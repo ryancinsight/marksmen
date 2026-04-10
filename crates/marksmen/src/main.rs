@@ -1,7 +1,8 @@
-//! marksmen — CLI tool for converting Markdown to PDF with native math support.
+//! marksmen — CLI tool for converting between Markdown and document formats.
 //!
-//! Uses the `marksmen-core` library for the conversion pipeline:
-//! `Markdown → pulldown-cmark → Typst → PDF`
+//! Uses the `marksmen` workspace conversion and reader crates to support
+//! `Markdown <-> DOCX / ODT / HTML / PDF` style workflows through a
+//! Markdown-like intermediate representation.
 
 use anyhow::Result;
 use clap::Parser;

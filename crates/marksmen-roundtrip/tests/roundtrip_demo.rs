@@ -232,33 +232,43 @@ fn test_html_roundtrip_similarity() -> Result<()> {
 
 #[test]
 fn test_pdf_roundtrip_similarity() -> Result<()> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    
-    // 1. Setup Source Text
-    let demo_md = fs::read_to_string(root.join("../../demo.md"))?;
-    let source_md_stripped = strip_mermaid(&strip_frontmatter(&demo_md));
+    let source_md = r#"---
+title: PDF Roundtrip Sample
+---
+# Styled PDF Roundtrip
+
+Alpha **beta** and *gamma* with `code`.
+
+Inline math: $x+y$.
+
+1. First item
+2. Second item
+"#;
+    let source_md_stripped = strip_mermaid(&strip_frontmatter(source_md));
 
     // 2. Compile to PDF natively
     let config = marksmen_core::Config::default();
-    let pdf_bytes = marksmen_pdf::convert(&demo_md, &config, Some(root.join("../../").into()))?;
+    let pdf_bytes = marksmen_pdf::convert(source_md, &config, None)?;
 
     // 3. Extract back to text string
     let extracted_md = marksmen_pdf_read::parse_pdf(&pdf_bytes)?;
 
     // 4. Mathematical Similarity Threshold
+    let extracted_stripped = strip_mermaid(&strip_frontmatter(&extracted_md));
     let normalized_source = strip_vectors_and_html(&normalize_whitespace(&source_md_stripped));
-    // Extraction does not contain mermaid tags or frontmatter, but stripping is safe.
-    let normalized_extracted = strip_vectors_and_html(&normalize_whitespace(&extracted_md));
+    let normalized_extracted = strip_vectors_and_html(&normalize_whitespace(&extracted_stripped));
     std::fs::write("pdf_norm_src.txt", &normalized_source).unwrap();
     std::fs::write("pdf_norm_ext.txt", &normalized_extracted).unwrap();
     
     let jw_sim = strsim::jaro_winkler(&normalized_source, &normalized_extracted);
     println!("PDF Roundtrip Jaro-Winkler Similarity: {:.4}", jw_sim);
     
-    // PDF text extraction is fundamentally lossy, often degrading to ~0.7-0.9 depending on layout.
+    // For marksmen-generated PDFs, the source Markdown is embedded into PDF metadata
+    // and preferred by the reader, preserving style markers for roundtrip testing.
+    // External PDFs still fall back to plain text extraction and remain lossy.
     assert!(
-        jw_sim > 0.70,
-        "PDF round-trip extraction degraded below 0.70 similarity threshold (Actual: {:.4})",
+        jw_sim > 0.98,
+        "PDF round-trip extraction degraded below 0.98 similarity threshold (Actual: {:.4})",
         jw_sim
     );
 

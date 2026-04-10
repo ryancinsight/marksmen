@@ -30,8 +30,18 @@ fn render_node(handle: ego_tree::NodeRef<'_, Node>, out: &mut String, in_pre: bo
                 out.push_str(text);
             } else {
                 let normalized = text.text.to_string();
-                if !normalized.trim().is_empty() {
-                    out.push_str(&normalized);
+                let mut compressed = String::with_capacity(normalized.len());
+                let mut in_space = false;
+                for c in normalized.chars() {
+                    if c.is_whitespace() {
+                        if !in_space { compressed.push(' '); in_space = true; }
+                    } else {
+                        compressed.push(c);
+                        in_space = false;
+                    }
+                }
+                if !compressed.is_empty() {
+                    out.push_str(&compressed);
                 }
             }
         }
@@ -188,7 +198,11 @@ fn render_table(table: &ElementRef<'_>, out: &mut String) {
         .select(&row_selector)
         .map(|row| {
             row.select(&cell_selector)
-                .map(|cell| cleanup_markdown(&cell.text().collect::<String>()))
+                .map(|cell| {
+                    let mut inner = String::new();
+                    render_children(&cell, &mut inner, false);
+                    cleanup_markdown(&inner)
+                })
                 .collect::<Vec<_>>()
         })
         .filter(|row| !row.is_empty())

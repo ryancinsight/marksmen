@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 anyhow.workspace = true
 anymap2 = "0.13.0"
+lopdf = "0.34.0"
 marksmen-core = { version = "0.1.0", path = "../marksmen-core" }
 marksmen-mermaid = { version = "0.1.0", path = "../marksmen-mermaid" }
 pulldown-cmark.workspace = true

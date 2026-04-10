@@ -5,4 +5,9 @@ edition = "2024"
 
 [dependencies]
 anyhow.workspace = true
+lopdf = "0.34.0"
 pdf-extract = "0.7.3"
+
+[dev-dependencies]
+marksmen-core = { path = "../marksmen-core" }
+marksmen-pdf = { path = "../marksmen-pdf" }

@@ -5,18 +5,19 @@ pub mod runner;
 use clap::Parser;
 use std::path::PathBuf;
 
-/// marksmen — Convert Markdown to PDF with native math equation support.
+/// marksmen — Convert between Markdown and supported document formats.
 ///
-/// Supports `$...$` for inline math and `$$...$$` for display math using
-/// Typst's math typesetting engine (LaTeX-quality output).
+/// Supports `md`, `docx`, `odt`, `html`, and `pdf` inputs. Output is inferred
+/// from `--output` or defaults to `.pdf` for Markdown input and `.md` for
+/// other source formats. `--as-typst` writes Typst source instead.
 #[derive(Parser, Debug)]
 #[command(name = "marksmen", version, about)]
 pub struct Args {
-    /// Input markdown file path(s). Supports glob patterns.
+    /// Input file path(s). Supported extensions: md, docx, odt, html, pdf.
     #[arg(required = true)]
     pub files: Vec<PathBuf>,
 
-    /// Output file path. If not specified, uses the input filename with .pdf extension.
+    /// Output file path. Extension determines the target format.
     #[arg(short = 'o', long)]
     pub output: Option<PathBuf>,
 

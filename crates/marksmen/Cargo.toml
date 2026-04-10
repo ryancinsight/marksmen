@@ -2,7 +2,7 @@
 name = "marksmen"
 version = "0.1.0"
 edition = "2021"
-description = "CLI tool for converting Markdown to PDF with native math equation support"
+description = "CLI tool for converting between Markdown and document formats with roundtrip extraction support"
 
 [[bin]]
 name = "marksmen"
@@ -11,10 +11,15 @@ path = "src/main.rs"
 [dependencies]
 marksmen-core = { path = "../marksmen-core" }
 marksmen-docx = { path = "../marksmen-docx" }
+marksmen-docx-read = { path = "../marksmen-docx-read" }
+marksmen-html = { path = "../marksmen-html" }
+marksmen-html-read = { path = "../marksmen-html-read" }
 marksmen-odt = { path = "../marksmen-odt" }
+marksmen-odt-read = { path = "../marksmen-odt-read" }
 clap = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 notify = { workspace = true }
 marksmen-pdf = { version = "0.1.0", path = "../marksmen-pdf" }
+marksmen-pdf-read = { path = "../marksmen-pdf-read" }
