@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title></title>
+  <style>
+    body { font-family: 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; max-width: 900px; margin: 0 auto; padding: 2rem; color: #333; }
+    img { max-width: 100%; height: auto; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background-color: #f5f5f5; }
+    pre { background: #f4f4f4; padding: 1rem; overflow-x: auto; }
+    blockquote { border-left: 4px solid #0366d6; margin: 0; padding-left: 1rem; color: #666; }
+  </style>
+</head>
+<body>
+<h1>Output Capabilities &amp; Typst Extensibility</h1>
+<h2>1. Document Headers &amp; Configuration</h2>
+<p>Headers, footers, and page numbers are intrinsically supported via YAML frontmatter blocks. For example, this document has a custom footer string.</p>
+<h2>2. Advanced Typography &amp; Tables</h2>
+<p>Because the intermediate format is Typst, typography is mathematically precise. Let's look at a standard Markdown table:</p>
+<table>
+  <thead>
+    <tr>
+      <td>Subsystem</td>
+      <td>Underlying Tech</td>
+      <td>Role</td>
+      <td>Status</td>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Parser</strong></td>
+      <td><code>pulldown-cmark</code></td>
+      <td>Emits syntax events</td>
+      <td>✅</td>
+    </tr>
+    <tr>
+      <td><strong>Translator</strong></td>
+      <td><code>marksmen-core</code></td>
+      <td>Maps AST to Typst</td>
+      <td>✅</td>
+    </tr>
+    <tr>
+      <td><strong>Compiler</strong></td>
+      <td><code>typst</code></td>
+      <td>Typesets elements</td>
+      <td>✅</td>
+    </tr>
+    <tr>
+      <td><strong>Exporter</strong></td>
+      <td><code>typst-pdf</code></td>
+      <td>Emits binary format</td>
+      <td>✅</td>
+    </tr>
+</table>
+<h3>2.1 CSS &amp; HTML Handling</h3>
+<p>Typst is an analytical typesetting engine, <strong>not a web browser</strong>. It cannot execute CSS or complex DOM layouts. However, the translator enforces semantic mapping for structural inline HTML subsets:</p>
+<ul>
+<li><strong>Underline</strong>: This text is underlined via <code><u></code></li>
+<li><strong>Subscripts</strong>: H2O via <code><sub></code></li>
+<li><strong>Superscripts</strong>: E = mc2 via <code><sup></code></li>
+<li><strong>Colors</strong>: This text is colored via <code><span style="color: ..."></code></li>
+<li><strong>Line breaks</strong>: Forced HTML break  is translated correctly.</li>
+</ul>
+<p><em>Note: Arbitrary <code><div style="padding: 2px"></code> blocks are ignored, preserving architectural invariants against empirical DOM approximations.</em></p>
+<h2>3. Mathematical Typesetting</h2>
+<p>True native math (without KaTeX SVG hacks):<br /><p style="text-align: center;"><i>
+\mathbf{J} = \nabla \times \mathbf{H} = \sigma \mathbf{E} + \frac{\partial \mathbf{D}}{\partial t}
+</i></p>
+</p>
+<p>Inline equations like <i>\lim_{x \to \infty} f(x)</i> blend seamlessly with the baseline.</p>
+<h2>4. Linked SVG Figures</h2>
+<p>Instead of relying on web-based JS to render graphics, Typst handles <code>SVG</code> vector embeddings natively without rasterization:</p>
+<p><img src="./architecture.svg" alt="Architecture Diagram" /></p>
+<h2>5. Native Diagram Rendering (<code>marksmen-mermaid</code>)</h2>
+<blockquote><p><strong>Pure-Rust Mermaid Translation:</strong><br />Executing standard <code>mermaid.js</code> typically requires evaluating an entire web runtime (V8/Browser) with empirical DOM measurement APIs, which violates our offline-first pure-Rust correctness guarantees.</p>
+<p><em>Instead, <code>marksmen</code> relies on a mathematically-verified <code>marksmen-mermaid</code> layout engine implementing the Sugiyama Framework. It parses this raw Mermaid block offline and renders it deterministically into Typst spatial vectors!</em></p>
+</blockquote>
+<div class="mermaid-graph" style="text-align: center; margin: 2rem 0;">
+<svg xmlns="http://www.w3.org/2000/svg" width="336" height="400" viewBox="0 0 336 400" style="max-width: 100%; height: auto;">
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#333"/>
+    </marker>
+  </defs>
+  <rect width="336" height="400" fill="white" rx="8" ry="8" stroke="#eeeeee" stroke-width="1"/>  <polyline points="78,50 82,110" fill="none" stroke="#555" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <polyline points="82,140 82,200" fill="none" stroke="#555" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <polyline points="82,230 82,260 70,260 70,290" fill="none" stroke="#555" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <polyline points="82,230 82,260 218,260 218,290" fill="none" stroke="#555" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <rect x="20" y="200" width="124" height="30" rx="6" ry="6" fill="#E8F4FD" stroke="#2196F3" stroke-width="2" />
+  <text x="82" y="220" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#333">Typst Vectors</text>
+  <rect x="20" y="110" width="124" height="30" rx="6" ry="6" fill="#E8F4FD" stroke="#2196F3" stroke-width="2" />
+  <text x="82" y="130" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#333">Marksmen Core</text>
+  <rect x="20" y="20" width="116" height="30" rx="6" ry="6" fill="#E8F4FD" stroke="#2196F3" stroke-width="2" />
+  <text x="78" y="40" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#333">Markdown AST</text>
+  <rect x="160" y="290" width="116" height="30" rx="6" ry="6" fill="#E8F4FD" stroke="#2196F3" stroke-width="2" />
+  <text x="218" y="310" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#333">HTML5 Output</text>
+  <rect x="20" y="290" width="100" height="30" rx="6" ry="6" fill="#E8F4FD" stroke="#2196F3" stroke-width="2" />
+  <text x="70" y="310" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#333">PDF Output</text>
+</svg>
+</div>
+<!-- pagebreak -->
+<h2>Appendix: Mathematical Justifications</h2>
+<p>Because <code>marksmen</code> leverages Typst, we can seamlessly write <i>e^(i pi) + 1 = 0</i> in the middle of text, and be confident that it renders beautifully on a completely separated page.</p>
+</body>
+</html>

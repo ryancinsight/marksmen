@@ -1,0 +1,15 @@
+[package]
+name = "marksmen-pdf"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow.workspace = true
+anymap2 = "0.13.0"
+marksmen-core = { version = "0.1.0", path = "../marksmen-core" }
+marksmen-mermaid = { version = "0.1.0", path = "../marksmen-mermaid" }
+pulldown-cmark.workspace = true
+tracing.workspace = true
+tracing-core = "0.1.36"
+typst.workspace = true
+typst-pdf.workspace = true

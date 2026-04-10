@@ -1,0 +1,10 @@
+[package]
+name = "marksmen-html"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+marksmen-core = { path = "../marksmen-core" }
+marksmen-mermaid = { path = "../marksmen-mermaid" }
+anyhow.workspace = true
+pulldown-cmark.workspace = true

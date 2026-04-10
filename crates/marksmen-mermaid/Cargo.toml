@@ -1,0 +1,10 @@
+[package]
+name = "marksmen-mermaid"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rustc-hash = "1.1.0"
+thiserror = "1.0"
+anyhow = { workspace = true }
+regex = "1"

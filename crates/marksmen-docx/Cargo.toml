@@ -1,0 +1,17 @@
+[package]
+name = "marksmen-docx"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+docx-rs = "0.4"
+marksmen-core = { path = "../marksmen-core" }
+marksmen-mermaid = { path = "../marksmen-mermaid" }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+pulldown-cmark = { workspace = true }
+quick-xml = "0.39.2"
+uuid = { version = "1.22.0", features = ["v4"] }
+resvg = "0.44"
+usvg = "0.44"
+tiny-skia = "0.11"

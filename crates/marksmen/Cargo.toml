@@ -1,0 +1,20 @@
+[package]
+name = "marksmen"
+version = "0.1.0"
+edition = "2021"
+description = "CLI tool for converting Markdown to PDF with native math equation support"
+
+[[bin]]
+name = "marksmen"
+path = "src/main.rs"
+
+[dependencies]
+marksmen-core = { path = "../marksmen-core" }
+marksmen-docx = { path = "../marksmen-docx" }
+marksmen-odt = { path = "../marksmen-odt" }
+clap = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+notify = { workspace = true }
+marksmen-pdf = { version = "0.1.0", path = "../marksmen-pdf" }

@@ -1,0 +1,17 @@
+[package]
+name = "marksmen-roundtrip"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow.workspace = true
+marksmen-core = { version = "0.1.0", path = "../marksmen-core" }
+marksmen-docx = { version = "0.1.0", path = "../marksmen-docx" }
+marksmen-docx-read = { version = "0.1.0", path = "../marksmen-docx-read" }
+marksmen-odt = { version = "0.1.0", path = "../marksmen-odt" }
+marksmen-odt-read = { version = "0.1.0", path = "../marksmen-odt-read" }
+marksmen-html = { path = "../marksmen-html" }
+marksmen-html-read = { path = "../marksmen-html-read" }
+marksmen-pdf = { version = "0.1.0", path = "../marksmen-pdf" }
+marksmen-pdf-read = { version = "0.1.0", path = "../marksmen-pdf-read" }
+strsim = "0.11.1"

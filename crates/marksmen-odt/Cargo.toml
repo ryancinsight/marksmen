@@ -1,0 +1,14 @@
+[package]
+name = "marksmen-odt"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+marksmen-core = { path = "../marksmen-core" }
+marksmen-mermaid = { path = "../marksmen-mermaid" }
+pulldown-cmark = { workspace = true }
+zip = { workspace = true }
+quick-xml = { workspace = true }
+tempfile = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }

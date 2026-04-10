@@ -1,0 +1,20 @@
+[workspace]
+members = ["crates/marksmen", "crates/marksmen-core", "crates/marksmen-docx", "crates/marksmen-docx-read", "crates/marksmen-html", "crates/marksmen-html-read", "crates/marksmen-mermaid", "crates/marksmen-odt", "crates/marksmen-odt-read", "crates/marksmen-pdf", "crates/marksmen-pdf-read", "crates/marksmen-roundtrip", "examples"]
+resolver = "2"
+
+[workspace.dependencies]
+pulldown-cmark = { version = "0.13", features = ["simd"] }
+typst = "0.14"
+typst-pdf = "0.14"
+typst-syntax = "0.14"
+typst-utils = "0.14"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap = { version = "4", features = ["derive"] }
+notify = "7"
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+zip = { version = "2", default-features = false, features = ["deflate", "time"] }
+quick-xml = "0.36"
+tempfile = "3"

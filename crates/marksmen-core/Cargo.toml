@@ -1,0 +1,17 @@
+[package]
+name = "marksmen-core"
+version = "0.1.0"
+edition = "2021"
+description = "Core library for marksmen: Markdown → Typst → PDF conversion with native math support"
+
+[dependencies]
+pulldown-cmark = { workspace = true }
+typst = { workspace = true }
+typst-pdf = { workspace = true }
+typst-syntax = { workspace = true }
+typst-utils = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_yaml = { workspace = true }
+marksmen-mermaid = { path = "../marksmen-mermaid" }
