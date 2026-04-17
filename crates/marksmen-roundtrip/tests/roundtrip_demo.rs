@@ -135,7 +135,7 @@ fn test_docx_roundtrip_similarity() -> Result<()> {
     let docx_bytes = marksmen_docx::translation::document::convert(events, &config, &get_workspace_root())?;
 
     // 3. Extract back to Markdown string
-    let extracted_md = marksmen_docx_read::parse_docx(&docx_bytes)?;
+    let extracted_md = marksmen_docx_read::parse_docx(&docx_bytes, None)?;
     // 4. Mathematical Similarity Threshold
     let normalized_source = normalize_whitespace(&strip_vectors_and_html(&strip_frontmatter(&demo_md)));
     let normalized_extracted = normalize_whitespace(&strip_vectors_and_html(&extracted_md));
@@ -411,7 +411,7 @@ fn test_manual_docx_extract() {
     let docx_path = root.join("../../demo_test.docx");
     let bytes = std::fs::read(&docx_path)
         .unwrap_or_else(|_| panic!("demo_test.docx not found at {}", docx_path.display()));
-    let text = marksmen_docx_read::parse_docx(&bytes).unwrap();
+    let text = marksmen_docx_read::parse_docx(&bytes, None).unwrap();
     let out = root.join("extracted_manual.md");
     std::fs::write(&out, &text).unwrap();
     println!("Written to {}", out.display());
@@ -446,7 +446,7 @@ fn execute_prd_conversion() -> Result<()> {
         let doc_path = root.join(doc);
         if doc_path.exists() {
             let bytes = std::fs::read(&doc_path)?;
-            let md_text = marksmen_docx_read::parse_docx(&bytes)?;
+            let md_text = marksmen_docx_read::parse_docx(&bytes, None)?;
             let md_out = doc_path.with_extension("md");
             std::fs::write(&md_out, md_text)?;
             println!("Extracted {} -> {}", doc, md_out.display());
@@ -482,7 +482,7 @@ fn evaluate_prd_docx_roundtrip() -> Result<()> {
     std::fs::write(&docx_out, &docx_bytes)?;
 
     // 3. Extract back from DOCX to MD
-    let extracted_md = marksmen_docx_read::parse_docx(&docx_bytes)?;
+    let extracted_md = marksmen_docx_read::parse_docx(&docx_bytes, None)?;
     
     // 4. Dump Markdown for discrepancy analysis
     let md_out = root.join("PRD/PRD_Roundtrip_Extracted.md");

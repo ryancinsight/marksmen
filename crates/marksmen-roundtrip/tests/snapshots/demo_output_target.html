@@ -58,19 +58,19 @@
 <h3>2.1 CSS &amp; HTML Handling</h3>
 <p>Typst is an analytical typesetting engine, <strong>not a web browser</strong>. It cannot execute CSS or complex DOM layouts. However, the translator enforces semantic mapping for structural inline HTML subsets:</p>
 <ul>
-<li><strong>Underline</strong>: This text is underlined via <code><u></code></li>
-<li><strong>Subscripts</strong>: H2O via <code><sub></code></li>
-<li><strong>Superscripts</strong>: E = mc2 via <code><sup></code></li>
-<li><strong>Colors</strong>: This text is colored via <code><span style="color: ..."></code></li>
+<li><strong>Underline</strong>: This text is underlined via <code>&lt;u&gt;</code></li>
+<li><strong>Subscripts</strong>: H2O via <code>&lt;sub&gt;</code></li>
+<li><strong>Superscripts</strong>: E = mc2 via <code>&lt;sup&gt;</code></li>
+<li><strong>Colors</strong>: This text is colored via <code>&lt;span style=&quot;color: ...&quot;&gt;</code></li>
 <li><strong>Line breaks</strong>: Forced HTML break  is translated correctly.</li>
 </ul>
-<p><em>Note: Arbitrary <code><div style="padding: 2px"></code> blocks are ignored, preserving architectural invariants against empirical DOM approximations.</em></p>
+<p><em>Note: Arbitrary <code>&lt;div style=&quot;padding: 2px&quot;&gt;</code> blocks are ignored, preserving architectural invariants against empirical DOM approximations.</em></p>
 <h2>3. Mathematical Typesetting</h2>
-<p>True native math (without KaTeX SVG hacks):<br /><p style="text-align: center;"><i>
+<p>True native math (without KaTeX SVG hacks):<br /><div class="math-display">
 \mathbf{J} = \nabla \times \mathbf{H} = \sigma \mathbf{E} + \frac{\partial \mathbf{D}}{\partial t}
-</i></p>
+</div>
 </p>
-<p>Inline equations like <i>\lim_{x \to \infty} f(x)</i> blend seamlessly with the baseline.</p>
+<p>Inline equations like <span class="math-inline">\lim_{x \to \infty} f(x)</span> blend seamlessly with the baseline.</p>
 <h2>4. Linked SVG Figures</h2>
 <p>Instead of relying on web-based JS to render graphics, Typst handles <code>SVG</code> vector embeddings natively without rasterization:</p>
 <p><img src="./architecture.svg" alt="Architecture Diagram" /></p>
@@ -101,8 +101,16 @@
   <text x="70" y="310" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#333">PDF Output</text>
 </svg>
 </div>
+<pre class="marksmen-roundtrip-meta" style="display:none">```mermaid
+graph TD
+    A[Markdown AST] --&gt; B{Marksmen Core}
+    B --&gt; C[Typst Vectors]
+    C --&gt; D(PDF Output)
+    C --&gt; E(HTML5 Output)
+
+```</pre>
 <!-- pagebreak -->
 <h2>Appendix: Mathematical Justifications</h2>
-<p>Because <code>marksmen</code> leverages Typst, we can seamlessly write <i>e^(i pi) + 1 = 0</i> in the middle of text, and be confident that it renders beautifully on a completely separated page.</p>
+<p>Because <code>marksmen</code> leverages Typst, we can seamlessly write <span class="math-inline">e^(i pi) + 1 = 0</span> in the middle of text, and be confident that it renders beautifully on a completely separated page.</p>
 </body>
 </html>

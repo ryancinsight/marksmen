@@ -7,15 +7,51 @@ use anyhow::{Context, Result};
 use std::io::{Cursor, Read};
 use quick_xml::events::Event;
 use quick_xml::Reader;
+use std::path::Path;
+use std::collections::HashMap;
 
 /// Analytically extracts `.docx` binary payloads into a mathematically equivalent Markdown string.
 /// Traverses `<w:p>`, `<w:r>`, and `<w:t>` elements, evaluating nested styles for bold, italic,
 /// and restoring mathematical `$inline$` or `$$display$$` syntax from `Cambria Math` tags.
+///
+/// If `media_out_dir` is provided, traverses `w:drawing` logic, performs `a:blip` mapping through
+/// `word/_rels/document.xml.rels`, and isolates binary sub streams to local IO limits.
 
-pub fn parse_docx(bytes: &[u8]) -> Result<String> {
+pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> {
     let cursor = Cursor::new(bytes);
     let mut archive = zip::ZipArchive::new(cursor)
         .context("Failed to parse bytes as a ZIP DOCX archive")?;
+
+    let mut rels_map: HashMap<String, String> = HashMap::new();
+    if let Ok(mut rels_file) = archive.by_name("word/_rels/document.xml.rels") {
+        let mut rels_xml = String::new();
+        if rels_file.read_to_string(&mut rels_xml).is_ok() {
+            let mut reader = Reader::from_str(&rels_xml);
+            reader.config_mut().trim_text(true);
+            loop {
+                match reader.read_event() {
+                    Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
+                        if e.name().as_ref() == b"Relationship" {
+                            let mut id = String::new();
+                            let mut target = String::new();
+                            for attr in e.attributes().flatten() {
+                                if attr.key.as_ref() == b"Id" {
+                                    id = String::from_utf8_lossy(&attr.value).into_owned();
+                                } else if attr.key.as_ref() == b"Target" {
+                                    target = String::from_utf8_lossy(&attr.value).into_owned();
+                                }
+                            }
+                            if !id.is_empty() && !target.is_empty() {
+                                rels_map.insert(id, target);
+                            }
+                        }
+                    }
+                    Ok(Event::Eof) | Err(_) => break,
+                    _ => {}
+                }
+            }
+        }
+    }
 
     let mut doc_xml = String::new();
     {
@@ -52,6 +88,10 @@ pub fn parse_docx(bytes: &[u8]) -> Result<String> {
     let mut tc_count = 0;
     let mut tc_alignments: Vec<u8> = Vec::new(); // 1 = center, 2 = right
     let mut current_tc_alignment = 0;
+
+    let mut drawing_name = String::new();
+    let mut drawing_descr = String::new();
+    let mut drawing_target_file = String::new();
     
     loop {
         match reader.read_event() {
@@ -188,32 +228,42 @@ pub fn parse_docx(bytes: &[u8]) -> Result<String> {
                         }
                     }
                     b"w:drawing" => {
-                        if output.len() > 0 && !output.ends_with("\n\n") {
-                            output.push_str("\n\n");
-                        }
-                        output.push_str("![Image]()");
+                        drawing_name.clear();
+                        drawing_descr.clear();
+                        drawing_target_file.clear();
                     }
-                    b"wp:docPr" => {
-                        let mut name = String::new();
-                        let mut descr = String::new();
-                        for attr in e.attributes() {
-                            if let Ok(a) = attr {
-                                if a.key.as_ref() == b"name" {
-                                    name = String::from_utf8_lossy(&a.value).into_owned();
-                                }
-                                if a.key.as_ref() == b"descr" {
-                                    descr = String::from_utf8_lossy(&a.value).into_owned();
+                    b"a:blip" => {
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == b"r:embed" {
+                                let rid = String::from_utf8_lossy(&attr.value).to_string();
+                                if let Some(target) = rels_map.get(&rid) {
+                                    if let Some(out_dir) = media_out_dir {
+                                        if let Some(file_name) = Path::new(target).file_name() {
+                                            let dest_path = out_dir.join(file_name);
+                                            let internal_path = format!("word/{}", target.replace("\\", "/"));
+                                            if let Ok(mut img_file) = archive.by_name(&internal_path) {
+                                                if let Ok(mut out_file) = std::fs::File::create(&dest_path) {
+                                                    let _ = std::io::copy(&mut img_file, &mut out_file);
+                                                }
+                                            }
+                                            if let Some(out_dir_name) = out_dir.file_name() {
+                                                // Convert the path completely to forward slashes for cross-platform markdown.
+                                                let relative_path = Path::new(out_dir_name).join(file_name).to_string_lossy().replace("\\", "/");
+                                                drawing_target_file = relative_path;
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
-                        if !name.is_empty() || !descr.is_empty() {
-                            // Extract actual path and name
-                            if output.ends_with("![Image]()") {
-                                output.truncate(output.len() - 10);
-                                output.push_str(&format!("![{}]({})", name, descr));
-                            } else if output.ends_with("![Image]()\n\n") {
-                                output.truncate(output.len() - 12);
-                                output.push_str(&format!("![{}]({})\n\n", name, descr));
+                    }
+                    b"wp:docPr" => {
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == b"name" {
+                                drawing_name = String::from_utf8_lossy(&attr.value).into_owned();
+                            }
+                            if attr.key.as_ref() == b"descr" {
+                                drawing_descr = String::from_utf8_lossy(&attr.value).into_owned();
                             }
                         }
                     }
@@ -256,6 +306,15 @@ pub fn parse_docx(bytes: &[u8]) -> Result<String> {
                 b"w:tbl" => {
                     in_tbl -= 1;
                     output.push_str("\n");
+                }
+                b"w:drawing" => {
+                    if output.len() > 0 && !output.ends_with("\n\n") {
+                        output.push_str("\n\n");
+                    }
+                    let alt = if !drawing_name.is_empty() { &drawing_name } else { "Image" };
+                    let path = if !drawing_target_file.is_empty() { &drawing_target_file } else { &drawing_descr };
+                    let valid_path = path.replace(" ", "%20");
+                    output.push_str(&format!("![{}]({})\n\n", alt, valid_path));
                 }
                 _ => {}
             },
@@ -322,3 +381,4 @@ pub fn parse_docx(bytes: &[u8]) -> Result<String> {
     
     Ok(cleaned)
 }
+

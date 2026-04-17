@@ -1,4 +1,4 @@
-use pulldown_cmark::{Parser, Options, Event, Tag};
+use pulldown_cmark::{Parser, Options};
 use std::fs;
 
 fn main() {
@@ -16,7 +16,7 @@ fn main() {
     
     let mut count = 0;
     let mut last_event = None;
-    for (idx, event) in parser.enumerate() {
+    for (_idx, event) in parser.enumerate() {
         count += 1;
         last_event = Some(event);
     }

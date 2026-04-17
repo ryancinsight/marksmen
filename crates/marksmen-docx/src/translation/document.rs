@@ -4,12 +4,11 @@ use anyhow::Result;
 use pulldown_cmark::{Event, CodeBlockKind, Tag, TagEnd};
 use docx_rs::*;
 use crate::translation::elements::{handle_event, TextState};
-use crate::translation::math::latex_to_omml::{LatexToOmmlTranslator, OmmlRenderer};
-use crate::translation::mermaid::mermaid_to_drawingml::DrawingMlAstGenerator;
 use marksmen_mermaid::parsing::parser;
 use marksmen_mermaid::graph::directed_graph;
 use marksmen_mermaid::layout::{rank_assignment, crossing_reduction, coordinate_assign};
 use marksmen_core::Config;
+use marksmen_render::{render_math_to_png, render_mmd_to_png, svg_bytes_to_png};
 
 pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path) -> Result<Vec<u8>> {
     let page_width_twips = parse_length_to_twips(&config.page.width).unwrap_or(11906);
@@ -74,8 +73,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path) -> Res
 
     let mut current_paragraph = Paragraph::new();
     let mut text_state = TextState::default();
-    let omml = LatexToOmmlTranslator::new();
-    
+
     let mut in_mermaid_block = false;
     let mut current_mermaid_source = String::new();
     let mut in_blockquote = false;
@@ -174,18 +172,18 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path) -> Res
                 crossing_reduction::minimize_crossings(&mut ranked_graph);
                 let spaced_graph = coordinate_assign::assign_coordinates(&ranked_graph);
                 
-                // Render the SpacedGraph into an SVG string
-                let svg_str = render_graph_to_svg(&spaced_graph);
-                
+                // Render the SpacedGraph to PNG via marksmen_render
+                let png_result = marksmen_render::mermaid::render_graph_to_svg(&spaced_graph);
+                let png_result = marksmen_render::svg_bytes_to_png(png_result.as_bytes());
+
                 // Flush preceding paragraph
                 if text_state.has_runs {
                     let prev_p = std::mem::replace(&mut current_paragraph, Paragraph::new());
                     doc = doc.add_paragraph(prev_p);
                     text_state.has_runs = false;
                 }
-                
-                // Rasterize SVG→PNG and embed as Pic
-                if let Some((png_bytes, width, height)) = svg_to_png(svg_str.as_bytes()) {
+
+                if let Some((png_bytes, width, height)) = png_result {
                     let (width, height) = fit_image_to_bounds(width, height, max_figure_width_px, max_figure_height_px);
                     let pic = Pic::new_with_dimensions(png_bytes, width, height);
                     let run = Run::new().add_image(pic);
@@ -194,8 +192,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path) -> Res
                             .align(AlignmentType::Center)
                             .add_run(run)
                     );
-                    
-                    // Inject metadata invisibly so `marksmen-docx-read` mathematically restores the AST!
+                    // Inject metadata invisibly so `marksmen-docx-read` can restore the AST.
                     let mut meta_run = Run::new().vanish().add_text("```mermaid").add_break(BreakType::TextWrapping);
                     for line in current_mermaid_source.lines() {
                         meta_run = meta_run.add_text(line).add_break(BreakType::TextWrapping);
@@ -203,7 +200,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path) -> Res
                     meta_run = meta_run.add_text("```");
                     doc = doc.add_paragraph(Paragraph::new().add_run(meta_run));
                 } else {
-                    // Fallback: emit the raw mermaid source as text
+                    // Fallback: raw mermaid source as code text
                     let run = Run::new().fonts(RunFonts::new().ascii("Consolas"))
                         .add_text(format!("```mermaid\n{}\n```", &current_mermaid_source));
                     doc = doc.add_paragraph(Paragraph::new().add_run(run));
@@ -211,13 +208,21 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path) -> Res
                 continue;
             }
             Event::InlineMath(latex) => {
-                // Render LaTeX as visible italic text (OMML CustomItem is not reliably rendered)
-                let run = Run::new()
-                    .italic()
-                    .fonts(RunFonts::new().ascii("Cambria Math").hi_ansi("Cambria Math"))
-                    .add_text(format!(" {} ", &latex));
-                current_paragraph = current_paragraph.add_run(run);
-                continue; 
+                if let Some((png, w, h)) = render_math_to_png(&latex, false) {
+                    let (w, h) = fit_image_to_bounds(w, h, max_figure_width_px, max_figure_height_px / 4);
+                    current_paragraph = current_paragraph.add_run(
+                        Run::new().add_image(Pic::new_with_dimensions(png, w, h))
+                    );
+                } else {
+                    // Fallback: italic Cambria Math text
+                    current_paragraph = current_paragraph.add_run(
+                        Run::new()
+                            .italic()
+                            .fonts(RunFonts::new().ascii("Cambria Math").hi_ansi("Cambria Math"))
+                            .add_text(format!(" {} ", &latex))
+                    );
+                }
+                continue;
             }
             Event::DisplayMath(latex) => {
                 // Flush current paragraph
@@ -226,16 +231,26 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path) -> Res
                     doc = doc.add_paragraph(prev_p);
                     text_state.has_runs = false;
                 }
-                // Render display math as centered italic paragraph
-                let run = Run::new()
-                    .italic()
-                    .fonts(RunFonts::new().ascii("Cambria Math").hi_ansi("Cambria Math"))
-                    .add_text(latex.to_string());
-                doc = doc.add_paragraph(
-                    Paragraph::new()
-                        .align(AlignmentType::Center)
-                        .add_run(run)
-                );
+                if let Some((png, w, h)) = render_math_to_png(&latex, true) {
+                    let (w, h) = fit_image_to_bounds(w, h, max_figure_width_px, max_figure_height_px / 2);
+                    doc = doc.add_paragraph(
+                        Paragraph::new()
+                            .align(AlignmentType::Center)
+                            .add_run(Run::new().add_image(Pic::new_with_dimensions(png, w, h)))
+                    );
+                } else {
+                    // Fallback: centred italic paragraph
+                    doc = doc.add_paragraph(
+                        Paragraph::new()
+                            .align(AlignmentType::Center)
+                            .add_run(
+                                Run::new()
+                                    .italic()
+                                    .fonts(RunFonts::new().ascii("Cambria Math").hi_ansi("Cambria Math"))
+                                    .add_text(latex.to_string())
+                            )
+                    );
+                }
                 continue;
             }
             Event::Start(Tag::Image { dest_url, title, .. }) => {
@@ -270,38 +285,54 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path) -> Res
                     input_dir.join(img_path_str)
                 };
 
+                // .mmd file: run the pure-Rust mermaid pipeline
+                let is_mmd = img_path_str.ends_with(".mmd");
+                if is_mmd {
+                    match std::fs::read_to_string(&resolved).ok()
+                        .and_then(|src| render_mmd_to_png(&src))
+                    {
+                        Some((png, w, h)) => {
+                            let (w, h) = fit_image_to_bounds(w, h, max_figure_width_px, max_figure_height_px);
+                            doc = doc.add_paragraph(
+                                Paragraph::new()
+                                    .align(AlignmentType::Center)
+                                    .add_run(Run::new().add_image(Pic::new_with_dimensions(png, w, h)))
+                            );
+                        }
+                        None => {
+                            let run = Run::new().italic().add_text(format!("[Diagram: {}]", caption));
+                            doc = doc.add_paragraph(Paragraph::new().add_run(run));
+                        }
+                    }
+                    continue;
+                }
+
                 if let Ok(raw_bytes) = std::fs::read(&resolved) {
                     let is_svg = img_path_str.ends_with(".svg")
                         || raw_bytes.starts_with(b"<?xml")
                         || raw_bytes.starts_with(b"<svg");
 
                     let (png_bytes, width, height) = if is_svg {
-                        // SVG → PNG rasterization
-                        match svg_to_png(&raw_bytes) {
+                        match svg_bytes_to_png(&raw_bytes) {
                             Some(result) => result,
                             None => {
-                                // Fallback: emit alt text as placeholder
                                 let run = Run::new().add_text(format!("![{}]({})", caption, img_path_str));
                                 doc = doc.add_paragraph(Paragraph::new().add_run(run));
                                 continue;
                             }
                         }
                     } else {
-                        // PNG/JPEG: detect dimensions from header
                         let (w, h) = image_dimensions(&raw_bytes).unwrap_or((640, 480));
                         (raw_bytes, w, h)
                     };
 
                     let (width, height) = fit_image_to_bounds(width, height, max_figure_width_px, max_figure_height_px);
-                    let pic = Pic::new_with_dimensions(png_bytes, width, height);
-                    let run = Run::new().add_image(pic);
                     doc = doc.add_paragraph(
                         Paragraph::new()
                             .align(AlignmentType::Center)
-                            .add_run(run)
+                            .add_run(Run::new().add_image(Pic::new_with_dimensions(png_bytes, width, height)))
                     );
                 } else {
-                    // File not found: emit placeholder
                     let run = Run::new().italic().add_text(format!("[Missing image: {}]", img_path_str));
                     doc = doc.add_paragraph(Paragraph::new().add_run(run));
                 }
@@ -331,21 +362,8 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path) -> Res
     Ok(buffer.into_inner())
 }
 
-/// Rasterizes an SVG byte buffer to a PNG byte buffer.
-/// Returns (png_bytes, width, height) or None on failure.
-fn svg_to_png(svg_data: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
-    let opt = usvg::Options::default();
-    let tree = usvg::Tree::from_data(svg_data, &opt).ok()?;
-    let size = tree.size();
-    let width = size.width() as u32;
-    let height = size.height() as u32;
-    if width == 0 || height == 0 { return None; }
-    
-    let mut pixmap = tiny_skia::Pixmap::new(width, height)?;
-    resvg::render(&tree, tiny_skia::Transform::default(), &mut pixmap.as_mut());
-    let png_data = pixmap.encode_png().ok()?;
-    Some((png_data, width, height))
-}
+// svg_to_png and render_graph_to_svg removed: canonical implementations
+// live in marksmen_render::svg_bytes_to_png and marksmen_render::mermaid::render_graph_to_svg.
 
 /// Extracts image dimensions from raw PNG/JPEG bytes.
 fn image_dimensions(data: &[u8]) -> Option<(u32, u32)> {
@@ -371,158 +389,7 @@ fn image_dimensions(data: &[u8]) -> Option<(u32, u32)> {
     None
 }
 
-/// Renders a `SpacedGraph` into a valid SVG string for rasterization.
-/// Nodes are drawn as rounded rectangles with centered text labels.
-/// Edges are drawn as straight lines with arrowhead markers.
-fn render_graph_to_svg(graph: &marksmen_mermaid::layout::coordinate_assign::SpacedGraph) -> String {
-    let padding = 20.0;
-    let svg_width = graph.width + padding * 2.0;
-    let svg_height = graph.height + padding * 2.0;
 
-    let mut svg = format!(
-        r##"<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}">
-  <rect width="{w}" height="{h}" fill="white"/>"##,
-        w = svg_width, h = svg_height
-    );
-
-    let mut ordered_subgraphs = graph.subgraphs.clone();
-    ordered_subgraphs.sort_by(|left, right| left.depth.cmp(&right.depth).then_with(|| left.title.cmp(&right.title)));
-    for subgraph in &ordered_subgraphs {
-        let shade = (248.0 - (subgraph.depth as f64 * 8.0)).max(228.0) as i32;
-        let fill = format!("#{:02x}{:02x}{:02x}", shade, shade, shade);
-        svg.push_str(&format!(
-            r##"  <rect x="{}" y="{}" width="{}" height="{}" rx="{}" ry="{}" fill="{}" stroke="#aaaaaa" stroke-width="1"/>"##,
-            subgraph.x + padding,
-            subgraph.y + padding,
-            subgraph.width,
-            subgraph.height,
-            (8.0 - subgraph.depth as f64).max(4.0),
-            (8.0 - subgraph.depth as f64).max(4.0),
-            fill
-        ));
-        svg.push('\n');
-        svg.push_str(&format!(
-            r##"  <text x="{}" y="{}" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#666">{}</text>"##,
-            subgraph.x + padding + 10.0,
-            subgraph.y + padding + 16.0,
-            xml_escape(&subgraph.title)
-        ));
-        svg.push('\n');
-    }
-
-    // Draw edges
-    for edge in &graph.edges {
-        if edge.path.len() >= 2 {
-            let stroke_width = match edge.style {
-                marksmen_mermaid::parsing::lexer::EdgeStyle::ThickArrow => 2.5,
-                _ => 2.0,
-            };
-            let dash = if edge.style == marksmen_mermaid::parsing::lexer::EdgeStyle::DottedArrow {
-                r#" stroke-dasharray="4 4""#
-            } else {
-                ""
-            };
-            let stroke_path = if edge.style == marksmen_mermaid::parsing::lexer::EdgeStyle::SolidLine {
-                edge.path.clone()
-            } else {
-                trim_path_end(&edge.path, 10.0)
-            };
-            let points = stroke_path.iter()
-                .map(|(x, y)| format!("{},{}", x + padding, y + padding))
-                .collect::<Vec<_>>()
-                .join(" ");
-            svg.push_str(&format!(
-                r##"  <polyline points="{}" fill="none" stroke="#555" stroke-width="{}"{} stroke-linejoin="round" stroke-linecap="round" />"##,
-                points,
-                stroke_width,
-                dash,
-            ));
-            svg.push('\n');
-
-            if edge.style != marksmen_mermaid::parsing::lexer::EdgeStyle::SolidLine {
-                if let Some([tip, left, right]) = arrowhead_points(&edge.path, 10.0, 7.0) {
-                    svg.push_str(&format!(
-                        r##"  <polygon points="{},{} {},{} {},{}" fill="#555" stroke="#555" stroke-width="0.6" />"##,
-                        tip.0 + padding,
-                        tip.1 + padding,
-                        left.0 + padding,
-                        left.1 + padding,
-                        right.0 + padding,
-                        right.1 + padding
-                    ));
-                    svg.push('\n');
-                }
-            }
-
-            if let Some(label) = &edge.label {
-                let (label_x, label_y) = edge_label_anchor(&edge.path);
-                let text_x = label_x + padding;
-                let text_y = label_y + padding - 6.0;
-                svg.push_str(&format!(
-                    r##"  <rect x="{}" y="{}" width="{}" height="18" fill="white" opacity="0.9"/>"##,
-                    text_x - 70.0,
-                    text_y - 12.0,
-                    140.0
-                ));
-                svg.push('\n');
-                svg.push_str(&format!(
-                    r##"  <text x="{}" y="{}" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="#444">{}</text>"##,
-                    text_x,
-                    text_y,
-                    xml_escape(label)
-                ));
-                svg.push('\n');
-            }
-        }
-    }
-
-    // Draw nodes
-    for (_id, node) in &graph.nodes {
-        let rx = node.x + padding;
-        let ry = node.y + padding;
-        let fill = node.style.fill.as_deref().unwrap_or("#E8F4FD");
-        let stroke = node.style.stroke.as_deref().unwrap_or("#2196F3");
-        let stroke_width = node.style.stroke_width.as_deref().unwrap_or("2");
-        let text_fill = node.style.color.as_deref().unwrap_or("#333");
-        let dash = node.style.stroke_dasharray.as_deref()
-            .map(|v| format!(r#" stroke-dasharray="{}""#, v))
-            .unwrap_or_default();
-        svg.push_str(&format!(
-            r##"  <rect x="{}" y="{}" width="{}" height="{}" rx="6" ry="6" fill="{}" stroke="{}" stroke-width="{}"{} />"##,
-            rx, ry, node.width, node.height, fill, stroke, stroke_width, dash
-        ));
-        svg.push('\n');
-        // Center text label
-        let text_x = rx + node.width / 2.0;
-        let text_y = ry + node.height / 2.0 + 5.0;
-        svg.push_str(&format!(
-            r##"  <text x="{}" y="{}" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="{}">{}</text>"##,
-            text_x, text_y, text_fill, xml_escape(&node.label)
-        ));
-        svg.push('\n');
-    }
-
-    svg.push_str("</svg>");
-    svg
-}
-
-fn xml_escape(input: &str) -> String {
-    input
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-}
-
-fn edge_label_anchor(path: &[(f64, f64)]) -> (f64, f64) {
-    if path.len() < 2 {
-        return (0.0, 0.0);
-    }
-    let mid_segment = (path.len() - 1) / 2;
-    let start = path[mid_segment];
-    let end = path[mid_segment + 1];
-    ((start.0 + end.0) / 2.0, (start.1 + end.1) / 2.0)
-}
 
 fn parse_length_to_twips(input: &str) -> Option<u32> {
     let trimmed = input.trim().to_ascii_lowercase();
@@ -578,61 +445,4 @@ fn fit_image_to_bounds(width: u32, height: u32, max_width: u32, max_height: u32)
     )
 }
 
-fn trim_path_end(path: &[(f64, f64)], distance: f64) -> Vec<(f64, f64)> {
-    if path.len() < 2 {
-        return path.to_vec();
-    }
 
-    let mut trimmed = path.to_vec();
-    for idx in (1..trimmed.len()).rev() {
-        let start = trimmed[idx - 1];
-        let end = trimmed[idx];
-        let dx = end.0 - start.0;
-        let dy = end.1 - start.1;
-        let magnitude = (dx * dx + dy * dy).sqrt();
-        if magnitude < 0.001 {
-            continue;
-        }
-
-        let applied = distance.min(magnitude * 0.6);
-        let ux = dx / magnitude;
-        let uy = dy / magnitude;
-        trimmed[idx] = (end.0 - (ux * applied), end.1 - (uy * applied));
-        return trimmed;
-    }
-
-    trimmed
-}
-
-fn arrowhead_points(path: &[(f64, f64)], length: f64, width: f64) -> Option<[(f64, f64); 3]> {
-    if path.len() < 2 {
-        return None;
-    }
-
-    for segment in path.windows(2).rev() {
-        let start = segment[0];
-        let end = segment[1];
-        let dx = end.0 - start.0;
-        let dy = end.1 - start.1;
-        let magnitude = (dx * dx + dy * dy).sqrt();
-        if magnitude < 0.001 {
-            continue;
-        }
-
-        let ux = dx / magnitude;
-        let uy = dy / magnitude;
-        let px = -uy;
-        let py = ux;
-        let base_x = end.0 - (ux * length);
-        let base_y = end.1 - (uy * length);
-        let half_width = width / 2.0;
-
-        return Some([
-            end,
-            (base_x + (px * half_width), base_y + (py * half_width)),
-            (base_x - (px * half_width), base_y - (py * half_width)),
-        ]);
-    }
-
-    None
-}

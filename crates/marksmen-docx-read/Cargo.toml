@@ -6,5 +6,5 @@ edition = "2024"
 [dependencies]
 anyhow.workspace = true
 docx-rs = "0.4.19"
-quick-xml.workspace = true
+quick-xml = { workspace = true, features = ["serialize"] }
 zip.workspace = true

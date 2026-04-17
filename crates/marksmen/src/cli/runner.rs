@@ -66,11 +66,11 @@ fn convert_file(input_path: &Path, args: &Args, config: &Config) -> Result<()> {
         "Converting"
     );
 
-    let markdown = read_as_markdown_like(input_path, source_format)?;
+    let markdown = read_as_markdown_like(input_path, source_format, &output_path)?;
     write_output(&markdown, input_path, &output_path, target_format, config)
 }
 
-fn read_as_markdown_like(input_path: &Path, source_format: Format) -> Result<String> {
+fn read_as_markdown_like(input_path: &Path, source_format: Format, output_path: &Path) -> Result<String> {
     match source_format {
         Format::Markdown | Format::Typst => fs::read_to_string(input_path)
             .with_context(|| format!("Failed to read input file: {}", input_path.display())),
@@ -83,7 +83,21 @@ fn read_as_markdown_like(input_path: &Path, source_format: Format) -> Result<Str
         Format::Docx => {
             let bytes = fs::read(input_path)
                 .with_context(|| format!("Failed to read DOCX input: {}", input_path.display()))?;
-            marksmen_docx_read::parse_docx(&bytes)
+            
+            let mut media_dir = None;
+            let mut media_path_buf = PathBuf::new();
+            if let Some(file_stem) = output_path.file_stem() {
+                let parent = output_path.parent().unwrap_or_else(|| Path::new(""));
+                let dir_name = format!("{}_media", file_stem.to_string_lossy());
+                media_path_buf = parent.join(dir_name);
+                if let Err(e) = fs::create_dir_all(&media_path_buf) {
+                    tracing::warn!("Failed to create media directory: {}", e);
+                } else {
+                    media_dir = Some(media_path_buf.as_path());
+                }
+            }
+
+            marksmen_docx_read::parse_docx(&bytes, media_dir)
                 .with_context(|| format!("Failed to parse DOCX input: {}", input_path.display()))
         }
         Format::Odt => {

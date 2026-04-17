@@ -9,8 +9,10 @@ anymap2 = "0.13.0"
 lopdf = "0.34.0"
 marksmen-core = { version = "0.1.0", path = "../marksmen-core" }
 marksmen-mermaid = { version = "0.1.0", path = "../marksmen-mermaid" }
+marksmen-render = { version = "0.1.0", path = "../marksmen-render" }
 pulldown-cmark.workspace = true
 tracing.workspace = true
 tracing-core = "0.1.36"
 typst.workspace = true
 typst-pdf.workspace = true
+typst-render.workspace = true
