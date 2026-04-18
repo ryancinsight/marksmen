@@ -25,6 +25,13 @@ pub fn run(args: Args) -> Result<()> {
     if args.no_math {
         config.math.enabled = false;
     }
+
+    if args.rasterize_svg {
+        return run_rasterize_svg(&args);
+    }
+    if args.preprocess_math {
+        return run_preprocess_math(&args);
+    }
     if let Some(ref width) = args.page_width {
         config.page.width = width.clone();
     }
@@ -51,6 +58,152 @@ pub fn run(args: Args) -> Result<()> {
         // TODO: Implement watch mode using `notify` crate.
     }
 
+    Ok(())
+}
+
+fn run_rasterize_svg(args: &Args) -> Result<()> {
+    if args.files.is_empty() {
+        bail!("--rasterize-svg requires an input file");
+    }
+    let input_path = &args.files[0];
+    let output_path = args.output.clone().unwrap_or_else(|| input_path.with_extension("png"));
+    
+    tracing::info!(input = %input_path.display(), output = %output_path.display(), "Rasterizing SVG to PNG");
+    let svg_bytes = fs::read(input_path).context("Failed to read SVG file")?;
+    
+    if let Some((png_bytes, _, _)) = marksmen_render::svg_bytes_to_png(&svg_bytes) {
+        fs::write(&output_path, png_bytes).context("Failed to write PNG file")?;
+        tracing::info!("Created {}", output_path.display());
+    } else {
+        bail!("Failed to rasterize SVG into PNG");
+    }
+    Ok(())
+}
+
+fn run_preprocess_math(args: &Args) -> Result<()> {
+    if args.files.is_empty() {
+        bail!("--preprocess-math requires an input markdown file");
+    }
+    let input_path = &args.files[0];
+    let output_path = args.output.clone().unwrap_or_else(|| input_path.with_extension("md"));
+    
+    tracing::info!(input = %input_path.display(), output = %output_path.display(), "Preprocessing Markdown math to PNGs");
+    let source = fs::read_to_string(input_path).context("Failed to read Markdown file")?;
+    
+    let input_dir = input_path.parent().unwrap_or_else(|| Path::new(""));
+    let math_dir = input_dir.join("diagrams").join("math");
+    fs::create_dir_all(&math_dir).context("Failed to create diagrams/math directory")?;
+
+    let mut result_md = String::with_capacity(source.len());
+    let mut eq_index = 0;
+    
+    // We do a simple line-by-line parsing to avoid mutating the structure of the AST.
+    // Display Math block: lines starting with `$$` or surrounded by `$$`.
+    let mut in_display_math = false;
+    let mut current_math = String::new();
+    let mut display_math_lines = 0;
+
+    for line in source.lines() {
+        let tline = line.trim();
+        if in_display_math {
+            if tline.ends_with("$$") || tline == "$$" {
+                // Closing display math
+                if tline != "$$" {
+                    // Extract before the $$
+                    current_math.push_str(&line[..line.len() - 2]);
+                }
+                eq_index += 1;
+                let trimmed = current_math.trim();
+                let math_png_path = math_dir.join(format!("eq_{}.png", eq_index));
+                if let Some((png_bytes, _, _)) = marksmen_render::render_math_to_png(trimmed, true) {
+                    fs::write(&math_png_path, png_bytes)?;
+                } else {
+                    tracing::warn!("Failed to render eq_{} (display)", eq_index);
+                }
+                let rel_path = math_png_path.strip_prefix(input_dir).unwrap_or(&math_png_path);
+                result_md.push_str(&format!("![Equation {}]({})\n", eq_index, rel_path.display().to_string().replace('\\', "/")));
+                in_display_math = false;
+            } else {
+                current_math.push_str(line);
+                current_math.push('\n');
+                display_math_lines += 1;
+            }
+            continue;
+        }
+
+        if tline.starts_with("$$") {
+            let rest = &tline[2..];
+            if rest.ends_with("$$") && !rest.is_empty() {
+                // Single line: $$ ... $$
+                let eq_str = &rest[..rest.len() - 2].trim();
+                eq_index += 1;
+                let math_png_path = math_dir.join(format!("eq_{}.png", eq_index));
+                if let Some((png_bytes, _, _)) = marksmen_render::render_math_to_png(eq_str, true) {
+                    fs::write(&math_png_path, png_bytes)?;
+                } else {
+                    tracing::warn!("Failed to render eq_{} (inline-display)", eq_index);
+                }
+                let rel_path = math_png_path.strip_prefix(input_dir).unwrap_or(&math_png_path);
+                result_md.push_str(&format!("![Equation {}]({})\n", eq_index, rel_path.display().to_string().replace('\\', "/")));
+            } else if rest == "" {
+                in_display_math = true;
+                current_math.clear();
+                display_math_lines = 0;
+            } else {
+                in_display_math = true;
+                current_math.clear();
+                current_math.push_str(rest);
+                current_math.push('\n');
+            }
+            continue;
+        }
+
+        // Inline math parsing `$ ... $`
+        let mut out_line = String::new();
+        let mut prev = 0;
+        let bytes = line.as_bytes();
+        let mut s = 0;
+        while s < bytes.len() {
+            if bytes[s] == b'$' {
+                if s + 1 < bytes.len() && bytes[s + 1] == b'$' {
+                    out_line.push_str(&line[prev..s + 2]);
+                    prev = s + 2;
+                    s += 2;
+                    continue;
+                }
+                let start = s + 1;
+                let mut end = start;
+                while end < bytes.len() && !(bytes[end] == b'$' && bytes[end - 1] != b'\\') {
+                    end += 1;
+                }
+                if end >= bytes.len() {
+                    s += 1;
+                    continue;
+                }
+                let latex = &line[start..end];
+                out_line.push_str(&line[prev..s]);
+                eq_index += 1;
+                let math_png_path = math_dir.join(format!("eq_{}.png", eq_index));
+                if let Some((png_bytes, _, _)) = marksmen_render::render_math_to_png(latex, false) {
+                    fs::write(&math_png_path, png_bytes)?;
+                } else {
+                    tracing::warn!("Failed to render inline math: {}", latex);
+                }
+                let rel_path = math_png_path.strip_prefix(input_dir).unwrap_or(&math_png_path);
+                out_line.push_str(&format!("![]({})", rel_path.display().to_string().replace('\\', "/")));
+                prev = end + 1;
+                s = end + 1;
+            } else {
+                s += 1;
+            }
+        }
+        out_line.push_str(&line[prev..]);
+        result_md.push_str(&out_line);
+        result_md.push('\n');
+    }
+
+    fs::write(&output_path, result_md).context("Failed to write annotated Markdown file")?;
+    tracing::info!("Preprocessed math into {} equations", eq_index);
     Ok(())
 }
 

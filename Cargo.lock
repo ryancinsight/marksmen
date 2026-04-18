@@ -1739,6 +1739,7 @@ dependencies = [
  "marksmen-odt-read",
  "marksmen-pdf",
  "marksmen-pdf-read",
+ "marksmen-render",
  "notify",
  "tracing",
  "tracing-subscriber",

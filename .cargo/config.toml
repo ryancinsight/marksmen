@@ -1,0 +1,3 @@
+[env]
+CC = "D:\\msys64\\ucrt64\\bin\\clang.exe"
+CXX = "D:\\msys64\\ucrt64\\bin\\clang++.exe"

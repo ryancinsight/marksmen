@@ -44,4 +44,12 @@ pub struct Args {
     /// Page margin (single value applied to all sides, e.g., "25mm").
     #[arg(long)]
     pub margin: Option<String>,
+
+    /// Rasterize an input SVG file to a PNG file specified by --output.
+    #[arg(long)]
+    pub rasterize_svg: bool,
+
+    /// Preprocess a Markdown file to replace Math with PNG links, writing to --output.
+    #[arg(long)]
+    pub preprocess_math: bool,
 }

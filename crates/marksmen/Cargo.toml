@@ -23,3 +23,4 @@ tracing-subscriber = { workspace = true }
 notify = { workspace = true }
 marksmen-pdf = { version = "0.1.0", path = "../marksmen-pdf" }
 marksmen-pdf-read = { path = "../marksmen-pdf-read" }
+marksmen-render = { path = "../marksmen-render" }
