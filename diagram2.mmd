@@ -1,0 +1,15 @@
+flowchart TD
+  A[creation] --> A1[Parse frontmatter]
+  A --> A2[Inspect event stream]
+
+  B[conversions] --> B1[Generate HTML]
+  B --> B2[Generate DOCX]
+  B --> B3[Generate ODT]
+  B --> B4[Generate PDF]
+
+  C[roundtrips] --> C1[DOCX to Markdown-like text]
+  C --> C2[ODT to Markdown-like text]
+  C --> C3[Reader-driven symmetry checks]
+
+  D[symmetry_assessments] --> D1[Normalize extracted text]
+  D --> D2[Measure similarity]

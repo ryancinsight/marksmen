@@ -1,0 +1,15 @@
+flowchart LR
+  MD[Markdown] --> PDF[PDF]
+  MD --> DOCX[DOCX]
+  MD --> ODT[ODT]
+  MD --> HTML[HTML]
+
+  PDF --> PDFR[marksmen-pdf-read]
+  DOCX --> DOCXR[marksmen-docx-read]
+  ODT --> ODTR[marksmen-odt-read]
+  HTML --> HTMLR[marksmen-html-read]
+
+  PDFR --> MDO[Markdown-like output]
+  DOCXR --> MDO
+  ODTR --> MDO
+  HTMLR --> MDO
