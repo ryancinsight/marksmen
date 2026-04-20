@@ -113,8 +113,18 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
             }
             Event::Html(html) => out.push_str(&html),
             Event::SoftBreak | Event::HardBreak => out.push_str("<br />"),
-            Event::InlineMath(math) => out.push_str(&format!("<span class=\"math-inline\">{}</span>", escape_html(math.as_ref()))),
-            Event::DisplayMath(math) => out.push_str(&format!("<div class=\"math-display\">{}</div>\n", escape_html(math.as_ref()))),
+            Event::InlineMath(math) => {
+                match latex2mathml::latex_to_mathml(math.as_ref(), latex2mathml::DisplayStyle::Inline) {
+                    Ok(mathml) => out.push_str(&mathml),
+                    Err(_) => out.push_str(&format!("<span class=\"math-inline\">{}</span>", escape_html(math.as_ref()))),
+                }
+            }
+            Event::DisplayMath(math) => {
+                match latex2mathml::latex_to_mathml(math.as_ref(), latex2mathml::DisplayStyle::Block) {
+                    Ok(mathml) => out.push_str(&mathml),
+                    Err(_) => out.push_str(&format!("<div class=\"math-display\">{}</div>\n", escape_html(math.as_ref()))),
+                }
+            }
             Event::Rule => out.push_str("<hr />\n"),
             _ => {}
         }

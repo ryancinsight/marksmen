@@ -135,7 +135,19 @@ fn emit_preamble(output: &mut String, config: &Config) {
 
     // Code styling.
     output.push_str("#show raw: set text(font: (\"Consolas\", \"Courier New\", \"monospace\"), size: 10pt)\n");
+    // Inline code: light grey highlight behind the text.
     output.push_str("#show raw.where(block: false): it => highlight(fill: luma(245), extent: 1.5pt)[#it]\n");
+    // Block code: explicit grey box with padding and rounded corners.
+    output.push_str("#show raw.where(block: true): it => block(\n");
+    output.push_str("  fill: luma(246),\n");
+    output.push_str("  inset: (x: 10pt, y: 8pt),\n");
+    output.push_str("  radius: 3pt,\n");
+    output.push_str("  width: 100%,\n");
+    output.push_str("  breakable: false,\n");
+    output.push_str(")[#it]\n");
+    // Disable syntax-highlight colouring: all other formats render code monochrome,
+    // so normalise Typst/PDF to match rather than diverge via theme colours.
+    output.push_str("#set raw(theme: none)\n");
 
     // Heading styling.
     output.push_str("#set heading(numbering: none)\n");
@@ -194,12 +206,12 @@ fn translate_event(
         Event::Start(Tag::Paragraph) => {
             if state.in_blockquote {
                 // Blockquote paragraphs are handled by the blockquote wrapper.
-            } else if !state.in_table_cell {
+            } else if !state.in_table_cell && state.list_depth == 0 {
                 output.push('\n');
             }
         }
         Event::End(TagEnd::Paragraph) => {
-            if !state.in_table_cell {
+            if !state.in_table_cell && state.list_depth == 0 {
                 output.push('\n');
             }
         }
@@ -269,14 +281,14 @@ fn translate_event(
             let is_ordered = state.list_ordered.last().copied().unwrap_or(false);
             if is_ordered {
                 let num = state.list_item_number.last_mut().unwrap();
-                output.push_str(&format!("{}+ #[", indent));
+                output.push_str(&format!("{}+ ", indent));
                 *num += 1;
             } else {
-                output.push_str(&format!("{}- #[", indent));
+                output.push_str(&format!("{}- ", indent));
             }
         }
         Event::End(TagEnd::Item) => {
-            output.push_str("]\n");
+            output.push('\n');
         }
 
         // --- Inline styles ---
@@ -355,9 +367,13 @@ fn translate_event(
                 .collect();
 
             output.push_str("\n#align(center)[\n#table(\n");
+            
+            let mut frs = Vec::new();
+            for _ in 0..ncols { frs.push("1fr"); }
+            
             output.push_str(&format!(
-                "  columns: {},\n",
-                ncols
+                "  columns: ({}),\n",
+                frs.join(", ")
             ));
             output.push_str("  inset: 3pt,\n");
             output.push_str(&format!(

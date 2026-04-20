@@ -47,12 +47,8 @@ pub fn handle_event<'a>(
             }
         }
         
-        // --- Lists (Visual Topologies) ---
-        Event::Start(Tag::Item) => {
-            let run = Run::new().add_text("•     ");
-            *current_paragraph = current_paragraph.clone().add_run(run);
-            text_state.has_runs = true;
-        }
+        // Tag::List, Tag::Item, TagEnd::List, TagEnd::Item are handled in document.rs
+        // via DOCX numbering properties — handled before this fallthrough.
 
         // --- Text Formatting Flags ---
         Event::Start(Tag::Strong) => text_state.is_bold = true,
@@ -115,8 +111,8 @@ pub fn handle_event<'a>(
             *current_paragraph = current_paragraph.clone().add_run(run);
             text_state.has_runs = true;
         }
-        // Paragraph boundary
-        Event::End(TagEnd::Paragraph) | Event::End(TagEnd::Item) => {
+        // Paragraph boundary (not Item — Item is flushed by document.rs)
+        Event::End(TagEnd::Paragraph) => {
             if text_state.has_runs {
                 let mut p = std::mem::replace(current_paragraph, Paragraph::new());
                 if in_blockquote {

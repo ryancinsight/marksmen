@@ -225,8 +225,14 @@ fn convert_file(input_path: &Path, args: &Args, config: &Config) -> Result<()> {
 
 fn read_as_markdown_like(input_path: &Path, source_format: Format, output_path: &Path) -> Result<String> {
     match source_format {
-        Format::Markdown | Format::Typst => fs::read_to_string(input_path)
+        Format::Markdown => fs::read_to_string(input_path)
             .with_context(|| format!("Failed to read input file: {}", input_path.display())),
+        Format::Typst => {
+            let typst_source = fs::read_to_string(input_path)
+                .with_context(|| format!("Failed to read Typst input file: {}", input_path.display()))?;
+            marksmen_typst_read::parse_typst(&typst_source)
+                .with_context(|| format!("Failed to parse Typst input: {}", input_path.display()))
+        }
         Format::Html => {
             let html = fs::read_to_string(input_path)
                 .with_context(|| format!("Failed to read HTML input: {}", input_path.display()))?;
@@ -286,7 +292,7 @@ fn write_output(
             let (body, fm_config) = marksmen_core::config::frontmatter::parse_frontmatter(markdown)?;
             let merged = config.merge_frontmatter(&fm_config);
             let events = marksmen_core::parsing::parser::parse(body);
-            let typst_source = marksmen_pdf::translation::translator::translate(events, &merged)?;
+            let typst_source = marksmen_typst::translator::translate(events, &merged)?;
 
             fs::write(output_path, &typst_source)
                 .with_context(|| format!("Failed to write Typst output: {}", output_path.display()))?;
@@ -358,11 +364,7 @@ fn determine_output_path(input_path: &Path, args: &Args, source_format: Format) 
 }
 
 fn infer_input_format(path: &Path) -> Result<Format> {
-    let format = infer_format_from_path(path).with_context(|| format!("Unsupported input format: {}", path.display()))?;
-    if format == Format::Typst {
-        bail!("Typst input is not supported: {}", path.display());
-    }
-    Ok(format)
+    infer_format_from_path(path).with_context(|| format!("Unsupported input format: {}", path.display()))
 }
 
 fn infer_output_format(path: &Path, as_typst: bool) -> Result<Format> {

@@ -1,13 +1,14 @@
 use pulldown_cmark::{Event, Tag, TagEnd};
 use marksmen_core::config::Config;
-use quick_xml::escape::escape;
+use marksmen_xml::escape;
 use std::path::Path;
 
 /// Iterates structurally over the parsed `Event` stream and sequentially constructs
 /// the native `<text:p>`, `<text:h>`, and `<text:span>` elements mapping directly
 /// into the OpenDocument core `<office:text>` container.
-pub fn translate_events<'a>(events: &[Event<'a>], config: &Config, _input_dir: &Path) -> String {
+pub fn translate_events<'a>(events: &[Event<'a>], config: &Config, _input_dir: &Path) -> (String, Vec<String>) {
     let mut output = String::with_capacity(events.len() * 32);
+    let mut math_objects = Vec::new();
     let mut in_blockquote = false;
     
     // Inject YAML Frontmatter (Title Page)
@@ -27,6 +28,11 @@ pub fn translate_events<'a>(events: &[Event<'a>], config: &Config, _input_dir: &
     }
     
     let mut in_mermaid_block = false;
+    // List state: track ordered/unordered per nesting level.
+    // ODF nesting: <text:list-item> can contain <text:p> then a nested <text:list>.
+    // We close </text:p> before emitting a nested <text:list>, reopen if needed.
+    let mut list_ordered_stack: Vec<bool> = Vec::new();
+    let mut list_item_has_open_p = false;
     for event in events {
         match event {
             Event::Start(Tag::Paragraph) => {
@@ -44,7 +50,7 @@ pub fn translate_events<'a>(events: &[Event<'a>], config: &Config, _input_dir: &
             Event::End(TagEnd::Heading(_)) => output.push_str("</text:h>\n"),
             
             // --- Tables ---
-            Event::Start(Tag::Table(_)) => output.push_str("<table:table>\n"),
+            Event::Start(Tag::Table(_)) => output.push_str("<table:table table:style-name=\"Table_Full\">\n"),
             Event::End(TagEnd::Table) => output.push_str("</table:table>\n"),
             Event::Start(Tag::TableHead) => output.push_str("<table:table-header-rows>\n"),
             Event::End(TagEnd::TableHead) => output.push_str("</table:table-header-rows>\n"),
@@ -54,11 +60,35 @@ pub fn translate_events<'a>(events: &[Event<'a>], config: &Config, _input_dir: &
             Event::End(TagEnd::TableCell) => output.push_str("</text:p></table:table-cell>\n"),
 
             // --- Lists ---
-            Event::Start(Tag::List(_)) => output.push_str("<text:list text:style-name=\"L1\">\n"),
-            Event::End(TagEnd::List(_)) => output.push_str("</text:list>\n"),
-            
-            Event::Start(Tag::Item) => output.push_str("<text:list-item><text:p>"),
-            Event::End(TagEnd::Item) => output.push_str("</text:p></text:list-item>\n"),
+            Event::Start(Tag::List(start_num)) => {
+                let is_ordered = start_num.is_some();
+                list_ordered_stack.push(is_ordered);
+                let style = if is_ordered { "L_Numbered" } else { "L_Bullet" };
+                // If we are inside an open <text:p> of a parent item, close it first.
+                if list_item_has_open_p {
+                    output.push_str("</text:p>\n");
+                    list_item_has_open_p = false;
+                }
+                output.push_str(&format!("<text:list text:style-name=\"{}\">\n", style));
+            }
+            Event::End(TagEnd::List(_)) => {
+                list_ordered_stack.pop();
+                output.push_str("</text:list>\n");
+            }
+            Event::Start(Tag::Item) => {
+                output.push_str("<text:list-item>");
+                // Open the item's paragraph immediately; it will be closed when a
+                // sub-list starts OR when End(Item) fires with no sub-list.
+                output.push_str("<text:p>");
+                list_item_has_open_p = true;
+            }
+            Event::End(TagEnd::Item) => {
+                if list_item_has_open_p {
+                    output.push_str("</text:p>");
+                    list_item_has_open_p = false;
+                }
+                output.push_str("</text:list-item>\n");
+            }
             
             // --- Text Formatting ---
             Event::Start(Tag::Strong) => output.push_str("<text:span text:style-name=\"S_Bold\">"),
@@ -117,10 +147,42 @@ pub fn translate_events<'a>(events: &[Event<'a>], config: &Config, _input_dir: &
 
             // --- Math Equations ---
             Event::InlineMath(latex) => {
-                output.push_str(&format!("<text:span text:style-name=\"S_MathInline\">{}</text:span>", escape(latex.as_ref())));
+                match latex2mathml::latex_to_mathml(latex.as_ref(), latex2mathml::DisplayStyle::Inline) {
+                    Ok(mathml) => {
+                        let object_id = format!("Object {}", math_objects.len() + 1);
+                        math_objects.push(mathml);
+                        output.push_str(&format!(
+                            "<draw:frame draw:z-index=\"0\" text:anchor-type=\"as-char\"><draw:object xlink:href=\"./{}\" xlink:type=\"simple\"/></draw:frame>",
+                            object_id
+                        ));
+                        output.push_str(&format!(
+                            "<text:span text:style-name=\"S_HiddenMeta\">{}</text:span>",
+                            escape(latex.as_ref())
+                        ));
+                    }
+                    Err(_) => {
+                        output.push_str(&format!("<text:span text:style-name=\"S_MathInline\">{}</text:span>", escape(latex.as_ref())));
+                    }
+                }
             }
             Event::DisplayMath(latex) => {
-                output.push_str(&format!("<text:p text:style-name=\"P_DisplayMath\">{}</text:p>\n", escape(latex.as_ref())));
+                match latex2mathml::latex_to_mathml(latex.as_ref(), latex2mathml::DisplayStyle::Block) {
+                    Ok(mathml) => {
+                        let object_id = format!("Object {}", math_objects.len() + 1);
+                        math_objects.push(mathml);
+                        output.push_str(&format!(
+                            "<text:p text:style-name=\"P_DisplayMath\"><draw:frame draw:z-index=\"0\" text:anchor-type=\"paragraph\"><draw:object xlink:href=\"./{}\" xlink:type=\"simple\"/></draw:frame></text:p>\n",
+                            object_id
+                        ));
+                        output.push_str(&format!(
+                            "<text:p text:style-name=\"P_HiddenMeta\">{}</text:p>\n",
+                            escape(latex.as_ref())
+                        ));
+                    }
+                    Err(_) => {
+                        output.push_str(&format!("<text:p text:style-name=\"P_DisplayMath\">{}</text:p>\n", escape(latex.as_ref())));
+                    }
+                }
             }
 
             // --- Images ---
@@ -152,5 +214,5 @@ pub fn translate_events<'a>(events: &[Event<'a>], config: &Config, _input_dir: &
         }
     }
     
-    output
+    (output, math_objects)
 }

@@ -1,5 +1,4 @@
 pub mod rendering;
-pub mod translation;
 
 use anyhow::{Context, Result};
 use lopdf::{Dictionary, Document, Object};
@@ -24,7 +23,7 @@ pub fn convert(markdown: &str, config: &Config, base_path: Option<std::path::Pat
     let events = marksmen_core::parsing::parser::parse(body);
 
     // Step 3: Translate events to Typst markup.
-    let typst_source = translation::translator::translate(events, &merged_config)?;
+    let typst_source = marksmen_typst::translator::translate(events, &merged_config)?;
 
     tracing::debug!(
         typst_source_len = typst_source.len(),

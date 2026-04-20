@@ -34,7 +34,30 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path) -> Res
         .add_style(Style::new("Heading3", StyleType::Paragraph).name("heading 3").size(28).bold()) // 14pt
         .add_style(Style::new("Heading4", StyleType::Paragraph).name("heading 4").size(24).bold()) // 12pt
         .add_style(Style::new("Heading5", StyleType::Paragraph).name("heading 5").size(22).bold()) // 11pt
-        .add_style(Style::new("Heading6", StyleType::Paragraph).name("heading 6").size(20).bold()); // 10pt
+        .add_style(Style::new("Heading6", StyleType::Paragraph).name("heading 6").size(20).bold()) // 10pt
+        .add_style(Style::new("CodeBlock", StyleType::Paragraph).name("CodeBlock"))
+        // Bullet list: numbering-id 1
+        .add_abstract_numbering(
+            AbstractNumbering::new(1)
+                .add_level(Level::new(0, Start::new(1), NumberFormat::new("bullet"), LevelText::new("\u{2022}"), LevelJc::new("left"))
+                    .indent(Some(720), Some(SpecialIndentType::Hanging(360)), None, None))
+                .add_level(Level::new(1, Start::new(1), NumberFormat::new("bullet"), LevelText::new("\u{25E6}"), LevelJc::new("left"))
+                    .indent(Some(1440), Some(SpecialIndentType::Hanging(360)), None, None))
+                .add_level(Level::new(2, Start::new(1), NumberFormat::new("bullet"), LevelText::new("\u{25AA}"), LevelJc::new("left"))
+                    .indent(Some(2160), Some(SpecialIndentType::Hanging(360)), None, None))
+        )
+        .add_numbering(Numbering::new(1, 1))
+        // Decimal list: numbering-id 2
+        .add_abstract_numbering(
+            AbstractNumbering::new(2)
+                .add_level(Level::new(0, Start::new(1), NumberFormat::new("decimal"), LevelText::new("%1."), LevelJc::new("left"))
+                    .indent(Some(720), Some(SpecialIndentType::Hanging(360)), None, None))
+                .add_level(Level::new(1, Start::new(1), NumberFormat::new("decimal"), LevelText::new("%2."), LevelJc::new("left"))
+                    .indent(Some(1440), Some(SpecialIndentType::Hanging(360)), None, None))
+                .add_level(Level::new(2, Start::new(1), NumberFormat::new("decimal"), LevelText::new("%3."), LevelJc::new("left"))
+                    .indent(Some(2160), Some(SpecialIndentType::Hanging(360)), None, None))
+        )
+        .add_numbering(Numbering::new(2, 2));
 
     // Inject Title Page
     if !config.title.is_empty() {
@@ -74,8 +97,14 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path) -> Res
     let mut current_paragraph = Paragraph::new();
     let mut text_state = TextState::default();
 
+    // List state: parallel stacks for depth and ordered/bullet classification.
+    // NumberingId 1 = bullet (unordered), NumberingId 2 = decimal (ordered).
+    let mut list_ordered_stack: Vec<bool> = Vec::new();
+
     let mut in_mermaid_block = false;
     let mut current_mermaid_source = String::new();
+    let mut in_generic_code_block = false;
+    let mut current_generic_code_source = String::new();
     let mut in_blockquote = false;
     let (max_figure_width_px, max_figure_height_px) = figure_bounds_px(
         page_width_twips,
@@ -138,18 +167,31 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path) -> Res
                     }
                 }
                 
-                let table = Table::new(rows.clone()).layout(TableLayoutType::Autofit);
-                println!("DOCX ASSEMBLED TABLE WITH ROWS: {}", rows.len());
+                let table = Table::new(rows.clone()).layout(TableLayoutType::Autofit).width(5000, WidthType::Pct);
                 doc = doc.add_table(table);
                 continue;
             }
-            Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(ref lang))) if lang.as_ref() == "mermaid" => {
-                in_mermaid_block = true;
-                current_mermaid_source.clear();
+            Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(ref lang))) => {
+                if lang.as_ref() == "mermaid" {
+                    in_mermaid_block = true;
+                    current_mermaid_source.clear();
+                } else {
+                    in_generic_code_block = true;
+                    current_generic_code_source.clear();
+                }
+                continue;
+            }
+            Event::Start(Tag::CodeBlock(_)) => {
+                in_generic_code_block = true;
+                current_generic_code_source.clear();
                 continue;
             }
             Event::Text(ref text) if in_mermaid_block => {
                 current_mermaid_source.push_str(text.as_ref());
+                continue;
+            }
+            Event::Text(ref text) if in_generic_code_block => {
+                current_generic_code_source.push_str(text.as_ref());
                 continue;
             }
             Event::End(TagEnd::CodeBlock) if in_mermaid_block => {
@@ -205,6 +247,34 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path) -> Res
                         .add_text(format!("```mermaid\n{}\n```", &current_mermaid_source));
                     doc = doc.add_paragraph(Paragraph::new().add_run(run));
                 }
+                continue;
+            }
+            Event::End(TagEnd::CodeBlock) if in_generic_code_block => {
+                in_generic_code_block = false;
+
+                // Flush any pending inline paragraph first.
+                if text_state.has_runs {
+                    let prev_p = std::mem::replace(&mut current_paragraph, Paragraph::new());
+                    doc = doc.add_paragraph(prev_p);
+                    text_state.has_runs = false;
+                }
+
+                // Emit each line as a separate run separated by line-breaks inside
+                // a single CodeBlock-styled paragraph so the reader can detect the
+                // w:pStyle="CodeBlock" sentinel and reconstruct the fenced block.
+                let mut p = Paragraph::new().style("CodeBlock");
+                let src = std::mem::take(&mut current_generic_code_source);
+                let lines: Vec<&str> = src.split('\n').collect();
+                for (i, line) in lines.iter().enumerate() {
+                    let mut run = Run::new()
+                        .fonts(RunFonts::new().ascii("Consolas").hi_ansi("Consolas"))
+                        .add_text(*line);
+                    if i + 1 < lines.len() {
+                        run = run.add_break(BreakType::TextWrapping);
+                    }
+                    p = p.add_run(run);
+                }
+                doc = doc.add_paragraph(p);
                 continue;
             }
             Event::InlineMath(latex) => {
@@ -343,6 +413,31 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path) -> Res
             }
             Event::End(TagEnd::BlockQuote(_)) => {
                 in_blockquote = false;
+            }
+            // --- Lists: intercept before handle_event to use DOCX numbering ---
+            Event::Start(Tag::List(start_num)) => {
+                let is_ordered = start_num.is_some();
+                list_ordered_stack.push(is_ordered);
+            }
+            Event::End(TagEnd::List(_)) => {
+                list_ordered_stack.pop();
+            }
+            Event::Start(Tag::Item) => {
+                // Flush any pending paragraph before starting a list item paragraph.
+                if text_state.has_runs {
+                    doc = doc.add_paragraph(std::mem::replace(&mut current_paragraph, Paragraph::new()));
+                    text_state.has_runs = false;
+                }
+                let depth = list_ordered_stack.len().saturating_sub(1) as usize;
+                let is_ordered = list_ordered_stack.last().copied().unwrap_or(false);
+                let numbering_id = if is_ordered { 2usize } else { 1usize };
+                current_paragraph = Paragraph::new()
+                    .numbering(NumberingId::new(numbering_id), IndentLevel::new(depth));
+            }
+            Event::End(TagEnd::Item) => {
+                let p = std::mem::replace(&mut current_paragraph, Paragraph::new());
+                doc = doc.add_paragraph(p);
+                text_state.has_runs = false;
             }
             _ => {
                 handle_event(event, &mut doc, &mut current_paragraph, &mut text_state, in_blockquote);

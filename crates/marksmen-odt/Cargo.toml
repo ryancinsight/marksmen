@@ -8,7 +8,8 @@ marksmen-core = { path = "../marksmen-core" }
 marksmen-mermaid = { path = "../marksmen-mermaid" }
 pulldown-cmark = { workspace = true }
 zip = { workspace = true }
-quick-xml = { workspace = true }
+marksmen-xml = { path = "../marksmen-xml" }
 tempfile = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
+latex2mathml = "0.2.3"

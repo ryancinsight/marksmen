@@ -146,7 +146,12 @@ pub fn latex_to_typst(latex: &str) -> String {
                     // --- Greek letters and symbols ---
                     _ => {
                         if let Some(typst_sym) = translate_symbol(cmd) {
+                            // Wrap in spaces to prevent concatenation with adjacent
+                            // single-character identifiers (e.g. `i\hbar` → `i planck.reduce`
+                            // instead of `iplanck.reduce`).
+                            result.push(' ');
                             result.push_str(typst_sym);
+                            result.push(' ');
                         } else {
                             tracing::warn!(
                                 latex_command = cmd,
@@ -170,6 +175,25 @@ pub fn latex_to_typst(latex: &str) -> String {
                 i += 1;
             }
             c => {
+                // In Typst math, a sequence of ASCII letters is parsed as a
+                // single multi-character identifier (e.g. `ac` → unknown variable
+                // `ac`). In LaTeX, adjacent letters represent independent variables
+                // with implicit multiplication. Similarly, a digit immediately
+                // followed by a letter (e.g. `4ac`) produces `4 * ac` in Typst
+                // rather than `4 * a * c`.
+                //
+                // Invariant: any plain ASCII alpha character emitted here must be
+                // preceded by a space if the previous non-space character emitted
+                // is also a plain ASCII alpha or a digit, preventing multi-char
+                // identifier formation.
+                if c.is_ascii_alphabetic() {
+                    let last = result.chars().rev().find(|ch| !ch.is_whitespace());
+                    if let Some(prev) = last {
+                        if prev.is_ascii_alphanumeric() {
+                            result.push(' ');
+                        }
+                    }
+                }
                 result.push(c);
                 i += 1;
             }
@@ -461,23 +485,23 @@ mod tests {
 
     #[test]
     fn translates_greek() {
-        assert_eq!(latex_to_typst("\\alpha"), "alpha");
-        assert_eq!(latex_to_typst("\\beta"), "beta");
-        assert_eq!(latex_to_typst("\\Omega"), "Omega");
+        assert_eq!(latex_to_typst("\\alpha"), " alpha ");
+        assert_eq!(latex_to_typst("\\beta"), " beta ");
+        assert_eq!(latex_to_typst("\\Omega"), " Omega ");
     }
 
     #[test]
     fn translates_operators() {
-        assert_eq!(latex_to_typst("\\sum"), "sum");
-        assert_eq!(latex_to_typst("\\int"), "integral");
-        assert_eq!(latex_to_typst("\\infty"), "infinity");
+        assert_eq!(latex_to_typst("\\sum"), " sum ");
+        assert_eq!(latex_to_typst("\\int"), " integral ");
+        assert_eq!(latex_to_typst("\\infty"), " infinity ");
     }
 
     #[test]
     fn translates_relations() {
-        assert_eq!(latex_to_typst("\\ne"), "eq.not");
-        assert_eq!(latex_to_typst("\\le"), "lt.eq");
-        assert_eq!(latex_to_typst("\\ge"), "gt.eq");
+        assert_eq!(latex_to_typst("\\ne"), " eq.not ");
+        assert_eq!(latex_to_typst("\\le"), " lt.eq ");
+        assert_eq!(latex_to_typst("\\ge"), " gt.eq ");
     }
 
     #[test]
@@ -508,5 +532,34 @@ mod tests {
     fn passthrough_plain_math() {
         let result = latex_to_typst("x + y = z");
         assert_eq!(result, "x + y = z");
+    }
+
+    #[test]
+    fn digit_alpha_inserts_space() {
+        // `4ac` in LaTeX = 4 * a * c; Typst must see `4 a c`, not `4ac` (unknown ident).
+        let result = latex_to_typst("4ac");
+        assert_eq!(result, "4 a c");
+    }
+
+    #[test]
+    fn adjacent_alpha_inserts_space() {
+        // `ab` in LaTeX = a * b; Typst must see `a b`, not `ab`.
+        let result = latex_to_typst("ab");
+        assert_eq!(result, "a b");
+    }
+
+    #[test]
+    fn superscript_alpha_no_spurious_space() {
+        // `x^2_i` — the `i` follows `_`, not alphanumeric, so no space before `i`.
+        let result = latex_to_typst("x^2_i");
+        assert_eq!(result, "x^2_i");
+    }
+
+    #[test]
+    fn quadratic_formula_implicit_mul() {
+        // `b^2 - 4ac` — the `a` follows space (prev non-space is `4`, a digit),
+        // so space injected before `a`; `c` follows `a` alpha, so space before `c`.
+        let result = latex_to_typst("b^2 - 4ac");
+        assert_eq!(result, "b^2 - 4 a c");
     }
 }

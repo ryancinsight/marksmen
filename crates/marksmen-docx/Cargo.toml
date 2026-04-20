@@ -11,5 +11,5 @@ marksmen-render = { path = "../marksmen-render" }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 pulldown-cmark = { workspace = true }
-quick-xml = "0.39.2"
+marksmen-xml = { path = "../marksmen-xml" }
 uuid = { version = "1.22.0", features = ["v4"] }

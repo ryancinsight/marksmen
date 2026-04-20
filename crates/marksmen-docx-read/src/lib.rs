@@ -5,8 +5,8 @@
 
 use anyhow::{Context, Result};
 use std::io::{Cursor, Read};
-use quick_xml::events::Event;
-use quick_xml::Reader;
+use marksmen_xml_read::Event;
+use marksmen_xml_read::Reader;
 use std::path::Path;
 use std::collections::HashMap;
 
@@ -81,6 +81,7 @@ pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> 
     let mut is_subscript = false;
     let mut is_superscript = false;
     let mut in_quote = false;
+    let mut in_code_block = false;
     
     // Node stack to track nested blocks (like Table vs Paragraph)
     let mut in_tbl = 0;
@@ -92,6 +93,16 @@ pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> 
     let mut drawing_name = String::new();
     let mut drawing_descr = String::new();
     let mut drawing_target_file = String::new();
+
+    // List state: detect w:numId and w:ilvl from w:numPr within each w:p.
+    // numId=1 => bullet, numId=2 => decimal. Track counters per ilvl.
+    let mut p_num_id: u32 = 0;   // 0 = not a list paragraph
+    let mut p_ilvl: usize = 0;   // indent level (0-indexed)
+    let mut p_list_marker_emitted = false;
+    // Counters per ilvl, indexed by ilvl value (grows on demand).
+    let mut list_counters: Vec<u32> = Vec::new();
+    // Track the previous ilvl to reset counters when leaving deeper levels.
+    let mut prev_ilvl: usize = 0;
     
     loop {
         match reader.read_event() {
@@ -103,11 +114,12 @@ pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> 
                         p_heading_level = 0;
                         p_aligned_center = false;
                         in_quote = false;
+                        p_num_id = 0;
+                        p_ilvl = 0;
+                        p_list_marker_emitted = false;
                         if in_tbl == 0 {
                             if output.len() > 0 {
                                 if !output.ends_with("\n") {
-                                    output.push_str("\n\n");
-                                } else if !output.ends_with("\n\n") {
                                     output.push_str("\n");
                                 }
                             }
@@ -140,12 +152,38 @@ pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> 
                                     let val = a.value;
                                     if val.as_ref() == b"Quote" {
                                         in_quote = true;
+                                    } else if val.as_ref() == b"CodeBlock" {
+                                        if !output.ends_with("\n\n") && !output.ends_with("\n") {
+                                            output.push_str("\n\n");
+                                        }
+                                        output.push_str("```\n");
+                                        in_code_block = true;
                                     } else if val.starts_with(b"Heading") && val.len() == 8 {
                                         let level = val[7] - b'0';
                                         if level >= 1 && level <= 6 {
                                             p_heading_level = level;
                                         }
                                     }
+                                }
+                            }
+                        }
+                    }
+                    b"w:numId" => {
+                        for attr in e.attributes() {
+                            if let Ok(a) = attr {
+                                if a.key.as_ref() == b"w:val" {
+                                    p_num_id = String::from_utf8_lossy(&a.value)
+                                        .parse().unwrap_or(0);
+                                }
+                            }
+                        }
+                    }
+                    b"w:ilvl" => {
+                        for attr in e.attributes() {
+                            if let Ok(a) = attr {
+                                if a.key.as_ref() == b"w:val" {
+                                    p_ilvl = String::from_utf8_lossy(&a.value)
+                                        .parse().unwrap_or(0);
                                 }
                             }
                         }
@@ -170,7 +208,35 @@ pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> 
                         is_italic = false;
                         is_math = false;
                         is_code = false;
-                        
+
+                        // List marker injection: emit before the first run of a list paragraph.
+                        if p_num_id > 0 && !p_list_marker_emitted && in_p {
+                            p_list_marker_emitted = true;
+                            let indent = "    ".repeat(p_ilvl);
+                            if p_num_id == 2 {
+                                // Ordered: decimal. Use/increment counter at p_ilvl.
+                                if p_ilvl > prev_ilvl {
+                                    // Entering deeper level: reset counter.
+                                    while list_counters.len() <= p_ilvl {
+                                        list_counters.push(0);
+                                    }
+                                    list_counters[p_ilvl] = 0;
+                                } else if p_ilvl < prev_ilvl {
+                                    // Returning to shallower level: counters at deeper levels are stale.
+                                    // Do not reset current level — it continues from where it left off.
+                                }
+                                while list_counters.len() <= p_ilvl {
+                                    list_counters.push(0);
+                                }
+                                list_counters[p_ilvl] += 1;
+                                output.push_str(&format!("{}{}. ", indent, list_counters[p_ilvl]));
+                            } else {
+                                // Bullet
+                                output.push_str(&format!("{}- ", indent));
+                            }
+                            prev_ilvl = p_ilvl;
+                        }
+
                         // If this paragraph is a heading and we haven't emitted the `#`s yet
                         // we inject them right before the first text run
                         if p_heading_level > 0 && in_p {
@@ -273,6 +339,13 @@ pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> 
             Ok(Event::End(e)) => match e.name().as_ref() {
                 b"w:p" => {
                     in_p = false;
+                    if in_code_block {
+                        if !output.ends_with("\n") {
+                            output.push_str("\n");
+                        }
+                        output.push_str("```\n");
+                        in_code_block = false;
+                    }
                 }
                 b"w:r" => {
                     in_r = false;
@@ -347,7 +420,7 @@ pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> 
                             
                             let mut core_text = formatted.trim().to_string();
                             if !core_text.is_empty() {
-                                if is_code { core_text = format!("`{}`", core_text); }
+                                if is_code && !in_code_block { core_text = format!("`{}`", core_text); }
                                 if is_bold { core_text = format!("**{}**", core_text); }
                                 if is_italic { core_text = format!("*{}*", core_text); }
                                 if is_underline { core_text = format!("<u>{}</u>", core_text); }

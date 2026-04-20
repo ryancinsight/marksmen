@@ -5,8 +5,8 @@
 
 use anyhow::{Context, Result};
 use std::io::{Cursor, Read};
-use quick_xml::events::Event;
-use quick_xml::Reader;
+use marksmen_xml_read::Event;
+use marksmen_xml_read::Reader;
 
 /// Analytically extracts `.odt` binary payloads into a mathematically equivalent Markdown string.
 /// Traverses `content.xml` nodes such as `<text:p>`, `<text:h>`, and `<text:span>` to reconstruct
@@ -42,12 +42,22 @@ pub fn parse_odt(bytes: &[u8]) -> Result<String> {
     let mut is_inline_math = false;
     let mut in_hidden_meta = false;
     let mut hidden_meta_text = String::new();
+    let mut in_hidden_span_meta = false;
+    let mut hidden_span_meta_text = String::new();
+    // P_DisplayMath paragraphs contain draw:frame (MathML objects) that cannot be re-rendered.
+    // They are always paired with a following P_HiddenMeta paragraph holding the raw LaTeX.
+    // Skip them entirely; the P_HiddenMeta handler emits the $$...$$  Markdown.
+    let mut in_display_math_para = false;
     
     let mut in_tbl = 0;
     let mut tr_count = 0;
     let mut tc_count = 0;
     let mut tc_alignments: Vec<u8> = Vec::new();
     let mut current_tc_alignment = 0;
+    // List state: ordered flag and item counter per nesting level.
+    // L_Numbered maps to ordered (1. 2. 3.), L_Bullet to unordered (-).
+    let mut list_ordered_stack: Vec<bool> = Vec::new();
+    let mut list_counter_stack: Vec<u32> = Vec::new();
     
     loop {
         match reader.read_event() {
@@ -59,15 +69,17 @@ pub fn parse_odt(bytes: &[u8]) -> Result<String> {
                         is_display_math = false;
                         is_inline_math = false;
                         in_hidden_meta = false;
+                        in_display_math_para = false;
                         hidden_meta_text.clear();
                         let mut is_quote_paragraph = false;
                         for attr in e.attributes() {
                             if let Ok(a) = attr {
                                 if a.key.as_ref() == b"text:style-name" {
                                     if a.value.as_ref() == b"P_Rule" {
-                                        is_display_math = true;
+                                        // Horizontal rule — not math.
                                     } else if a.value.as_ref() == b"P_DisplayMath" {
-                                        is_display_math = true;
+                                        // Skip: authoritative LaTeX is in the following P_HiddenMeta.
+                                        in_display_math_para = true;
                                     } else if a.value.as_ref() == b"P_Right" {
                                         current_tc_alignment = 2;
                                     } else if a.value.as_ref() == b"P_Quote" {
@@ -78,11 +90,14 @@ pub fn parse_odt(bytes: &[u8]) -> Result<String> {
                                 }
                             }
                         }
-                        if in_hidden_meta {
+                        if in_hidden_meta || in_display_math_para {
                             continue;
                         }
                         if in_tbl == 0 {
-                            if output.len() > 0 && !output.ends_with("\n\n") && !output.ends_with("\n") && !output.ends_with("- ") {
+                            if !list_ordered_stack.is_empty() {
+                                // Inside a list item: text:p is the item body;
+                                // do not insert paragraph break between the marker and body text.
+                            } else if output.len() > 0 && !output.ends_with("\n\n") && !output.ends_with("\n") && !output.ends_with("- ") {
                                 output.push_str("\n\n");
                             }
                             if is_quote_paragraph {
@@ -126,11 +141,37 @@ pub fn parse_odt(bytes: &[u8]) -> Result<String> {
                         current_tc_alignment = 0;
                     }
                     b"text:list" => {
-                        if output.len() > 0 && !output.ends_with("\n\n") { output.push_str("\n\n"); }
+                        // Detect list style from text:style-name attribute.
+                        let mut is_ordered = false;
+                        for attr in e.attributes() {
+                            if let Ok(a) = attr {
+                                if a.key.as_ref() == b"text:style-name"
+                                    && a.value.as_ref() == b"L_Numbered"
+                                {
+                                    is_ordered = true;
+                                }
+                            }
+                        }
+                        list_ordered_stack.push(is_ordered);
+                        list_counter_stack.push(0);
+                        if output.len() > 0 && !output.ends_with("\n\n") && !output.ends_with("\n") {
+                            output.push_str("\n");
+                        }
                     }
                     b"text:list-item" => {
-                        if output.len() > 0 && !output.ends_with("\n") { output.push_str("\n"); }
-                        output.push_str("- ");
+                        let depth = list_ordered_stack.len().saturating_sub(1);
+                        let indent = "    ".repeat(depth);
+                        let is_ordered = list_ordered_stack.last().copied().unwrap_or(false);
+                        if let Some(counter) = list_counter_stack.last_mut() {
+                            *counter += 1;
+                            if is_ordered {
+                                if output.len() > 0 && !output.ends_with("\n") { output.push('\n'); }
+                                output.push_str(&format!("{}{}. ", indent, counter));
+                            } else {
+                                if output.len() > 0 && !output.ends_with("\n") { output.push('\n'); }
+                                output.push_str(&format!("{}- ", indent));
+                            }
+                        }
                     }
                     b"text:span" => {
                         in_span = true;
@@ -146,6 +187,7 @@ pub fn parse_odt(bytes: &[u8]) -> Result<String> {
                                         b"S_Underline" => is_underline = true,
                                         b"S_Sub" => is_sub = true,
                                         b"S_Sup" => is_sup = true,
+                                        b"S_HiddenMeta" => in_hidden_span_meta = true,
                                         _ => {}
                                     }
                                 }
@@ -158,16 +200,19 @@ pub fn parse_odt(bytes: &[u8]) -> Result<String> {
             }
             Ok(Event::End(e)) => match e.name().as_ref() {
                 b"text:p" | b"text:h" | b"text:hidden-paragraph" => {
-                    if in_hidden_meta {
+                    if in_display_math_para {
+                        // Discard all content accumulated for this paragraph;
+                        // the paired P_HiddenMeta paragraph carries the real LaTeX.
+                        in_display_math_para = false;
+                    } else if in_hidden_meta {
                         let meta = hidden_meta_text.trim();
                         if !meta.is_empty() {
-                            if output.ends_with("![Image]()") {
-                                output.truncate(output.len() - "![Image]()".len());
-                            }
                             if !output.ends_with("\n\n") && !output.is_empty() {
                                 output.push_str("\n\n");
                             }
+                            output.push_str("$$");
                             output.push_str(meta);
+                            output.push_str("$$");
                         }
                         in_hidden_meta = false;
                         hidden_meta_text.clear();
@@ -198,6 +243,10 @@ pub fn parse_odt(bytes: &[u8]) -> Result<String> {
                     in_tbl -= 1;
                     output.push_str("\n");
                 }
+                b"text:list" => {
+                    list_ordered_stack.pop();
+                    list_counter_stack.pop();
+                }
                 b"text:span" => {
                     in_span = false;
                     is_bold = false;
@@ -207,16 +256,34 @@ pub fn parse_odt(bytes: &[u8]) -> Result<String> {
                     is_underline = false;
                     is_sub = false;
                     is_sup = false;
+                    if in_hidden_span_meta {
+                        let meta = hidden_span_meta_text.trim();
+                        if !meta.is_empty() {
+                            output.push_str("$");
+                            output.push_str(meta);
+                            output.push_str("$");
+                        }
+                        in_hidden_span_meta = false;
+                        hidden_span_meta_text.clear();
+                    }
                 }
                 _ => {}
             },
             Ok(Event::Text(e)) => {
                 let text = e.unescape().unwrap_or_default();
-                if text.trim().is_empty() {
+                // Discard all text inside P_DisplayMath paragraphs.
+                if in_display_math_para {
+                    continue;
+                }
+                if text.trim().is_empty() && !is_code && !is_inline_math && !is_display_math && !in_hidden_meta && !in_hidden_span_meta {
                     continue;
                 }
                 if in_hidden_meta {
                     hidden_meta_text.push_str(&text);
+                    continue;
+                }
+                if in_hidden_span_meta {
+                    hidden_span_meta_text.push_str(&text);
                     continue;
                 }
                 if !text.is_empty() {

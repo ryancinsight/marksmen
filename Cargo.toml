@@ -1,14 +1,16 @@
 [workspace]
-members = ["crates/marksmen", "crates/marksmen-core", "crates/marksmen-docx", "crates/marksmen-docx-read", "crates/marksmen-html", "crates/marksmen-html-read", "crates/marksmen-mermaid", "crates/marksmen-odt", "crates/marksmen-odt-read", "crates/marksmen-pdf", "crates/marksmen-pdf-read", "crates/marksmen-render", "crates/marksmen-roundtrip", "examples"]
+members = ["crates/marksmen", "crates/marksmen-core", "crates/marksmen-docx", "crates/marksmen-docx-read", "crates/marksmen-html", "crates/marksmen-html-read", "crates/marksmen-mermaid", "crates/marksmen-odt", "crates/marksmen-odt-read", "crates/marksmen-pdf", "crates/marksmen-pdf-read", "crates/marksmen-render", "crates/marksmen-roundtrip", "crates/marksmen-typst", "crates/marksmen-typst-read", "crates/marksmen-webui", "crates/marksmen-xml", "crates/marksmen-xml-read", "examples"]
 resolver = "2"
 
 [workspace.dependencies]
 pulldown-cmark = { version = "0.13", features = ["simd"] }
 typst = "0.14"
 typst-pdf = "0.14"
+typst-svg = "0.14"
 typst-render = "0.14"
 typst-syntax = "0.14"
 typst-utils = "0.14"
+base64 = "0.22"
 anyhow = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

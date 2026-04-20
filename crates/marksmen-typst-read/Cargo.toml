@@ -1,10 +1,10 @@
 [package]
-name = "marksmen-odt-read"
+name = "marksmen-typst-read"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
 anyhow.workspace = true
-marksmen-xml-read = { path = "../marksmen-xml-read" }
 pulldown-cmark.workspace = true
-zip.workspace = true
+typst.workspace = true
+marksmen-core = { path = "../marksmen-core" }

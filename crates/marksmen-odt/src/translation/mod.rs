@@ -9,6 +9,7 @@ pub struct OdtDom {
     pub content_xml: String,
     pub styles_xml: String,
     pub meta_xml: String,
+    pub math_objects: Vec<String>,
 }
 
 pub mod translator;
@@ -16,7 +17,7 @@ pub mod translator;
 /// Iterates structurally over the parsed `Event` stream and sequentially constructs
 /// the XML nodes for the OpenDocument DOM representation.
 pub fn translate<'a>(events: &[Event<'a>], config: &Config, input_dir: &Path) -> Result<OdtDom> {
-    let body_nodes = translator::translate_events(events, config, input_dir);
+    let (body_nodes, math_objects) = translator::translate_events(events, config, input_dir);
     
     // Generate the full OpenXML representation
     let content_xml = format!(
@@ -25,6 +26,7 @@ pub fn translate<'a>(events: &[Event<'a>], config: &Config, input_dir: &Path) ->
   xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
   xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
   xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"
+  xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
   xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0">
   <office:automatic-styles>
     <style:style style:name="S_Bold" style:family="text">
@@ -65,6 +67,9 @@ pub fn translate<'a>(events: &[Event<'a>], config: &Config, input_dir: &Path) ->
     <style:style style:name="P_HiddenMeta" style:family="paragraph">
       <style:text-properties fo:font-size="1pt" fo:color="#ffffff" text:display="none"/>
     </style:style>
+    <style:style style:name="S_HiddenMeta" style:family="text">
+      <style:text-properties fo:font-size="1pt" fo:color="#ffffff" text:display="none"/>
+    </style:style>
     <style:style style:name="T_Title" style:family="paragraph">
       <style:paragraph-properties fo:text-align="center"/>
       <style:text-properties fo:font-size="24pt" fo:font-weight="bold"/>
@@ -76,12 +81,44 @@ pub fn translate<'a>(events: &[Event<'a>], config: &Config, input_dir: &Path) ->
     <style:style style:name="P_Break" style:family="paragraph">
       <style:paragraph-properties fo:break-before="page"/>
     </style:style>
-    <text:list-style style:name="L1">
-      <text:list-level-style-bullet text:level="1" text:style-name="Bullet_20_Symbols" text:bullet-char="•">
+    <style:style style:name="Table_Full" style:family="table">
+      <style:table-properties table:align="margins" style:width="100%"/>
+    </style:style>
+    <!-- Unordered list: 3 indent levels with •, ◦, ▪ bullets -->
+    <text:list-style style:name="L_Bullet">
+      <text:list-level-style-bullet text:level="1" text:bullet-char="•">
         <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
           <style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="0.5in" fo:text-indent="-0.25in" fo:margin-left="0.5in"/>
         </style:list-level-properties>
       </text:list-level-style-bullet>
+      <text:list-level-style-bullet text:level="2" text:bullet-char="◦">
+        <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
+          <style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="1.0in" fo:text-indent="-0.25in" fo:margin-left="1.0in"/>
+        </style:list-level-properties>
+      </text:list-level-style-bullet>
+      <text:list-level-style-bullet text:level="3" text:bullet-char="▪">
+        <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
+          <style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="1.5in" fo:text-indent="-0.25in" fo:margin-left="1.5in"/>
+        </style:list-level-properties>
+      </text:list-level-style-bullet>
+    </text:list-style>
+    <!-- Ordered list: 3 indent levels with 1. 2. 3. decimal numbering -->
+    <text:list-style style:name="L_Numbered">
+      <text:list-level-style-number text:level="1" style:num-format="1" style:num-suffix=".">
+        <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
+          <style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="0.5in" fo:text-indent="-0.25in" fo:margin-left="0.5in"/>
+        </style:list-level-properties>
+      </text:list-level-style-number>
+      <text:list-level-style-number text:level="2" style:num-format="1" style:num-suffix=".">
+        <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
+          <style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="1.0in" fo:text-indent="-0.25in" fo:margin-left="1.0in"/>
+        </style:list-level-properties>
+      </text:list-level-style-number>
+      <text:list-level-style-number text:level="3" style:num-format="1" style:num-suffix=".">
+        <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
+          <style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="1.5in" fo:text-indent="-0.25in" fo:margin-left="1.5in"/>
+        </style:list-level-properties>
+      </text:list-level-style-number>
     </text:list-style>
   </office:automatic-styles>
   <office:body>
@@ -124,5 +161,6 @@ pub fn translate<'a>(events: &[Event<'a>], config: &Config, input_dir: &Path) ->
         content_xml,
         styles_xml,
         meta_xml,
+        math_objects,
     })
 }

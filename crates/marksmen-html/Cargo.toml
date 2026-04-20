@@ -8,3 +8,4 @@ marksmen-core = { path = "../marksmen-core" }
 marksmen-mermaid = { path = "../marksmen-mermaid" }
 anyhow.workspace = true
 pulldown-cmark.workspace = true
+latex2mathml = "0.2.3"
