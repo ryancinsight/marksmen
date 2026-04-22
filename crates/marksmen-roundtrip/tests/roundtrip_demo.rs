@@ -553,9 +553,12 @@ fn test_qsr_lossless_roundtrip() -> Result<()> {
 
     let source_bytes = fs::read(&src_path)?;
 
-    // ── 1. Extract original to Markdown ───────────────────────────────────────
-    let intermediate_md = marksmen_docx_read::parse_docx(&source_bytes, None)?;
-    fs::write(root.join("PRD/QSR_Intermediate_RT.md"), &intermediate_md)?;
+    // ── 1. Extract original to Markdown (with media extraction) ───────────────
+    let prd_dir = root.join("PRD");
+    let media_dir = prd_dir.join("QSR_media");
+    let _ = fs::create_dir_all(&media_dir);
+    let intermediate_md = marksmen_docx_read::parse_docx(&source_bytes, Some(media_dir.as_path()))?;
+    fs::write(prd_dir.join("QSR_Intermediate_RT.md"), &intermediate_md)?;
 
     // ── 2. Parse Markdown to AST ──────────────────────────────────────────────
     let config = marksmen_core::Config::default();
@@ -563,7 +566,6 @@ fn test_qsr_lossless_roundtrip() -> Result<()> {
     let events = marksmen_core::parsing::parser::parse(body);
 
     // ── 3. Write DOCX with source-passthrough active ──────────────────────────
-    let prd_dir = root.join("PRD");
     let out_bytes = marksmen_docx::translation::document::convert(
         events,
         &config,

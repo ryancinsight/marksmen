@@ -210,6 +210,15 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                                             *last_span += 1;
                                         }
                                         continue;
+                                    } else if tlow.contains("<!-- bg_color:") {
+                                        let bg = tlow.split("<!-- bg_color:").nth(1).unwrap_or("").split("-->").next().unwrap_or("").trim().to_uppercase();
+                                        if !bg.is_empty() {
+                                            current_tc = current_tc.shading(docx_rs::Shading::new().fill(bg).shd_type(docx_rs::ShdType::Clear).color("auto"));
+                                        }
+                                        continue;
+                                    } else if tlow.contains("<!-- p_br -->") {
+                                        current_tc = current_tc.add_paragraph(std::mem::replace(&mut current_cell_p, Paragraph::new()));
+                                        continue;
                                     }
                                     tlow.starts_with("<table") && tlow.contains("nested")
                                 }
@@ -241,6 +250,16 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                                         } else if !is_text && seg_low.starts_with("</tr") { n_rows.push(TableRow::new(std::mem::take(&mut n_cells)));
                                         } else if !is_text && seg_low.starts_with("<td") { in_td = true; n_tc = TableCell::new(); n_p = Paragraph::new();
                                         } else if !is_text && seg_low.starts_with("</td") { in_td = false; n_cells.push(std::mem::replace(&mut n_tc, TableCell::new()).add_paragraph(std::mem::replace(&mut n_p, Paragraph::new())));
+                                        } else if !is_text && seg_low.starts_with("<!-- bg_color:") {
+                                            let bg = seg_low.split("<!-- bg_color:").nth(1).unwrap_or("").split("-->").next().unwrap_or("").trim().to_uppercase();
+                                            if !bg.is_empty() {
+                                                n_tc = n_tc.shading(docx_rs::Shading::new().fill(bg).shd_type(docx_rs::ShdType::Clear).color("auto"));
+                                            }
+                                        } else if !is_text && seg_low.starts_with("<!-- colspan:") {
+                                            let span = seg_low.split("<!-- colspan:").nth(1).unwrap_or("").split("-->").next().unwrap_or("").trim().parse().unwrap_or(1);
+                                            if span > 1 {
+                                                n_tc = n_tc.grid_span(span);
+                                            }
                                         } else if !is_text && seg_low.starts_with("<mark") && seg_low.contains("comment") {
                                             mark_stack.push("comment");
                                             let author = crate::translation::elements::extract_attr(s, "data-author").unwrap_or_default();
@@ -273,6 +292,12 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                                         } else if !is_text && seg_low.starts_with("</del") { text_state.is_del = false;
                                         } else if !is_text && seg_low.starts_with("<br") {
                                             n_p = n_p.add_run(Run::new().add_break(docx_rs::BreakType::TextWrapping));
+                                        } else if !is_text && seg_low.starts_with("<img") {
+                                            let src = crate::translation::elements::extract_attr(s, "src").unwrap_or_default();
+                                            let alt = crate::translation::elements::extract_attr(s, "alt").unwrap_or_default();
+                                            let run = resolve_image_to_run(&src, &alt, input_dir, max_figure_width_px, max_figure_height_px);
+                                            n_tc = n_tc.add_paragraph(std::mem::replace(&mut n_p, Paragraph::new()));
+                                            n_tc = n_tc.add_paragraph(Paragraph::new().align(AlignmentType::Center).add_run(run));
                                         } else if is_text && in_td {
                                             let mut run = Run::new().add_text(s);
                                             if n_is_bold { run = run.bold(); }
@@ -312,6 +337,20 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                             } else {
                                 handle_event(ev, Container::Doc(&mut doc), &mut current_cell_p, &mut text_state, in_blockquote, config, None);
                             }
+                        }
+                        Event::Start(Tag::Image { dest_url, title, .. }) => {
+                            let mut alt_text = String::new();
+                            loop {
+                                match event_iter.next() {
+                                    Some(Event::End(TagEnd::Image)) | None => break,
+                                    Some(Event::Text(t)) => alt_text.push_str(t.as_ref()),
+                                    _ => {}
+                                }
+                            }
+                            let caption = if !title.is_empty() { title.to_string() } else { alt_text };
+                            let run = resolve_image_to_run(dest_url.as_ref(), &caption, input_dir, max_figure_width_px, max_figure_height_px);
+                            current_tc = current_tc.add_paragraph(std::mem::replace(&mut current_cell_p, Paragraph::new()));
+                            current_tc = current_tc.add_paragraph(Paragraph::new().align(AlignmentType::Center).add_run(run));
                         }
                         _ => handle_event(te, Container::Doc(&mut doc), &mut current_cell_p, &mut text_state, in_blockquote, config, None),
                     }
@@ -499,63 +538,8 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                 }
 
                 let img_path_str = dest_url.as_ref();
-                let resolved = if Path::new(img_path_str).is_absolute() {
-                    PathBuf::from(img_path_str)
-                } else {
-                    input_dir.join(img_path_str)
-                };
-
-                // .mmd file: run the pure-Rust mermaid pipeline
-                let is_mmd = img_path_str.ends_with(".mmd");
-                if is_mmd {
-                    match std::fs::read_to_string(&resolved).ok()
-                        .and_then(|src| render_mmd_to_png(&src))
-                    {
-                        Some((png, w, h)) => {
-                            let (w, h) = fit_image_to_bounds(w, h, max_figure_width_px, max_figure_height_px);
-                            doc = doc.add_paragraph(
-                                Paragraph::new()
-                                    .align(AlignmentType::Center)
-                                    .add_run(Run::new().add_image(Pic::new_with_dimensions(png, w, h)))
-                            );
-                        }
-                        None => {
-                            let run = Run::new().italic().add_text(format!("[Diagram: {}]", caption));
-                            doc = doc.add_paragraph(Paragraph::new().add_run(run));
-                        }
-                    }
-                    continue;
-                }
-
-                if let Ok(raw_bytes) = std::fs::read(&resolved) {
-                    let is_svg = img_path_str.ends_with(".svg")
-                        || raw_bytes.starts_with(b"<?xml")
-                        || raw_bytes.starts_with(b"<svg");
-
-                    let (png_bytes, width, height) = if is_svg {
-                        match svg_bytes_to_png(&raw_bytes) {
-                            Some(result) => result,
-                            None => {
-                                let run = Run::new().add_text(format!("![{}]({})", caption, img_path_str));
-                                doc = doc.add_paragraph(Paragraph::new().add_run(run));
-                                continue;
-                            }
-                        }
-                    } else {
-                        let (w, h) = image_dimensions(&raw_bytes).unwrap_or((640, 480));
-                        (raw_bytes, w, h)
-                    };
-
-                    let (width, height) = fit_image_to_bounds(width, height, max_figure_width_px, max_figure_height_px);
-                    doc = doc.add_paragraph(
-                        Paragraph::new()
-                            .align(AlignmentType::Center)
-                            .add_run(Run::new().add_image(Pic::new_with_dimensions(png_bytes, width, height)))
-                    );
-                } else {
-                    let run = Run::new().italic().add_text(format!("[Missing image: {}]", img_path_str));
-                    doc = doc.add_paragraph(Paragraph::new().add_run(run));
-                }
+                let run = resolve_image_to_run(img_path_str, &caption, input_dir, max_figure_width_px, max_figure_height_px);
+                doc = doc.add_paragraph(Paragraph::new().align(AlignmentType::Center).add_run(run));
                 continue;
             }
             Event::Start(Tag::BlockQuote(_)) => {
@@ -622,7 +606,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
     let mut passthrough_map: std::collections::HashMap<String, Vec<u8>> =
         std::collections::HashMap::new();
     // Track which additional files (customXml/*, docMetadata/*, etc.) to inject.
-    let mut extra_files: Vec<(String, Vec<u8>, zip::CompressionMethod)> = Vec::new();
+    let extra_files: Vec<(String, Vec<u8>, zip::CompressionMethod)> = Vec::new();
 
     // Content-type Override entries harvested from source for merge.
     let mut source_ct_overrides: Vec<String> = Vec::new();
@@ -638,7 +622,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
     if let Some(ref mut sa) = source_archive {
         let file_count = sa.len();
         for idx in 0..file_count {
-            let (name, cm, raw) = {
+            let (name, _cm, raw) = {
                 let mut f = match sa.by_index(idx) { Ok(f) => f, Err(_) => continue };
                 let nm = f.name().to_string();
                 let compression = f.compression();
@@ -995,5 +979,54 @@ fn fit_image_to_bounds(width: u32, height: u32, max_width: u32, max_height: u32)
         ((height as f64) * scale).round().max(1.0) as u32,
     )
 }
+
+fn resolve_image_to_run(
+    img_path_str: &str,
+    caption: &str,
+    input_dir: &Path,
+    max_figure_width_px: u32,
+    max_figure_height_px: u32,
+) -> Run {
+    let resolved = if Path::new(img_path_str).is_absolute() {
+        PathBuf::from(img_path_str)
+    } else {
+        input_dir.join(img_path_str)
+    };
+
+    let is_mmd = img_path_str.ends_with(".mmd");
+    if is_mmd {
+        return match std::fs::read_to_string(&resolved).ok()
+            .and_then(|src| render_mmd_to_png(&src))
+        {
+            Some((png, w, h)) => {
+                let (w, h) = fit_image_to_bounds(w, h, max_figure_width_px, max_figure_height_px);
+                Run::new().add_image(Pic::new_with_dimensions(png, w, h))
+            }
+            None => Run::new().italic().add_text(format!("[Diagram: {}]", caption))
+        };
+    }
+
+    if let Ok(raw_bytes) = std::fs::read(&resolved) {
+        let is_svg = img_path_str.ends_with(".svg")
+            || raw_bytes.starts_with(b"<?xml")
+            || raw_bytes.starts_with(b"<svg");
+
+        let (png_bytes, width, height) = if is_svg {
+            match svg_bytes_to_png(&raw_bytes) {
+                Some(result) => result,
+                None => return Run::new().add_text(format!("![{}]({})", caption, img_path_str))
+            }
+        } else {
+            let (w, h) = image_dimensions(&raw_bytes).unwrap_or((640, 480));
+            (raw_bytes, w, h)
+        };
+
+        let (width, height) = fit_image_to_bounds(width, height, max_figure_width_px, max_figure_height_px);
+        Run::new().add_image(Pic::new_with_dimensions(png_bytes, width, height))
+    } else {
+        Run::new().italic().add_text(format!("[Missing image: {}]", img_path_str))
+    }
+}
+
 
 

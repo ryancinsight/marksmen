@@ -206,8 +206,7 @@ fn parse_xml_payload(
     let mut tr_count_stack: Vec<u32> = Vec::new();
     let mut tc_count = 0;
     let mut tc_alignments: Vec<u8> = Vec::new(); // 1 = center, 2 = right
-    let mut current_tc_alignment = 0;
-    let mut current_tc_grid_span: u32 = 1; // columns this cell spans (w:gridSpan)
+    let mut tc_state_stack: Vec<(u32, u8, Option<String>)> = Vec::new(); // (grid_span, alignment, bg_color)
     // When in_tbl > 1 we buffer the entire nested table HTML here and emit it
     // atomically at </w:tbl> so pulldown-cmark receives one contiguous HTML block
     // rather than fragmented per-tag events, enabling the writer's HTML parser.
@@ -378,16 +377,28 @@ fn parse_xml_payload(
                             nested_html_buf.as_mut().unwrap().push_str("<td>");
                         }
                         tc_count += 1;
-                        current_tc_alignment = 0;
-                        current_tc_grid_span = 1; // reset; overridden by w:gridSpan
+                        tc_state_stack.push((1, 0, None));
+                    }
+                    b"w:shd" => {
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == b"w:fill" {
+                                let fill_val = String::from_utf8_lossy(&attr.value);
+                                if fill_val != "auto" && fill_val != "clear" {
+                                    if let Some(state) = tc_state_stack.last_mut() {
+                                        state.2 = Some(fill_val.into_owned());
+                                    }
+                                }
+                            }
+                        }
                     }
                     b"w:gridSpan" => {
                         // Detect how many columns this cell spans so we can emit padding
                         // empty cells to keep Markdown table column counts uniform.
                         for attr in e.attributes().flatten() {
                             if attr.key.as_ref() == b"w:val" {
-                                current_tc_grid_span = String::from_utf8_lossy(&attr.value)
-                                    .parse().unwrap_or(1);
+                                if let Some(state) = tc_state_stack.last_mut() {
+                                    state.0 = String::from_utf8_lossy(&attr.value).parse().unwrap_or(1);
+                                }
                             }
                         }
                     }
@@ -451,9 +462,13 @@ fn parse_xml_payload(
                                 if a.key.as_ref() == b"w:val" {
                                     if a.value.as_ref() == b"center" {
                                         p_aligned_center = true;
-                                        current_tc_alignment = 1;
+                                        if let Some(state) = tc_state_stack.last_mut() {
+                                            state.1 = 1;
+                                        }
                                     } else if a.value.as_ref() == b"right" {
-                                        current_tc_alignment = 2;
+                                        if let Some(state) = tc_state_stack.last_mut() {
+                                            state.1 = 2;
+                                        }
                                     }
                                 }
                             }
@@ -602,10 +617,20 @@ fn parse_xml_payload(
                                     if let Some(out_dir) = media_out_dir {
                                         if let Some(file_name) = Path::new(target).file_name() {
                                             let dest_path = out_dir.join(file_name);
-                                            let internal_path = format!("word/{}", target.replace("\\", "/"));
-                                            if let Ok(mut img_file) = archive.by_name(&internal_path) {
-                                                if let Ok(mut out_file) = std::fs::File::create(&dest_path) {
-                                                    let _ = std::io::copy(&mut img_file, &mut out_file);
+                                            // OOXML relationship targets may be absolute (leading '/')
+                                            // or relative (resolved from word/). Try both forms.
+                                            let clean_target = target.replace("\\", "/");
+                                            let stripped = clean_target.trim_start_matches('/');
+                                            let candidates = [
+                                                stripped.to_string(),
+                                                format!("word/{}", stripped),
+                                            ];
+                                            for cand in &candidates {
+                                                if let Ok(mut img_file) = archive.by_name(cand) {
+                                                    if let Ok(mut out_file) = std::fs::File::create(&dest_path) {
+                                                        let _ = std::io::copy(&mut img_file, &mut out_file);
+                                                    }
+                                                    break;
                                                 }
                                             }
                                             if let Some(out_dir_name) = out_dir.file_name() {
@@ -688,8 +713,8 @@ fn parse_xml_payload(
                                 buf.push_str("<br/>");
                             }
                         } else {
-                            if !output.ends_with("<br/>") {
-                                output.push_str("<br/>");
+                            if !output.ends_with("<!-- P_BR -->") {
+                                output.push_str("<!-- P_BR -->");
                             }
                         }
                     }
@@ -712,19 +737,37 @@ fn parse_xml_payload(
                 }
                 b"w:t" => in_t = false,
                 b"w:tc" => {
+                    let mut tc_span = 1;
+                    let mut tc_align = 0;
+                    let mut tc_bg = None;
+                    if let Some(state) = tc_state_stack.pop() {
+                        tc_span = state.0;
+                        tc_align = state.1;
+                        tc_bg = state.2;
+                    }
+                    
                     if in_tbl > 1 {
                         if let Some(buf) = nested_html_buf.as_mut() {
                             while buf.ends_with("<br/>") {
                                 let l = buf.len() - 5;
                                 buf.truncate(l);
                             }
+                            if let Some(bg) = tc_bg {
+                                buf.push_str(&format!("<!-- BG_COLOR:{} -->", bg));
+                            }
+                            if tc_span > 1 {
+                                buf.push_str(&format!("<!-- COLSPAN:{} -->", tc_span));
+                            }
                             buf.push_str("</td>");
                         }
                     } else {
-                        tc_alignments.push(current_tc_alignment);
+                        tc_alignments.push(tc_align);
+                        if let Some(bg) = tc_bg {
+                            output.push_str(&format!(" <!-- BG_COLOR:{} --> ", bg));
+                        }
                         output.push_str(" | ");
-                        for _ in 1..current_tc_grid_span {
-                            tc_alignments.push(current_tc_alignment);
+                        for _ in 1..tc_span {
+                            tc_alignments.push(tc_align);
                             output.push_str(" <!-- COLSPAN --> | ");
                         }
                     }
@@ -772,13 +815,21 @@ fn parse_xml_payload(
                     }
                 }
                 b"w:drawing" => {
-                    if output.len() > 0 && !output.ends_with("\n\n") {
-                        output.push_str("\n\n");
-                    }
                     let alt = if !drawing_name.is_empty() { &drawing_name } else { "Image" };
                     let path = if !drawing_target_file.is_empty() { &drawing_target_file } else { &drawing_descr };
                     let valid_path = path.replace(" ", "%20");
-                    output.push_str(&format!("![{}]({})\n\n", alt, valid_path));
+                    if in_tbl > 1 {
+                        if let Some(buf) = nested_html_buf.as_mut() {
+                            buf.push_str(&format!("<img src=\"{}\" alt=\"{}\" />", valid_path, alt));
+                        }
+                    } else if in_tbl == 1 {
+                        output.push_str(&format!("![{}]({})", alt, valid_path));
+                    } else {
+                        if output.len() > 0 && !output.ends_with("\n\n") {
+                            output.push_str("\n\n");
+                        }
+                        output.push_str(&format!("![{}]({})\n\n", alt, valid_path));
+                    }
                 }
                 _ => {}
             },
