@@ -66,11 +66,8 @@
 </ul>
 <p><em>Note: Arbitrary <code>&lt;div style=&quot;padding: 2px&quot;&gt;</code> blocks are ignored, preserving architectural invariants against empirical DOM approximations.</em></p>
 <h2>3. Mathematical Typesetting</h2>
-<p>True native math (without KaTeX SVG hacks):<br /><div class="math-display">
-\mathbf{J} = \nabla \times \mathbf{H} = \sigma \mathbf{E} + \frac{\partial \mathbf{D}}{\partial t}
-</div>
-</p>
-<p>Inline equations like <span class="math-inline">\lim_{x \to \infty} f(x)</span> blend seamlessly with the baseline.</p>
+<p>True native math (without KaTeX SVG hacks):<br /><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><mi mathvariant="bold">J</mi><mo>=</mo><mo>∇</mo><mo>×</mo><mi mathvariant="bold">H</mi><mo>=</mo><mi>σ</mi><mi mathvariant="bold">E</mi><mo>+</mo><mfrac><mrow><mo mathvariant="italic">∂</mo><mi mathvariant="bold">D</mi></mrow><mrow><mo mathvariant="italic">∂</mo><mi>t</mi></mrow></mfrac></math></p>
+<p>Inline equations like <math xmlns="http://www.w3.org/1998/Math/MathML" display="inline"><munder><mi>lim</mi><mrow><mi>x</mi><mo>→</mo><mi mathvariant="normal">∞</mi></mrow></munder><mi>f</mi><mo>(</mo><mi>x</mi><mo>)</mo></math> blend seamlessly with the baseline.</p>
 <h2>4. Linked SVG Figures</h2>
 <p>Instead of relying on web-based JS to render graphics, Typst handles <code>SVG</code> vector embeddings natively without rasterization:</p>
 <p><img src="./architecture.svg" alt="Architecture Diagram" /></p>
@@ -111,6 +108,6 @@ graph TD
 ```</pre>
 <!-- pagebreak -->
 <h2>Appendix: Mathematical Justifications</h2>
-<p>Because <code>marksmen</code> leverages Typst, we can seamlessly write <span class="math-inline">e^(i pi) + 1 = 0</span> in the middle of text, and be confident that it renders beautifully on a completely separated page.</p>
+<p>Because <code>marksmen</code> leverages Typst, we can seamlessly write <math xmlns="http://www.w3.org/1998/Math/MathML" display="inline"><msup><mi>e</mi><mo>(</mo></msup><mi>i</mi><mi>p</mi><mi>i</mi><mo>)</mo><mo>+</mo><mn>1</mn><mo>=</mo><mn>0</mn></math> in the middle of text, and be confident that it renders beautifully on a completely separated page.</p>
 </body>
 </html>

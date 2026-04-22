@@ -6,11 +6,13 @@
 pub mod frontmatter;
 pub mod math;
 pub mod page;
+pub mod style_map;
 
 use serde::{Deserialize, Serialize};
 
 pub use math::MathConfig;
 pub use page::PageConfig;
+pub use style_map::StyleMap;
 
 /// Top-level configuration for markdown-to-PDF conversion.
 ///
@@ -48,6 +50,14 @@ pub struct Config {
     /// Code syntax highlight theme name. Default: `"github"`.
     #[serde(default = "default_highlight_theme")]
     pub highlight_theme: String,
+
+    /// Global Word style mapping for DOCX output.
+    ///
+    /// When present, overrides the default structural style names emitted by
+    /// `marksmen-docx` for headings, blockquotes, tables, code blocks, and
+    /// body paragraphs. Populated from YAML front-matter `style_map:` block.
+    #[serde(default)]
+    pub style_map: StyleMap,
 }
 
 fn default_highlight_theme() -> String {
@@ -65,6 +75,7 @@ impl Default for Config {
             math: MathConfig::default(),
             dest: None,
             highlight_theme: default_highlight_theme(),
+            style_map: StyleMap::default(),
         }
     }
 }
@@ -100,6 +111,9 @@ impl Config {
         if let Some(ref theme) = fm.highlight_theme {
             merged.highlight_theme = theme.clone();
         }
+        if let Some(ref sm) = fm.style_map {
+            merged.style_map = sm.clone();
+        }
         merged
     }
 }
@@ -118,4 +132,6 @@ pub struct FrontMatterConfig {
     pub math: Option<MathConfig>,
     pub dest: Option<String>,
     pub highlight_theme: Option<String>,
+    /// Global Word style map from YAML `style_map:` block.
+    pub style_map: Option<StyleMap>,
 }

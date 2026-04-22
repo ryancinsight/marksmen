@@ -20,7 +20,6 @@ Because the intermediate format is Typst, typography is mathematically precise. 
 ### 2.1 CSS & HTML Handling
 
 Typst is an analytical typesetting engine, **not a web browser**. It cannot execute CSS or complex DOM layouts. However, the translator enforces semantic mapping for structural inline HTML subsets:
-
 - **Underline**: This text is underlined via `<u>`
 - **Subscripts**: H2O via `<sub>`
 - **Superscripts**: E = mc2 via `<sup>`
@@ -32,11 +31,9 @@ Typst is an analytical typesetting engine, **not a web browser**. It cannot exec
 ## 3. Mathematical Typesetting
 
 True native math (without KaTeX SVG hacks):
-$$
 
-\mathbf{J} = \nabla \times \mathbf{H} = \sigma \mathbf{E} + \frac{\partial \mathbf{D}}{\partial t}
 
-$$
+$$\mathbf{J} = \nabla \times \mathbf{H} = \sigma \mathbf{E} + \frac{\partial \mathbf{D}}{\partial t}$$
 
 Inline equations like $\lim_{x \to \infty} f(x)$ blend seamlessly with the baseline.
 
@@ -44,7 +41,9 @@ Inline equations like $\lim_{x \to \infty} f(x)$ blend seamlessly with the basel
 
 Instead of relying on web-based JS to render graphics, Typst handles `SVG` vector embeddings natively without rasterization:
 
-![Image](./architecture.svg)
+![Image]()
+
+$$![Image](./architecture.svg)$$
 Architecture Diagram
 
 ## 5. Native Diagram Rendering (`marksmen-mermaid`)

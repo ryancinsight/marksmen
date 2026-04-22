@@ -1,6 +1,9 @@
 /target
 **/*.log
 **/*.txt
+*.log
+*.diff
+*.zip
 
 /md-to-pdf/
 /external/

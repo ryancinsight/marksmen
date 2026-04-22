@@ -30,4 +30,6 @@ pub mod config;
 pub mod parsing;
 
 pub use config::Config;
+pub use config::StyleMap;
 pub use parsing::parser::parse;
+pub use parsing::{AnnotatedEvent, intercept};

@@ -1,7 +1,0 @@
-[package]
-name = "temp_cmark"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-pulldown-cmark.workspace = true

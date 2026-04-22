@@ -14,6 +14,7 @@ enum Format {
     Docx,
     Odt,
     Html,
+    Xhtml,
     Pdf,
     Typst,
 }
@@ -247,6 +248,12 @@ fn read_as_markdown_like(input_path: &Path, source_format: Format, output_path: 
             marksmen_html_read::parse_html(&html)
                 .with_context(|| format!("Failed to parse HTML input: {}", input_path.display()))
         }
+        Format::Xhtml => {
+            let xhtml = fs::read_to_string(input_path)
+                .with_context(|| format!("Failed to read XHTML input: {}", input_path.display()))?;
+            marksmen_xhtml_read::parse_xhtml(&xhtml)
+                .with_context(|| format!("Failed to parse XHTML input: {}", input_path.display()))
+        }
         Format::Docx => {
             let bytes = fs::read(input_path)
                 .with_context(|| format!("Failed to read DOCX input: {}", input_path.display()))?;
@@ -317,6 +324,17 @@ fn write_output(
             fs::write(output_path, &html)
                 .with_context(|| format!("Failed to write HTML output: {}", output_path.display()))?;
             tracing::info!(path = %output_path.display(), size_bytes = html.len(), "HTML written");
+            Ok(())
+        }
+        Format::Xhtml => {
+            let (body, fm_config) = marksmen_core::config::frontmatter::parse_frontmatter(markdown)?;
+            let merged = config.merge_frontmatter(&fm_config);
+            let events = marksmen_core::parsing::parser::parse(body);
+            let xhtml = marksmen_xhtml::convert(events, &merged)?;
+
+            fs::write(output_path, &xhtml)
+                .with_context(|| format!("Failed to write XHTML output: {}", output_path.display()))?;
+            tracing::info!(path = %output_path.display(), size_bytes = xhtml.len(), "XHTML written");
             Ok(())
         }
         Format::Docx => {
@@ -395,6 +413,7 @@ fn infer_format_from_path(path: &Path) -> Result<Format> {
         "docx" => Ok(Format::Docx),
         "odt" => Ok(Format::Odt),
         "html" | "htm" => Ok(Format::Html),
+        "xhtml" | "xht" => Ok(Format::Xhtml),
         "pdf" => Ok(Format::Pdf),
         "typ" => Ok(Format::Typst),
         _ => bail!("unsupported extension: .{}", ext),
@@ -412,6 +431,8 @@ mod tests {
         assert_eq!(infer_format_from_path(Path::new("test.docx")).unwrap(), Format::Docx);
         assert_eq!(infer_format_from_path(Path::new("test.odt")).unwrap(), Format::Odt);
         assert_eq!(infer_format_from_path(Path::new("test.html")).unwrap(), Format::Html);
+        assert_eq!(infer_format_from_path(Path::new("test.xhtml")).unwrap(), Format::Xhtml);
+        assert_eq!(infer_format_from_path(Path::new("test.xht")).unwrap(), Format::Xhtml);
         assert_eq!(infer_format_from_path(Path::new("test.pdf")).unwrap(), Format::Pdf);
         assert_eq!(infer_format_from_path(Path::new("test.typ")).unwrap(), Format::Typst);
     }

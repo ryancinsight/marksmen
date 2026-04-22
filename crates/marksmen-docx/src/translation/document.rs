@@ -152,24 +152,34 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                 }
 
                 let mut rows = Vec::new();
-                let mut current_cells = Vec::new();
+                let mut current_cells: Vec<TableCell> = Vec::new();
                 let mut current_tc = TableCell::new();
                 let mut current_cell_p = Paragraph::new();
                 let mut cell_index = 0;
+                
+                let mut cell_grid_spans: Vec<usize> = Vec::new();
+                let mut current_cell_is_colspan = false;
 
                 while let Some(te) = event_iter.by_ref().next() {
                     match te {
                         Event::End(TagEnd::Table) => break,
                         Event::Start(Tag::TableRow) | Event::Start(Tag::TableHead) => {
                             current_cells.clear();
+                            cell_grid_spans.clear();
                             cell_index = 0;
                         }
                         Event::End(TagEnd::TableRow) | Event::End(TagEnd::TableHead) => {
+                            for (cell, span) in current_cells.iter_mut().zip(cell_grid_spans.iter()) {
+                                if *span > 1 {
+                                    *cell = cell.clone().grid_span(*span);
+                                }
+                            }
                             rows.push(TableRow::new(std::mem::take(&mut current_cells)));
                         }
                         Event::Start(Tag::TableCell) => {
                             current_tc = TableCell::new();
                             current_cell_p = Paragraph::new();
+                            current_cell_is_colspan = false;
                             if cell_index < aligns.len() {
                                 match aligns[cell_index] {
                                     pulldown_cmark::Alignment::Center => {
@@ -183,13 +193,30 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                             }
                         }
                         Event::End(TagEnd::TableCell) => {
-                            current_tc = current_tc.add_paragraph(std::mem::replace(&mut current_cell_p, Paragraph::new()));
-                            current_cells.push(std::mem::replace(&mut current_tc, TableCell::new()));
+                            if !current_cell_is_colspan {
+                                current_tc = current_tc.add_paragraph(std::mem::replace(&mut current_cell_p, Paragraph::new()));
+                                current_cells.push(std::mem::replace(&mut current_tc, TableCell::new()));
+                                cell_grid_spans.push(1);
+                            }
                             cell_index += 1;
                         }
-                        Event::Html(ref html) | Event::InlineHtml(ref html) => {
-                            let tlow = html.to_lowercase();
-                            if tlow.starts_with("<table") && tlow.contains("nested") {
+                        ev @ (Event::Html(_) | Event::InlineHtml(_)) => {
+                            let is_nested = match &ev {
+                                Event::Html(h) | Event::InlineHtml(h) => {
+                                    let tlow = h.to_lowercase();
+                                    if tlow.contains("<!-- colspan -->") {
+                                        current_cell_is_colspan = true;
+                                        if let Some(last_span) = cell_grid_spans.last_mut() {
+                                            *last_span += 1;
+                                        }
+                                        continue;
+                                    }
+                                    tlow.starts_with("<table") && tlow.contains("nested")
+                                }
+                                _ => false,
+                            };
+
+                            if is_nested {
                                 let mut n_rows = Vec::new();
                                 let mut n_cells = Vec::new();
                                 let mut n_tc = TableCell::new();
@@ -198,10 +225,10 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                                 let mut n_is_bold = false;
                                 let mut mark_stack = Vec::new();
                                 
-                                while let Some(ev) = event_iter.by_ref().next() {
+                                while let Some(ev_n) = event_iter.by_ref().next() {
                                     let mut html_str = None;
                                     let mut is_text = false;
-                                    match &ev {
+                                    match &ev_n {
                                         Event::Html(h) | Event::InlineHtml(h) => html_str = Some(h.as_ref()),
                                         Event::Text(t) => { html_str = Some(t.as_ref()); is_text = true; },
                                         Event::SoftBreak | Event::HardBreak => { n_p = n_p.add_run(Run::new().add_break(docx_rs::BreakType::TextWrapping)); continue; },
@@ -282,10 +309,11 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                                 current_tc = current_tc.add_paragraph(std::mem::replace(&mut current_cell_p, Paragraph::new()));
                                 current_tc = current_tc.add_table(nested_tbl);
                                 current_cell_p = Paragraph::new();
-                                handle_event(te, Container::Doc(&mut doc), &mut current_cell_p, &mut text_state, in_blockquote);
+                            } else {
+                                handle_event(ev, Container::Doc(&mut doc), &mut current_cell_p, &mut text_state, in_blockquote, config, None);
                             }
                         }
-                        _ => handle_event(te, Container::Doc(&mut doc), &mut current_cell_p, &mut text_state, in_blockquote),
+                        _ => handle_event(te, Container::Doc(&mut doc), &mut current_cell_p, &mut text_state, in_blockquote, config, None),
                     }
                 }
                 
@@ -562,7 +590,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                 text_state.has_runs = false;
             }
             _ => {
-                handle_event(event, Container::Doc(&mut doc), &mut current_paragraph, &mut text_state, in_blockquote);
+                handle_event(event, Container::Doc(&mut doc), &mut current_paragraph, &mut text_state, in_blockquote, config, None);
             }
         }
     }
@@ -585,23 +613,10 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
     let mut source_archive = source_docx.and_then(|b| {
         zip::ZipArchive::new(std::io::Cursor::new(b)).ok()
     });
-
-    // Files whose content is replaced 1-to-1 from the source when present.
-    // Ordering matches typical OOXML content-type registration order.
-    const VERBATIM_PASSTHROUGH: &[&str] = &[
-        "word/styles.xml",
-        "word/numbering.xml",
-        "word/settings.xml",
-        "word/fontTable.xml",
-        "word/webSettings.xml",
-        "word/theme/theme1.xml",
-        "word/header1.xml",
-        "word/footer1.xml",
-        "word/comments.xml",
-        "word/commentsIds.xml",
-        "word/commentsExtended.xml",
-        "word/commentsExtensible.xml",
-    ];
+    // By omitting the few core files authored by marksmen, we effectively
+    // blanket-passthrough all advanced Office payload components (e.g. 
+    // multiple headers, footers, comments, glossaries, endnotes, themes, 
+    // extensions, docProps, etc.) to guarantee identical structural fidelity.
 
     // Collect verbatim passthrough bytes from source for each candidate.
     let mut passthrough_map: std::collections::HashMap<String, Vec<u8>> =
@@ -632,11 +647,18 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                 (nm, compression, buf)
             };
 
-            // ── Verbatim passthrough candidates ──────────────────────────────
-            if VERBATIM_PASSTHROUGH.contains(&name.as_str()) {
+            // ── Comprehensive Passthrough ──────────────────────────────────────────────
+            let is_core_file = name == "word/document.xml"
+                || name == "[Content_Types].xml"
+                || name == "_rels/.rels"
+                || name == "word/_rels/document.xml.rels"
+                || name == "word/comments.xml"
+                || name == "word/commentsExtended.xml"
+                || name.starts_with("word/media/") // allow docx-rs to re-pack media
+                || name.ends_with('/');             // implicitly handled directories
+
+            if !is_core_file {
                 passthrough_map.insert(name.clone(), raw.clone());
-            } else if name.starts_with("customXml/") || name.starts_with("docMetadata/") {
-                extra_files.push((name.clone(), raw.clone(), cm));
             }
 
             // ── Track source section formatting (margins, header/footer refs) ─
@@ -665,12 +687,16 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                     let rel_re = regex::Regex::new(r#"(?s)<Relationship\b[^>]*/>"#).unwrap();
                     for cap in rel_re.find_iter(&rels_xml) {
                         let entry = cap.as_str();
-                        if entry.contains("header")
-                            || entry.contains("footer")
-                            || entry.contains("theme")
-                            || entry.contains("commentsExtensible")
-                            || entry.contains("commentsIds")
-                            || entry.contains("webSettings")
+                        // Omit the core structural relations minted cleanly by docx-rs, 
+                        // harvest everything else (headers, footers, glossaries, notes).
+                        if !entry.contains("Target=\"styles.xml\"")
+                            && !entry.contains("Target=\"numbering.xml\"")
+                            && !entry.contains("Target=\"fontTable.xml\"")
+                            && !entry.contains("Target=\"settings.xml\"")
+                            && !entry.contains("Target=\"webSettings.xml\"")
+                            && !entry.contains("Target=\"media/")
+                            && !entry.contains("Target=\"comments.xml\"")
+                            && !entry.contains("Target=\"commentsExtended.xml\"")
                         {
                             source_rels_entries.push(entry.to_string());
                         }
@@ -711,8 +737,10 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
 
     for i in 0..archive.len() {
         let mut file = archive.by_index(i).unwrap();
-        let cm = file.compression();
-        let options = zip::write::FileOptions::<()>::default().compression_method(cm);
+        // Force DEFLATED compression instead of inheriting the docx-rs default,
+        // which emits Stored (uncompressed) files leading to bloated outputs.
+        let options = zip::write::FileOptions::<()>::default()
+            .compression_method(zip::CompressionMethod::Deflated);
 
         let mut content = Vec::new();
         std::io::Read::read_to_end(&mut file, &mut content)?;
@@ -726,21 +754,26 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
             continue;
         }
 
-        // ── _rels/document.xml.rels: merge source header/footer/theme entries ─
-        if path == "word/_rels/document.xml.rels" && !source_rels_entries.is_empty() {
+        if path == "word/_rels/document.xml.rels" {
             if let Ok(mut rels_str) = String::from_utf8(content.clone()) {
-                for entry in &source_rels_entries {
-                    if let Some(rid_start) = entry.find("Id=\"") {
-                        let rid_rest = &entry[rid_start + 4..];
-                        if let Some(rid_end) = rid_rest.find('"') {
-                            let rid = &rid_rest[..rid_end];
-                            if !rels_str.contains(&format!("Id=\"{}\"", rid)) {
-                                rels_str = rels_str.replace(
-                                    "</Relationships>",
-                                    &format!("{}</Relationships>", entry),
-                                );
-                            }
-                        }
+                // Offset docx-rs generated Id="rIdX" by 1000 to prevent collisions
+                let rid_re = regex::Regex::new(r#"Id="rId(\d+)""#).unwrap();
+                let mut offset_rels = String::new();
+                let mut last = 0;
+                for mat in rid_re.captures_iter(&rels_str) {
+                    let m = mat.get(0).unwrap();
+                    offset_rels.push_str(&rels_str[last..m.start()]);
+                    let old_num: u32 = mat.get(1).unwrap().as_str().parse().unwrap_or(0);
+                    offset_rels.push_str(&format!("Id=\"rId{}\"", old_num + 1000));
+                    last = m.end();
+                }
+                offset_rels.push_str(&rels_str[last..]);
+                rels_str = offset_rels;
+
+                if !source_rels_entries.is_empty() {
+                    let end_tag = "</Relationships>";
+                    for entry in &source_rels_entries {
+                        rels_str = rels_str.replace(end_tag, &format!("{}\n{}", entry, end_tag));
                     }
                 }
                 zip_writer.start_file(&path, options)?;
@@ -798,6 +831,21 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                 }
                 rebuilt.push_str(&doc_str[last..]);
                 
+                // Offset docx-rs generated r:id values to prevent collisions with source r:id values
+                let rid_re = regex::Regex::new(r#"r:(id|embed|link)="rId(\d+)""#).unwrap();
+                let mut offset_doc = String::new();
+                let mut d_last = 0;
+                for mat in rid_re.captures_iter(&rebuilt) {
+                    let m = mat.get(0).unwrap();
+                    offset_doc.push_str(&rebuilt[d_last..m.start()]);
+                    let attr_name = mat.get(1).unwrap().as_str();
+                    let old_num: u32 = mat.get(2).unwrap().as_str().parse().unwrap_or(0);
+                    offset_doc.push_str(&format!("r:{}=\"rId{}\"", attr_name, old_num + 1000));
+                    d_last = m.end();
+                }
+                offset_doc.push_str(&rebuilt[d_last..]);
+                rebuilt = offset_doc;
+                
                 // ── Inject source <w:sectPr> to preserve header/footer refs and margins ──
                 if let Some(src_sect) = &source_sect_pr {
                     let sect_re = regex::Regex::new(r#"(?s)<w:sectPr\b[^>]*>.*?</w:sectPr>"#).unwrap();
@@ -819,22 +867,20 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
     }
 
     // ── Inject passthrough files not present in the generated ZIP ─────────────
-    // These include: word/theme/theme1.xml, word/header1.xml, word/footer1.xml,
-    // word/commentsIds.xml, word/commentsExtensible.xml, and any customXml/* files.
+    // Since we aggressively collect everything except core files, this covers
+    // docProps, customXml, headers, footers, themes, and extensions.
     let deflate_opts = zip::write::FileOptions::<()>::default()
         .compression_method(zip::CompressionMethod::Deflated);
 
     for (fname, fbytes) in &passthrough_map {
         if !written_paths.contains(fname) {
-            // Ensure parent directory entry exists for theme/ subdirectory.
+            // Ensure parent directory entry exists.
             if fname.contains('/') {
-                let dir = format!("{}/", fname.rsplitn(2, '/').last().unwrap_or(""));
                 let dir_full = &fname[..fname.rfind('/').unwrap() + 1];
                 if !written_paths.contains(dir_full) {
                     let _ = zip_writer.add_directory(dir_full, deflate_opts);
                     written_paths.insert(dir_full.to_string());
                 }
-                let _ = dir; // suppress unused warning
             }
             zip_writer.start_file(fname, deflate_opts)?;
             std::io::Write::write_all(&mut zip_writer, fbytes)?;

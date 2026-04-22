@@ -1951,6 +1951,8 @@ dependencies = [
  "marksmen-render",
  "marksmen-typst",
  "marksmen-typst-read",
+ "marksmen-xhtml",
+ "marksmen-xhtml-read",
  "notify",
  "tracing",
  "tracing-subscriber",
@@ -2248,6 +2250,26 @@ dependencies = [
  "typst",
  "typst-svg",
  "zip 2.4.2",
+]
+
+[[package]]
+name = "marksmen-xhtml"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "latex2mathml",
+ "marksmen-core",
+ "marksmen-mermaid",
+ "pulldown-cmark",
+]
+
+[[package]]
+name = "marksmen-xhtml-read"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ego-tree",
+ "scraper",
 ]
 
 [[package]]
@@ -3541,13 +3563,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "temp_cmark"
-version = "0.1.0"
-dependencies = [
- "pulldown-cmark",
-]
-
-[[package]]
 name = "tempfile"
 version = "3.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3569,13 +3584,6 @@ dependencies = [
  "futf",
  "mac",
  "utf-8",
-]
-
-[[package]]
-name = "test_align"
-version = "0.1.0"
-dependencies = [
- "docx-rs",
 ]
 
 [[package]]

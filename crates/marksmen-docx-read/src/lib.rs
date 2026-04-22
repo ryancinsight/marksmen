@@ -189,6 +189,7 @@ fn parse_xml_payload(
     let mut in_quote = false;
     let mut in_code_block = false;
     let mut is_highlight = false;
+    let mut p_custom_style: Option<String> = None; // Non-structural Word style for {.StyleName} emission
 
     // Field code (w:fldChar / w:instrText) tracking
     // We emit sentinels `<!-- PAGE_NUM -->` and `<!-- TOTAL_PAGES -->` into Markdown
@@ -337,8 +338,12 @@ fn parse_xml_payload(
                         is_highlight = false;
                         if in_tbl == 0 {
                             if output.len() > 0 {
-                                if !output.ends_with("\n") {
-                                    output.push_str("\n");
+                                if !output.ends_with("\n\n") {
+                                    if output.ends_with('\n') {
+                                        output.push('\n');
+                                    } else {
+                                        output.push_str("\n\n");
+                                    }
                                 }
                             }
                         }
@@ -403,6 +408,17 @@ fn parse_xml_payload(
                                         let level = val[7] - b'0';
                                         if level >= 1 && level <= 6 {
                                             p_heading_level = level;
+                                        }
+                                    } else {
+                                        // Non-structural style: record for {.StyleName} emission.
+                                        let style_name = String::from_utf8_lossy(&val).into_owned();
+                                        // Exclude Word-internal names that have no Markdown representation.
+                                        let is_internal = style_name == "Normal"
+                                            || style_name == "DefaultParagraphFont"
+                                            || style_name.starts_with("a-")
+                                            || style_name.is_empty();
+                                        if !is_internal {
+                                            p_custom_style = Some(style_name);
                                         }
                                     }
                                 }
@@ -641,11 +657,27 @@ fn parse_xml_payload(
                         }
                     }
                     if in_code_block {
-                        if !output.ends_with("\n") {
+                        if !output.ends_with('\n') {
                             output.push_str("\n");
                         }
                         output.push_str("```\n");
                         in_code_block = false;
+                    }
+                    // Emit {.StyleName} attribute block for non-structural Word styles.
+                    // Only emitted for top-level (non-table) paragraphs.
+                    if in_tbl == 0 {
+                        if let Some(style) = p_custom_style.take() {
+                            if !output.ends_with("\n\n") {
+                                if output.ends_with('\n') {
+                                    output.push('\n');
+                                } else {
+                                    output.push_str("\n\n");
+                                }
+                            }
+                            output.push_str(&format!("{{.{}}}\n\n", style));
+                        }
+                    } else {
+                        p_custom_style = None;
                     }
                     // Emit paragraph boundary marker at END of cell paragraph so the
                     // writer can split content back into distinct w:p elements per cell.
@@ -693,7 +725,7 @@ fn parse_xml_payload(
                         output.push_str(" | ");
                         for _ in 1..current_tc_grid_span {
                             tc_alignments.push(current_tc_alignment);
-                            output.push_str(" | ");
+                            output.push_str(" <!-- COLSPAN --> | ");
                         }
                     }
                 }

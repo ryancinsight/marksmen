@@ -1,5 +1,6 @@
 use docx_rs::*;
 use pulldown_cmark::{Event, Tag, TagEnd};
+use marksmen_core::Config;
 
 #[derive(Default, Debug, Clone)]
 pub struct TextState {
@@ -51,13 +52,20 @@ impl<'a> Container<'a> {
     }
 }
 
-/// Applies Markdown formatting tags to a running DOCX Paragraph
+/// Applies Markdown formatting tags to a running DOCX Paragraph.
+///
+/// `config` carries `StyleMap` for heading and blockquote style resolution.
+/// `override_style` is an optional per-paragraph style injected by the
+/// `AnnotatedEvent` outer loop and takes precedence over both `StyleMap`
+/// defaults and hardcoded fallback names.
 pub fn handle_event<'a>(
     event: Event<'a>, 
     mut container: Container, 
     current_paragraph: &mut Paragraph,
     text_state: &mut TextState,
     in_blockquote: bool,
+    config: &Config,
+    override_style: Option<&str>,
 ) {
     match event {
         // --- Structural Elements ---
@@ -67,14 +75,16 @@ pub fn handle_event<'a>(
                 container = container.add_paragraph(p);
                 text_state.has_runs = false;
             }
-            let heading_style = match level {
-                pulldown_cmark::HeadingLevel::H1 => "Heading1",
-                pulldown_cmark::HeadingLevel::H2 => "Heading2",
-                pulldown_cmark::HeadingLevel::H3 => "Heading3",
-                pulldown_cmark::HeadingLevel::H4 => "Heading4",
-                pulldown_cmark::HeadingLevel::H5 => "Heading5",
-                pulldown_cmark::HeadingLevel::H6 => "Heading6",
+            let level_num = match level {
+                pulldown_cmark::HeadingLevel::H1 => 1usize,
+                pulldown_cmark::HeadingLevel::H2 => 2,
+                pulldown_cmark::HeadingLevel::H3 => 3,
+                pulldown_cmark::HeadingLevel::H4 => 4,
+                pulldown_cmark::HeadingLevel::H5 => 5,
+                pulldown_cmark::HeadingLevel::H6 => 6,
             };
+            let heading_style = override_style
+                .unwrap_or_else(|| config.style_map.heading_style(level_num));
             *current_paragraph = Paragraph::new().style(heading_style);
         }
         Event::End(TagEnd::Heading(_level)) => {
@@ -288,13 +298,27 @@ pub fn handle_event<'a>(
             if text_state.has_runs {
                 let mut p = std::mem::replace(current_paragraph, Paragraph::new());
                 if in_blockquote {
-                    p = p.style("Quote");
+                    let bq_style = override_style
+                        .unwrap_or_else(|| config.style_map.blockquote_style());
+                    p = p.style(bq_style);
                 }
                 // Header/footer paragraphs are suppressed from the document body.
                 // The source_docx verbatim passthrough injects word/header1.xml and
                 // word/footer1.xml directly into the ZIP, making body injection redundant
                 // and causing duplicate text extraction in roundtrip similarity checks.
                 if !text_state.in_header && !text_state.in_footer {
+                    // Apply override_style for body paragraphs when set.
+                    let p = if !in_blockquote {
+                        if let Some(style) = override_style {
+                            p.style(style)
+                        } else if let Some(ref para_style) = config.style_map.paragraph {
+                            p.style(para_style.as_str())
+                        } else {
+                            p
+                        }
+                    } else {
+                        p
+                    };
                     container = container.add_paragraph(p);
                 }
                 text_state.has_runs = false;
