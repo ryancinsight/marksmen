@@ -3,14 +3,14 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use pulldown_cmark::{Event, CodeBlockKind, Tag, TagEnd};
 use docx_rs::*;
-use crate::translation::elements::{handle_event, TextState};
+use crate::translation::elements::{handle_event, TextState, Container};
 use marksmen_mermaid::parsing::parser;
 use marksmen_mermaid::graph::directed_graph;
 use marksmen_mermaid::layout::{rank_assignment, crossing_reduction, coordinate_assign};
 use marksmen_core::Config;
 use marksmen_render::{render_math_to_png, render_mmd_to_png, svg_bytes_to_png};
 
-pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path) -> Result<Vec<u8>> {
+pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source_docx: Option<&[u8]>) -> Result<Vec<u8>> {
     let page_width_twips = parse_length_to_twips(&config.page.width).unwrap_or(11906);
     let page_height_twips = parse_length_to_twips(&config.page.height).unwrap_or(16838);
     let margin_top_twips = parse_length_to_twips(&config.page.margin_top).unwrap_or(1701);
@@ -97,6 +97,30 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path) -> Res
     let mut current_paragraph = Paragraph::new();
     let mut text_state = TextState::default();
 
+    // Pre-populate the source comment ID lookup table so handle_event uses original
+    // IDs from the source DOCX when writing w:commentRangeStart anchors in document.xml.
+    // This must be done before the event loop so the first comment mark gets the right ID.
+    if let Some(src_bytes) = source_docx {
+        if let Ok(mut src_zip) = zip::ZipArchive::new(std::io::Cursor::new(src_bytes)) {
+            if let Ok(mut cf) = src_zip.by_name("word/comments.xml") {
+                let mut cxml = String::new();
+                let _ = std::io::Read::read_to_string(&mut cf, &mut cxml);
+                // Match <w:comment ...> opening tag + first <w:t>...</w:t> in the block.
+                // Attribute order in source comments.xml is w:id then w:author then w:date.
+                let cmeta_re = regex::Regex::new(
+                    r#"(?s)<w:comment\s[^>]*?w:id="([^"]+)"[^>]*?>.*?<w:t[^>]*>([^<]*)</w:t>"#
+                ).unwrap();
+                for cap in cmeta_re.captures_iter(&cxml) {
+                    let id: usize = cap[1].trim().parse().unwrap_or(0);
+                    let text_norm = cap[2].trim().to_ascii_lowercase();
+                    if !text_norm.is_empty() {
+                        text_state.source_comment_ids.insert(text_norm, id);
+                    }
+                }
+            }
+        }
+    }
+
     // List state: parallel stacks for depth and ordered/bullet classification.
     // NumberingId 1 = bullet (unordered), NumberingId 2 = decimal (ordered).
     let mut list_ordered_stack: Vec<bool> = Vec::new();
@@ -129,10 +153,11 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path) -> Res
 
                 let mut rows = Vec::new();
                 let mut current_cells = Vec::new();
+                let mut current_tc = TableCell::new();
                 let mut current_cell_p = Paragraph::new();
                 let mut cell_index = 0;
 
-                while let Some(te) = event_iter.next() {
+                while let Some(te) = event_iter.by_ref().next() {
                     match te {
                         Event::End(TagEnd::Table) => break,
                         Event::Start(Tag::TableRow) | Event::Start(Tag::TableHead) => {
@@ -140,9 +165,10 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path) -> Res
                             cell_index = 0;
                         }
                         Event::End(TagEnd::TableRow) | Event::End(TagEnd::TableHead) => {
-                            rows.push(TableRow::new(current_cells.clone()));
+                            rows.push(TableRow::new(std::mem::take(&mut current_cells)));
                         }
                         Event::Start(Tag::TableCell) => {
+                            current_tc = TableCell::new();
                             current_cell_p = Paragraph::new();
                             if cell_index < aligns.len() {
                                 match aligns[cell_index] {
@@ -157,17 +183,113 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path) -> Res
                             }
                         }
                         Event::End(TagEnd::TableCell) => {
-                            current_cells.push(
-                                TableCell::new()
-                                    .add_paragraph(current_cell_p.clone())
-                            );
+                            current_tc = current_tc.add_paragraph(std::mem::replace(&mut current_cell_p, Paragraph::new()));
+                            current_cells.push(std::mem::replace(&mut current_tc, TableCell::new()));
                             cell_index += 1;
                         }
-                        _ => handle_event(te, &mut doc, &mut current_cell_p, &mut text_state, in_blockquote),
+                        Event::Html(ref html) | Event::InlineHtml(ref html) => {
+                            let tlow = html.to_lowercase();
+                            if tlow.starts_with("<table") && tlow.contains("nested") {
+                                let mut n_rows = Vec::new();
+                                let mut n_cells = Vec::new();
+                                let mut n_tc = TableCell::new();
+                                let mut n_p = Paragraph::new();
+                                let mut in_td = false;
+                                let mut n_is_bold = false;
+                                let mut mark_stack = Vec::new();
+                                
+                                while let Some(ev) = event_iter.by_ref().next() {
+                                    let mut html_str = None;
+                                    let mut is_text = false;
+                                    match &ev {
+                                        Event::Html(h) | Event::InlineHtml(h) => html_str = Some(h.as_ref()),
+                                        Event::Text(t) => { html_str = Some(t.as_ref()); is_text = true; },
+                                        Event::SoftBreak | Event::HardBreak => { n_p = n_p.add_run(Run::new().add_break(docx_rs::BreakType::TextWrapping)); continue; },
+                                        _ => continue,
+                                    }
+                                    if let Some(s) = html_str {
+                                        let seg_low = s.to_lowercase();
+                                        if !is_text && seg_low.starts_with("</table") { break;
+                                        } else if !is_text && seg_low.starts_with("<tr") { n_cells.clear();
+                                        } else if !is_text && seg_low.starts_with("</tr") { n_rows.push(TableRow::new(std::mem::take(&mut n_cells)));
+                                        } else if !is_text && seg_low.starts_with("<td") { in_td = true; n_tc = TableCell::new(); n_p = Paragraph::new();
+                                        } else if !is_text && seg_low.starts_with("</td") { in_td = false; n_cells.push(std::mem::replace(&mut n_tc, TableCell::new()).add_paragraph(std::mem::replace(&mut n_p, Paragraph::new())));
+                                        } else if !is_text && seg_low.starts_with("<mark") && seg_low.contains("comment") {
+                                            mark_stack.push("comment");
+                                            let author = crate::translation::elements::extract_attr(s, "data-author").unwrap_or_default();
+                                            let content = crate::translation::elements::extract_attr(s, "data-content").unwrap_or_default();
+                                            let id = text_state.comment_id_counter; text_state.comment_id_counter += 1; text_state.active_comment_id = Some(id);
+                                            let comment = Comment::new(id).author(author).add_paragraph(Paragraph::new().add_run(Run::new().add_text(content)));
+                                            n_p = n_p.add_comment_start(comment);
+                                        } else if !is_text && seg_low.starts_with("<mark") && seg_low.contains("align-center") {
+                                            mark_stack.push("align");
+                                            n_p = n_p.align(AlignmentType::Center);
+                                        } else if !is_text && seg_low.starts_with("</mark") {
+                                            if let Some(m) = mark_stack.pop() {
+                                                if m == "comment" {
+                                                    if let Some(id) = text_state.active_comment_id.take() { n_p = n_p.add_comment_end(id); }
+                                                }
+                                            }
+                                        } else if !is_text && seg_low.starts_with("<strong") { n_is_bold = true;
+                                        } else if !is_text && seg_low.starts_with("</strong") { n_is_bold = false;
+                                        } else if !is_text && seg_low.starts_with("<u") { text_state.is_underline = true;
+                                        } else if !is_text && seg_low.starts_with("</u") { text_state.is_underline = false;
+                                        } else if !is_text && seg_low.starts_with("<ins") {
+                                            text_state.is_ins = true;
+                                            text_state.revision_author = crate::translation::elements::extract_attr(s, "data-author");
+                                            text_state.revision_date = crate::translation::elements::extract_attr(s, "data-date");
+                                        } else if !is_text && seg_low.starts_with("</ins") { text_state.is_ins = false;
+                                        } else if !is_text && seg_low.starts_with("<del") {
+                                            text_state.is_del = true;
+                                            text_state.revision_author = crate::translation::elements::extract_attr(s, "data-author");
+                                            text_state.revision_date = crate::translation::elements::extract_attr(s, "data-date");
+                                        } else if !is_text && seg_low.starts_with("</del") { text_state.is_del = false;
+                                        } else if !is_text && seg_low.starts_with("<br") {
+                                            n_p = n_p.add_run(Run::new().add_break(docx_rs::BreakType::TextWrapping));
+                                        } else if is_text && in_td {
+                                            let mut run = Run::new().add_text(s);
+                                            if n_is_bold { run = run.bold(); }
+                                            if text_state.is_underline { run = run.underline("single"); }
+                                            if text_state.is_highlight { run = run.highlight("yellow"); }
+                                            
+                                            if text_state.is_ins {
+                                                let mut ins = docx_rs::Insert::new(run);
+                                                if let Some(author) = &text_state.revision_author {
+                                                    ins = ins.author(author);
+                                                }
+                                                if let Some(date) = &text_state.revision_date {
+                                                    ins = ins.date(date);
+                                                }
+                                                n_p = n_p.add_insert(ins);
+                                            } else if text_state.is_del {
+                                                let mut del = docx_rs::Delete::new().add_run(run);
+                                                if let Some(author) = &text_state.revision_author {
+                                                    del = del.author(author);
+                                                }
+                                                if let Some(date) = &text_state.revision_date {
+                                                    del = del.date(date);
+                                                }
+                                                n_p = n_p.add_delete(del);
+                                            } else {
+                                                n_p = n_p.add_run(run);
+                                            }
+                                        }
+                                    }
+                                }
+                                let n_cols = n_rows.first().map(|r| r.cells.len()).unwrap_or(1).max(1);
+                                let grid: Vec<usize> = (0..n_cols).map(|_| 9000 / n_cols).collect();
+                                let nested_tbl = Table::new(std::mem::take(&mut n_rows)).layout(TableLayoutType::Autofit).width(5000, WidthType::Pct).set_grid(grid);
+                                current_tc = current_tc.add_paragraph(std::mem::replace(&mut current_cell_p, Paragraph::new()));
+                                current_tc = current_tc.add_table(nested_tbl);
+                                current_cell_p = Paragraph::new();
+                                handle_event(te, Container::Doc(&mut doc), &mut current_cell_p, &mut text_state, in_blockquote);
+                            }
+                        }
+                        _ => handle_event(te, Container::Doc(&mut doc), &mut current_cell_p, &mut text_state, in_blockquote),
                     }
                 }
                 
-                let table = Table::new(rows.clone()).layout(TableLayoutType::Autofit).width(5000, WidthType::Pct);
+                let table = Table::new(std::mem::take(&mut rows)).layout(TableLayoutType::Autofit).width(5000, WidthType::Pct);
                 doc = doc.add_table(table);
                 continue;
             }
@@ -440,7 +562,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path) -> Res
                 text_state.has_runs = false;
             }
             _ => {
-                handle_event(event, &mut doc, &mut current_paragraph, &mut text_state, in_blockquote);
+                handle_event(event, Container::Doc(&mut doc), &mut current_paragraph, &mut text_state, in_blockquote);
             }
         }
     }
@@ -451,10 +573,298 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path) -> Res
     }
 
     // Write to memory buffer
-    let mut buffer = Cursor::new(Vec::new());
-    doc.build().pack(&mut buffer)?;
+    let mut docx_buffer = Cursor::new(Vec::new());
+    doc.build().pack(&mut docx_buffer)?;
 
-    Ok(buffer.into_inner())
+    // ─── Source-DOCX structural passthrough ──────────────────────────────────
+    // When the caller supplies the original DOCX bytes, critical XML artifacts
+    // that Markdown cannot represent (styles, numbering, settings, theme,
+    // header/footer, comment metadata) are reinstated verbatim from the source.
+    // This is the canonical approach to lossless roundtrip: the intermediate
+    // format carries semantic content; the source ZIP carries structural assets.
+    let mut source_archive = source_docx.and_then(|b| {
+        zip::ZipArchive::new(std::io::Cursor::new(b)).ok()
+    });
+
+    // Files whose content is replaced 1-to-1 from the source when present.
+    // Ordering matches typical OOXML content-type registration order.
+    const VERBATIM_PASSTHROUGH: &[&str] = &[
+        "word/styles.xml",
+        "word/numbering.xml",
+        "word/settings.xml",
+        "word/fontTable.xml",
+        "word/webSettings.xml",
+        "word/theme/theme1.xml",
+        "word/header1.xml",
+        "word/footer1.xml",
+        "word/comments.xml",
+        "word/commentsIds.xml",
+        "word/commentsExtended.xml",
+        "word/commentsExtensible.xml",
+    ];
+
+    // Collect verbatim passthrough bytes from source for each candidate.
+    let mut passthrough_map: std::collections::HashMap<String, Vec<u8>> =
+        std::collections::HashMap::new();
+    // Track which additional files (customXml/*, docMetadata/*, etc.) to inject.
+    let mut extra_files: Vec<(String, Vec<u8>, zip::CompressionMethod)> = Vec::new();
+
+    // Content-type Override entries harvested from source for merge.
+    let mut source_ct_overrides: Vec<String> = Vec::new();
+    // Relationship entries harvested from source _rels for merge.
+    let mut source_rels_entries: Vec<String> = Vec::new();
+    let mut source_sect_pr: Option<String> = None;
+
+    // Comment metadata from source for ID reconstruction:
+    // normalized-content → (id, author, date, initials)
+    let mut src_comment_meta: std::collections::HashMap<String, (String, String, String, String)> =
+        std::collections::HashMap::new();
+
+    if let Some(ref mut sa) = source_archive {
+        let file_count = sa.len();
+        for idx in 0..file_count {
+            let (name, cm, raw) = {
+                let mut f = match sa.by_index(idx) { Ok(f) => f, Err(_) => continue };
+                let nm = f.name().to_string();
+                let compression = f.compression();
+                let mut buf = Vec::new();
+                let _ = std::io::Read::read_to_end(&mut f, &mut buf);
+                (nm, compression, buf)
+            };
+
+            // ── Verbatim passthrough candidates ──────────────────────────────
+            if VERBATIM_PASSTHROUGH.contains(&name.as_str()) {
+                passthrough_map.insert(name.clone(), raw.clone());
+            } else if name.starts_with("customXml/") || name.starts_with("docMetadata/") {
+                extra_files.push((name.clone(), raw.clone(), cm));
+            }
+
+            // ── Track source section formatting (margins, header/footer refs) ─
+            if name == "word/document.xml" {
+                if let Ok(doc_xml) = String::from_utf8(raw.clone()) {
+                    let sect_re = regex::Regex::new(r#"(?s)<w:sectPr\b[^>]*>.*?</w:sectPr>"#).unwrap();
+                    if let Some(mat) = sect_re.find(&doc_xml) {
+                        source_sect_pr = Some(mat.as_str().to_string());
+                    }
+                }
+            }
+
+            // ── Content-type Override harvest ─────────────────────────────────
+            if name == "[Content_Types].xml" {
+                if let Ok(ct_xml) = String::from_utf8(raw.clone()) {
+                    let ct_re = regex::Regex::new(r#"(?s)<Override\b[^>]*/>"#).unwrap();
+                    for cap in ct_re.find_iter(&ct_xml) {
+                        source_ct_overrides.push(cap.as_str().to_string());
+                    }
+                }
+            }
+
+            // ── Relationship harvest for header/footer/theme/commentsIds ──────
+            if name == "word/_rels/document.xml.rels" {
+                if let Ok(rels_xml) = String::from_utf8(raw.clone()) {
+                    let rel_re = regex::Regex::new(r#"(?s)<Relationship\b[^>]*/>"#).unwrap();
+                    for cap in rel_re.find_iter(&rels_xml) {
+                        let entry = cap.as_str();
+                        if entry.contains("header")
+                            || entry.contains("footer")
+                            || entry.contains("theme")
+                            || entry.contains("commentsExtensible")
+                            || entry.contains("commentsIds")
+                            || entry.contains("webSettings")
+                        {
+                            source_rels_entries.push(entry.to_string());
+                        }
+                    }
+                }
+            }
+
+            // ── Comment ID lookup harvest from source comments.xml ────────────
+            if name == "word/comments.xml" {
+                if let Ok(cxml) = String::from_utf8(raw) {
+                    let cmeta_re = regex::Regex::new(
+                        r#"(?s)<w:comment\s[^>]*?w:id="([^"]+)"[^>]*?>.*?<w:t[^>]*>([^<]*)</w:t>"#
+                    ).unwrap();
+                    for cap in cmeta_re.captures_iter(&cxml) {
+                        let id_str = cap[1].trim().to_string();
+                        let text_norm = cap[2].trim().to_ascii_lowercase();
+                        if let Ok(id_num) = id_str.parse::<usize>() {
+                            if !text_norm.is_empty() {
+                                src_comment_meta.insert(text_norm, (id_str, String::new(), String::new(), String::new()));
+                                // Also update the per-usize map used in text_state (already built before event loop)
+                                let _ = id_num;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let mut archive = zip::ZipArchive::new(Cursor::new(docx_buffer.into_inner()))
+        .map_err(|e| anyhow::anyhow!("Failed to read generated docx: {}", e))?;
+
+    let mut out_buffer = std::io::Cursor::new(Vec::new());
+    let mut zip_writer = zip::ZipWriter::new(&mut out_buffer);
+
+    // Track which generated-file paths have been written so we can inject extras.
+    let mut written_paths: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i).unwrap();
+        let cm = file.compression();
+        let options = zip::write::FileOptions::<()>::default().compression_method(cm);
+
+        let mut content = Vec::new();
+        std::io::Read::read_to_end(&mut file, &mut content)?;
+        let path = file.name().to_string();
+        written_paths.insert(path.clone());
+
+        // ── Verbatim passthrough: replace generated content with source ──────
+        if let Some(src_bytes) = passthrough_map.get(&path) {
+            zip_writer.start_file(&path, options)?;
+            std::io::Write::write_all(&mut zip_writer, src_bytes)?;
+            continue;
+        }
+
+        // ── _rels/document.xml.rels: merge source header/footer/theme entries ─
+        if path == "word/_rels/document.xml.rels" && !source_rels_entries.is_empty() {
+            if let Ok(mut rels_str) = String::from_utf8(content.clone()) {
+                for entry in &source_rels_entries {
+                    if let Some(rid_start) = entry.find("Id=\"") {
+                        let rid_rest = &entry[rid_start + 4..];
+                        if let Some(rid_end) = rid_rest.find('"') {
+                            let rid = &rid_rest[..rid_end];
+                            if !rels_str.contains(&format!("Id=\"{}\"", rid)) {
+                                rels_str = rels_str.replace(
+                                    "</Relationships>",
+                                    &format!("{}</Relationships>", entry),
+                                );
+                            }
+                        }
+                    }
+                }
+                zip_writer.start_file(&path, options)?;
+                std::io::Write::write_all(&mut zip_writer, rels_str.as_bytes())?;
+            } else {
+                zip_writer.start_file(&path, options)?;
+                std::io::Write::write_all(&mut zip_writer, &content)?;
+            }
+            continue;
+        }
+
+        // ── [Content_Types].xml: merge source Override entries ────────────────
+        if path == "[Content_Types].xml" && !source_ct_overrides.is_empty() {
+            if let Ok(mut ct_str) = String::from_utf8(content.clone()) {
+                for entry in &source_ct_overrides {
+                    if let Some(pn_start) = entry.find("PartName=\"") {
+                        let pn_rest = &entry[pn_start + 10..];
+                        if let Some(pn_end) = pn_rest.find('"') {
+                            let part = &pn_rest[..pn_end];
+                            if !ct_str.contains(&format!("PartName=\"{}\"", part)) {
+                                ct_str = ct_str.replace(
+                                    "</Types>",
+                                    &format!("{}</Types>", entry),
+                                );
+                            }
+                        }
+                    }
+                }
+                zip_writer.start_file(&path, options)?;
+                std::io::Write::write_all(&mut zip_writer, ct_str.as_bytes())?;
+            } else {
+                zip_writer.start_file(&path, options)?;
+                std::io::Write::write_all(&mut zip_writer, &content)?;
+            }
+            continue;
+        }
+
+        // ── word/document.xml: fix docx-rs <w:del> tag rendering ──────────────
+        if path == "word/document.xml" {
+            if let Ok(doc_str) = String::from_utf8(content.clone()) {
+                // docx-rs incorrectly outputs `<w:t>` inside `<w:del>` for deleted tracked changes.
+                // Microsoft Word considers `<w:t>` inside a deletion to be a corruption and drops the changes.
+                // We must rewrite those tags to `<w:delText>` so the document remains valid XML.
+                let del_re = regex::Regex::new(r#"(?s)<w:del\b[^>]*>.*?</w:del>"#).unwrap();
+                let mut rebuilt = String::new();
+                let mut last = 0;
+                for mat in del_re.find_iter(&doc_str) {
+                    rebuilt.push_str(&doc_str[last..mat.start()]);
+                    let fixed_del = mat.as_str()
+                        .replace("<w:t>", "<w:delText xml:space=\"preserve\">")
+                        .replace("<w:t ", "<w:delText ")
+                        .replace("</w:t>", "</w:delText>");
+                    rebuilt.push_str(&fixed_del);
+                    last = mat.end();
+                }
+                rebuilt.push_str(&doc_str[last..]);
+                
+                // ── Inject source <w:sectPr> to preserve header/footer refs and margins ──
+                if let Some(src_sect) = &source_sect_pr {
+                    let sect_re = regex::Regex::new(r#"(?s)<w:sectPr\b[^>]*>.*?</w:sectPr>"#).unwrap();
+                    rebuilt = sect_re.replace(&rebuilt, src_sect.as_str()).to_string();
+                }
+                
+                zip_writer.start_file(&path, options)?;
+                std::io::Write::write_all(&mut zip_writer, rebuilt.as_bytes())?;
+            } else {
+                zip_writer.start_file(&path, options)?;
+                std::io::Write::write_all(&mut zip_writer, &content)?;
+            }
+            continue;
+        }
+
+        // ── Default: emit generated content unchanged ─────────────────────────
+        zip_writer.start_file(&path, options)?;
+        std::io::Write::write_all(&mut zip_writer, &content)?;
+    }
+
+    // ── Inject passthrough files not present in the generated ZIP ─────────────
+    // These include: word/theme/theme1.xml, word/header1.xml, word/footer1.xml,
+    // word/commentsIds.xml, word/commentsExtensible.xml, and any customXml/* files.
+    let deflate_opts = zip::write::FileOptions::<()>::default()
+        .compression_method(zip::CompressionMethod::Deflated);
+
+    for (fname, fbytes) in &passthrough_map {
+        if !written_paths.contains(fname) {
+            // Ensure parent directory entry exists for theme/ subdirectory.
+            if fname.contains('/') {
+                let dir = format!("{}/", fname.rsplitn(2, '/').last().unwrap_or(""));
+                let dir_full = &fname[..fname.rfind('/').unwrap() + 1];
+                if !written_paths.contains(dir_full) {
+                    let _ = zip_writer.add_directory(dir_full, deflate_opts);
+                    written_paths.insert(dir_full.to_string());
+                }
+                let _ = dir; // suppress unused warning
+            }
+            zip_writer.start_file(fname, deflate_opts)?;
+            std::io::Write::write_all(&mut zip_writer, fbytes)?;
+            written_paths.insert(fname.clone());
+        }
+    }
+
+    for (fname, fbytes, cm) in extra_files {
+        if !written_paths.contains(&fname) {
+            let opts = zip::write::FileOptions::<()>::default().compression_method(cm);
+            if fname.ends_with('/') {
+                let _ = zip_writer.add_directory(&fname, opts);
+            } else {
+                // Ensure parent directory.
+                if let Some(slash) = fname.rfind('/') {
+                    let dir = &fname[..slash + 1];
+                    if !written_paths.contains(dir) {
+                        let _ = zip_writer.add_directory(dir, deflate_opts);
+                        written_paths.insert(dir.to_string());
+                    }
+                }
+                zip_writer.start_file(&fname, opts)?;
+                std::io::Write::write_all(&mut zip_writer, &fbytes)?;
+            }
+            written_paths.insert(fname);
+        }
+    }
+
+    zip_writer.finish()?;
+    Ok(out_buffer.into_inner())
 }
 
 // svg_to_png and render_graph_to_svg removed: canonical implementations

@@ -14,6 +14,8 @@ marksmen-docx = { path = "../marksmen-docx" }
 marksmen-docx-read = { path = "../marksmen-docx-read" }
 marksmen-html = { path = "../marksmen-html" }
 marksmen-html-read = { path = "../marksmen-html-read" }
+marksmen-xhtml = { path = "../marksmen-xhtml" }
+marksmen-xhtml-read = { path = "../marksmen-xhtml-read" }
 marksmen-odt = { path = "../marksmen-odt" }
 marksmen-odt-read = { path = "../marksmen-odt-read" }
 clap = { workspace = true }

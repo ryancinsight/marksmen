@@ -459,7 +459,7 @@ fn translate_event(
         }
 
         Event::Rule => {
-            output.push_str("\n#line(length: 100%)\n");
+            output.push_str("\n#pagebreak(weak: true)\n");
         }
 
         // --- Math ---
@@ -655,14 +655,23 @@ fn process_single_tag(lower: &str, original: &str, output: &mut String, state: &
         let dest = if state.in_table_cell { &mut state.current_cell } else { output };
         dest.push(']');
 
-    // --- <u> / </u> ---
-    } else if lower.starts_with("<u") && !lower.starts_with("<ul") {
-        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
-        dest.push_str("#underline[");
     } else if lower.starts_with("</u") && !lower.starts_with("</ul") {
         let dest = if state.in_table_cell { &mut state.current_cell } else { output };
         dest.push(']');
-
+    // --- <ins> / </ins> ---
+    } else if lower.starts_with("<ins") {
+        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        dest.push_str("#underline(stroke: red)[#text(fill: red)[");
+    } else if lower.starts_with("</ins") {
+        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        dest.push_str("]]");
+    // --- <del> / </del> ---
+    } else if lower.starts_with("<del") {
+        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        dest.push_str("#strike(stroke: red)[#text(fill: red)[");
+    } else if lower.starts_with("</del") {
+        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        dest.push_str("]]");
     // --- <div> ---
     } else if lower.starts_with("<div") {
         if lower.contains("page-break") {
@@ -739,11 +748,19 @@ fn process_single_tag(lower: &str, original: &str, output: &mut String, state: &
                 dest.push_str(&format!("#text(fill: rgb(\"{}\"))[", color));
             }
         }
-    } else if lower.starts_with("<span") {
-        // Generic span — pass through.
     } else if lower.starts_with("</span") {
         let dest = if state.in_table_cell { &mut state.current_cell } else { output };
         dest.push(']');
+
+    // --- <mark> (Comments) ---
+    } else if lower.starts_with("<mark") && lower.contains("comment") {
+        let content = extract_attr_from_lower(lower, "data-content").unwrap_or_default();
+        let author = extract_attr_from_lower(lower, "data-author").unwrap_or_else(|| "Author".to_string());
+        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        dest.push_str(&format!("#highlight(fill: yellow.lighten(60%))[{}]#footnote[{} (by {})]", "{", content, author));
+    } else if lower.starts_with("</mark") {
+        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        dest.push_str("}");
 
     // --- <a> with id or href ---
     } else if lower.starts_with("<a") {
@@ -900,6 +917,17 @@ fn process_single_tag(lower: &str, original: &str, output: &mut String, state: &
     } else {
         // Catch-all: skip silently to avoid noisy comments polluting Typst source.
     }
+}
+
+fn extract_attr_from_lower(tag: &str, attr: &str) -> Option<String> {
+    let needle = format!("{}=\"", attr);
+    if let Some(start) = tag.find(&needle) {
+        let remaining = &tag[start + needle.len()..];
+        if let Some(end) = remaining.find('"') {
+            return Some(remaining[..end].to_string());
+        }
+    }
+    None
 }
 
 fn heading_level_to_u8(level: HeadingLevel) -> u8 {

@@ -23,7 +23,7 @@ fn main() -> Result<()> {
 
     // 2. OpenXML DOCX Compilation
     let events_docx = parse(body);
-    let docx_bytes = marksmen_docx::translation::document::convert(events_docx, &config, &root)?;
+    let docx_bytes = marksmen_docx::translation::document::convert(events_docx, &config, &root, None)?;
     fs::write(root.join("demo_export.docx"), &docx_bytes)?;
     println!("[+] Generated demo_export.docx ({} bytes).", docx_bytes.len());
 

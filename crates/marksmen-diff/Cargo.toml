@@ -1,0 +1,7 @@
+[package]
+name = "marksmen-diff"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+similar = "2.2"

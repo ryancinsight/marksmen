@@ -1,0 +1,9 @@
+@@ -134,7 +134,7 @@
+         }
+     }
+ 
+-    let (docx_xml, preview_docx) = match convert_docx(events.clone(), &config, std::path::Path::new("."), None) {
++    let (docx_xml, preview_docx) = match convert_docx(events.clone(), &config, std::path::Path::new(".")) {
+         Ok(xml) => (String::from_utf8_lossy(&xml).into_owned(), true),
+         Err(_) => (String::from("Error rendering DOCX."), false),
+     };

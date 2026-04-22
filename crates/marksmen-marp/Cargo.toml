@@ -1,0 +1,9 @@
+[package]
+name = "marksmen-marp"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+marksmen-core = { path = "../marksmen-core" }
+pulldown-cmark = { workspace = true }
+anyhow = { workspace = true }

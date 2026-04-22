@@ -13,14 +13,32 @@ use marksmen_core::parsing::parser;
 use marksmen_html::convert as convert_html;
 use marksmen_typst::translator::translate as translate_typst;
 use marksmen_docx::translation::document::convert as convert_docx;
+use marksmen_latex::convert as convert_latex;
 use marksmen_odt::translate_and_render as convert_odt;
 use marksmen_docx_read::parse_docx as read_docx;
+use marksmen_latex_read::parse_latex as read_latex;
 use marksmen_odt_read::parse_odt as read_odt;
+use marksmen_ppt::convert as convert_ppt;
+use marksmen_ppt_read::parse_pptx as read_ppt;
+use marksmen_marp::convert as convert_marp;
+use marksmen_marp_read::parse_marp as read_marp;
 
 /// Roundtrip request: the raw Markdown string from the editor.
 #[derive(Deserialize)]
 struct InspectRequest {
     markdown: String,
+}
+
+#[derive(Deserialize)]
+struct DiffRequest {
+    old_markdown: String,
+    new_markdown: String,
+}
+
+#[derive(Serialize)]
+struct DiffResponse {
+    preview_html: String,
+    diff_markdown: String,
 }
 
 /// Roundtrip response carrying previews for every output format.
@@ -33,18 +51,28 @@ struct InspectResponse {
     /// Source-level outputs (for the structured tabs).
     ast: String,
     html_src: String,
+    latex_src: String,
     typst_src: String,
     docx_xml: String,
     odt_xml: String,
 
     /// Visual previews.
     preview_html: String,
+    preview_latex: String,
     preview_docx: String,
     preview_odt: String,
     /// Full multi-page SVG string (already escaped-safe as an HTML snippet).
     preview_typst_svg: String,
     /// Base64-encoded PDF for embedding in an <embed> data URI.
     preview_pdf_b64: String,
+    /// Base64-encoded PPTX for download.
+    ppt_b64: String,
+    /// Roundtrip preview of PPTX content rendered as HTML.
+    preview_ppt: String,
+    /// Marp Markdown source.
+    marp_src: String,
+    /// Roundtrip preview of Marp content rendered as HTML.
+    preview_marp: String,
 }
 
 #[tokio::main]
@@ -52,6 +80,7 @@ async fn main() {
     let app = Router::new()
         .nest_service("/", ServeDir::new("crates/marksmen-webui/static"))
         .route("/api/inspect", post(handle_inspect))
+        .route("/api/diff", post(handle_diff))
         .layer(CorsLayer::permissive());
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
@@ -82,6 +111,21 @@ async fn handle_inspect(Json(payload): Json<InspectRequest>) -> Json<InspectResp
     // Wrap the raw fragment in a minimal document styled for iframe preview.
     let preview_html = build_preview_doc(&html_src);
 
+    // ── LaTeX ─────────────────────────────────────────────────────────────
+    let latex_src = convert_latex(events.clone(), &config)
+        .unwrap_or_else(|e| format!("% LaTeX Error: {}", e));
+
+    // Confirm format correctness via roundtrip reading
+    let preview_latex = match read_latex(&latex_src) {
+        Ok(md) => {
+            let rt_events = parser::parse(&md);
+            let rt_html = convert_html(rt_events, &config)
+                .unwrap_or_else(|e| format!("<!-- LaTeX RT HTML Error: {} -->", e));
+            build_preview_doc(&rt_html)
+        }
+        Err(e) => build_error_doc(&format!("LaTeX read error: {}", e)),
+    };
+
     // ── Typst ─────────────────────────────────────────────────────────────
     let typst_src = translate_typst(events.clone(), &config)
         .unwrap_or_else(|e| format!("// Typst Error: {}", e));
@@ -90,7 +134,7 @@ async fn handle_inspect(Json(payload): Json<InspectRequest>) -> Json<InspectResp
     let preview_typst_svg = compile_typst_to_svg_html(&typst_src, &config);
 
     // ── DOCX ──────────────────────────────────────────────────────────────
-    let (docx_xml, preview_docx) = match convert_docx(events.clone(), &config, std::path::Path::new(".")) {
+    let (docx_xml, preview_docx) = match convert_docx(events.clone(), &config, std::path::Path::new("."), None) {
         Ok(bytes) => {
             let xml = extract_zip_file(&bytes, "word/document.xml")
                 .unwrap_or_else(|e| format!("DOCX Extract Error: {}", e));
@@ -140,17 +184,72 @@ async fn handle_inspect(Json(payload): Json<InspectRequest>) -> Json<InspectResp
         Err(e) => format!("PDF Error: {}", e),
     };
 
+    // ── PPTX ──────────────────────────────────────────────────────────────
+    let (ppt_b64, preview_ppt) = match convert_ppt(events.clone(), &config) {
+        Ok(bytes) => {
+            let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &bytes);
+            let preview = match read_ppt(&bytes) {
+                Ok(md) => {
+                    let rt_events = parser::parse(&md);
+                    let rt_html = convert_html(rt_events, &config)
+                        .unwrap_or_else(|e| format!("<!-- PPT RT HTML Error: {} -->", e));
+                    build_preview_doc(&rt_html)
+                }
+                Err(e) => build_error_doc(&format!("PPT read error: {}", e)),
+            };
+            (b64, preview)
+        }
+        Err(e) => (
+            format!("PPT Build Error: {}", e),
+            build_error_doc(&format!("PPT build error: {}", e)),
+        ),
+    };
+
+    // ── Marp ──────────────────────────────────────────────────────────────
+    let marp_src = convert_marp(events.clone(), &config)
+        .unwrap_or_else(|e| format!("% Marp Error: {}", e));
+
+    let preview_marp = match read_marp(&marp_src) {
+        Ok(md) => {
+            let rt_events = parser::parse(&md);
+            let rt_html = convert_html(rt_events, &config)
+                .unwrap_or_else(|e| format!("<!-- Marp RT HTML Error: {} -->", e));
+            build_preview_doc(&rt_html)
+        }
+        Err(e) => build_error_doc(&format!("Marp read error: {}", e)),
+    };
+
     Json(InspectResponse {
         ast,
         html_src,
+        latex_src,
         typst_src,
         docx_xml,
         odt_xml,
         preview_html,
+        preview_latex,
         preview_docx,
         preview_odt,
         preview_typst_svg,
         preview_pdf_b64,
+        ppt_b64,
+        preview_ppt,
+        marp_src,
+        preview_marp,
+    })
+}
+
+async fn handle_diff(Json(payload): Json<DiffRequest>) -> Json<DiffResponse> {
+    let diff_markdown = marksmen_diff::diff_markdown(&payload.old_markdown, &payload.new_markdown);
+    let config = Config::default();
+    let events = parser::parse(&diff_markdown);
+    let html_src = convert_html(events, &config)
+        .unwrap_or_else(|e| format!("<!-- HTML Error: {} -->", e));
+    let preview_html = build_preview_doc(&html_src);
+
+    Json(DiffResponse {
+        preview_html,
+        diff_markdown,
     })
 }
 
@@ -223,6 +322,35 @@ fn build_preview_doc(fragment: &str) -> String {
   blockquote {{ border-left: 4px solid #ccc; margin: 0; padding-left: 16px; color: #555; }}
   img {{ max-width: 100%; }}
   math {{ font-size: 1.1em; }}
+  ins {{ text-decoration: underline; text-decoration-color: #cb2431; color: #cb2431; background-color: transparent; }}
+  del {{ text-decoration: line-through; color: #cb2431; background-color: transparent; }}
+  mark[data-author] {{ 
+    background-color: #fff8c5; 
+    border-bottom: 2px dashed #f9c513; 
+    position: relative; 
+    cursor: help; 
+    text-decoration: none;
+  }}
+  mark[data-author]::after {{
+    content: " [" attr(data-author) ": " attr(data-content) "]";
+    display: none;
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #333;
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    white-space: nowrap;
+    z-index: 1000;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    margin-bottom: 8px;
+  }}
+  mark[data-author]:hover::after {{
+    display: block;
+  }}
 </style></head><body>{}</body></html>"#,
         fragment
     )

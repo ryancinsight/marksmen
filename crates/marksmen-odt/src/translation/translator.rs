@@ -132,7 +132,7 @@ pub fn translate_events<'a>(events: &[Event<'a>], config: &Config, _input_dir: &
             Event::Text(t) => output.push_str(&escape(t.as_ref())),
             Event::SoftBreak | Event::HardBreak => output.push_str("<text:line-break/>"),
             
-            Event::Rule => output.push_str("<text:p text:style-name=\"P_Rule\">---</text:p>\n"),
+            Event::Rule => output.push_str("<text:p text:style-name=\"P_Break\"/>\n"),
 
             // --- HTML Semantic Mappings ---
             Event::Html(html) => {

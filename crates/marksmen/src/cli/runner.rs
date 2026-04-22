@@ -219,8 +219,16 @@ fn convert_file(input_path: &Path, args: &Args, config: &Config) -> Result<()> {
         "Converting"
     );
 
+    // Read raw source bytes for DOCX→DOCX roundtrip style preservation.
+    // For all other conversion paths this is unused.
+    let source_docx_bytes: Option<Vec<u8>> = if source_format == Format::Docx && target_format == Format::Docx {
+        fs::read(input_path).ok()
+    } else {
+        None
+    };
+
     let markdown = read_as_markdown_like(input_path, source_format, &output_path)?;
-    write_output(&markdown, input_path, &output_path, target_format, config)
+    write_output(&markdown, input_path, &output_path, target_format, config, source_docx_bytes.as_deref())
 }
 
 fn read_as_markdown_like(input_path: &Path, source_format: Format, output_path: &Path) -> Result<String> {
@@ -280,6 +288,7 @@ fn write_output(
     output_path: &Path,
     target_format: Format,
     config: &Config,
+    source_docx_bytes: Option<&[u8]>,
 ) -> Result<()> {
     match target_format {
         Format::Markdown => {
@@ -315,7 +324,7 @@ fn write_output(
             let merged = config.merge_frontmatter(&fm_config);
             let events = marksmen_core::parsing::parser::parse(body);
             let input_dir = input_path.parent().unwrap_or_else(|| Path::new("."));
-            let docx_bytes = marksmen_docx::translation::document::convert(events, &merged, input_dir)?;
+            let docx_bytes = marksmen_docx::translation::document::convert(events, &merged, input_dir, source_docx_bytes)?;
 
             fs::write(output_path, &docx_bytes)
                 .with_context(|| format!("Failed to write DOCX output: {}", output_path.display()))?;

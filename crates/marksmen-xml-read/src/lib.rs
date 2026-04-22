@@ -7,3 +7,4 @@
 // for marksmen traversal architectures.
 pub use quick_xml::events::Event;
 pub use quick_xml::Reader;
+pub use quick_xml::escape::escape;

@@ -125,7 +125,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
                     Err(_) => out.push_str(&format!("<div class=\"math-display\">{}</div>\n", escape_html(math.as_ref()))),
                 }
             }
-            Event::Rule => out.push_str("<hr />\n"),
+            Event::Rule => out.push_str("<div style=\"page-break-after: always;\"></div>\n"),
             _ => {}
         }
     }

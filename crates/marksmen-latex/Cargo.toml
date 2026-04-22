@@ -1,0 +1,9 @@
+[package]
+name = "marksmen-latex"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+marksmen-core = { path = "../marksmen-core" }
+anyhow.workspace = true
+pulldown-cmark.workspace = true

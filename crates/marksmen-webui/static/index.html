@@ -18,7 +18,10 @@
 
         <main class="split-view">
             <section class="editor-pane">
-                <div class="pane-header">Input (Markdown)</div>
+                <div class="pane-header">
+                    Input (Markdown)
+                    <button id="set-base-btn" title="Set current text as base for diffing">Set as Base</button>
+                </div>
                 <textarea id="markdown-input" spellcheck="false"># Marksmen Roundtrip Test
 
 This is **bold**, _italic_, ~~strikethrough~~, and `inline code`.
@@ -113,10 +116,14 @@ Visit [Typst](https://typst.app) or [CommonMark Spec](https://spec.commonmark.or
                     <div class="tab-group">
                         <span class="tab-group-label">Preview</span>
                         <button class="tab active" data-kind="preview" data-target="html">HTML</button>
+                        <button class="tab" data-kind="preview" data-target="latex">LaTeX</button>
                         <button class="tab" data-kind="preview" data-target="typst">Typst</button>
                         <button class="tab" data-kind="preview" data-target="docx">DOCX</button>
                         <button class="tab" data-kind="preview" data-target="odt">ODT</button>
+                        <button class="tab" data-kind="preview" data-target="ppt">PPTX</button>
+                        <button class="tab" data-kind="preview" data-target="marp">Marp</button>
                         <button class="tab" data-kind="preview" data-target="pdf">PDF</button>
+                        <button class="tab" data-kind="preview" data-target="diff">Diff</button>
                     </div>
                     <div class="tab-divider"></div>
                     <!-- Source tabs -->
@@ -124,28 +131,41 @@ Visit [Typst](https://typst.app) or [CommonMark Spec](https://spec.commonmark.or
                         <span class="tab-group-label">Source</span>
                         <button class="tab" data-kind="source" data-target="ast">AST</button>
                         <button class="tab" data-kind="source" data-target="html-src">HTML</button>
+                        <button class="tab" data-kind="source" data-target="latex-src">LaTeX</button>
                         <button class="tab" data-kind="source" data-target="typst-src">Typst</button>
                         <button class="tab" data-kind="source" data-target="docx-xml">DOCX XML</button>
                         <button class="tab" data-kind="source" data-target="odt-xml">ODT XML</button>
+                        <button class="tab" data-kind="source" data-target="marp-src">Marp</button>
                     </div>
                 </div>
 
                 <div class="tab-content-container">
                     <!-- Preview panels: iframes for max fidelity -->
                     <iframe id="html-content" class="tab-content preview-frame active" sandbox="allow-same-origin"></iframe>
+                    <iframe id="latex-content" class="tab-content preview-frame" sandbox="allow-same-origin"></iframe>
                     <iframe id="typst-content" class="tab-content preview-frame" sandbox="allow-same-origin"></iframe>
                     <iframe id="docx-content" class="tab-content preview-frame" sandbox="allow-same-origin"></iframe>
                     <iframe id="odt-content" class="tab-content preview-frame" sandbox="allow-same-origin"></iframe>
                     <div id="pdf-content" class="tab-content pdf-container">
                         <embed id="pdf-embed" type="application/pdf" width="100%" height="100%" />
                     </div>
+                    <div id="ppt-content" class="tab-content pdf-container">
+                        <iframe id="ppt-preview-frame" class="preview-frame" style="width:100%;height:calc(100% - 48px);border:none;" sandbox="allow-same-origin"></iframe>
+                        <div style="padding:8px;text-align:center;">
+                            <a id="ppt-download-link" href="#" download="presentation.pptx" style="font-size:0.85em;color:#4472C4;">⬇ Download PPTX</a>
+                        </div>
+                    </div>
+                    <iframe id="marp-content" class="tab-content preview-frame" sandbox="allow-same-origin"></iframe>
+                    <iframe id="diff-content" class="tab-content preview-frame" sandbox="allow-same-origin"></iframe>
 
                     <!-- Source panels -->
                     <pre id="ast-content" class="tab-content source-pane">Loading...</pre>
                     <pre id="html-src-content" class="tab-content source-pane">Loading...</pre>
+                    <pre id="latex-src-content" class="tab-content source-pane">Loading...</pre>
                     <pre id="typst-src-content" class="tab-content source-pane">Loading...</pre>
                     <pre id="docx-xml-content" class="tab-content source-pane">Loading...</pre>
                     <pre id="odt-xml-content" class="tab-content source-pane">Loading...</pre>
+                    <pre id="marp-src-content" class="tab-content source-pane">Loading...</pre>
                 </div>
             </section>
         </main>

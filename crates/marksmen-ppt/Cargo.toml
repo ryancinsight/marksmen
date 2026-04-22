@@ -1,0 +1,11 @@
+[package]
+name = "marksmen-ppt"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+marksmen-core = { path = "../marksmen-core" }
+marksmen-xml = { path = "../marksmen-xml" }
+pulldown-cmark = { workspace = true }
+zip = { workspace = true }
+anyhow = { workspace = true }

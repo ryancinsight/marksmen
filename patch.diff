@@ -1,0 +1,12 @@
+@@ -250,6 +250,9 @@
+             }
+         }
+ 
++        for (idx, ev) in coalesced.iter().enumerate() {
++            if format!("{:?}", ev).contains("Took these Technical") {
++                println!("EV {}:\n{:#?}", idx, ev);
++            }
++        }
++
+         let mut iter = coalesced.into_iter();
+         while let Some(ev) = iter.next() {

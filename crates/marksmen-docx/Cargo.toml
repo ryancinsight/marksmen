@@ -13,3 +13,9 @@ tracing = { workspace = true }
 pulldown-cmark = { workspace = true }
 marksmen-xml = { path = "../marksmen-xml" }
 uuid = { version = "1.22.0", features = ["v4"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+regex = "1.12.3"
+
+[[bin]]
+name = "test_page_meta"
+path = "src/bin/test_page_meta.rs"

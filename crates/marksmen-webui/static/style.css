@@ -105,8 +105,10 @@ header {
     padding: 0;
     overflow-x: auto;
     gap: 0;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
+    scrollbar-width: none; /* Firefox */
 }
+.pane-header.tabs::-webkit-scrollbar { display: none; }
 
 .tab-group {
     display: flex;
@@ -115,20 +117,20 @@ header {
 }
 
 .tab-group-label {
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     color: var(--text-secondary);
-    padding: 0 8px 0 12px;
+    padding: 0 4px 0 8px;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.04em;
     white-space: nowrap;
-    opacity: 0.6;
+    opacity: 0.5;
 }
 
 .tab-divider {
     width: 1px;
-    height: 24px;
+    height: 20px;
     background: var(--border-color);
-    margin: 0 4px;
+    margin: 0 2px;
     flex-shrink: 0;
 }
 
@@ -136,9 +138,9 @@ header {
     background: none;
     border: none;
     color: var(--text-secondary);
-    padding: 10px 14px;
+    padding: 7px 10px;
     font-family: var(--font-ui);
-    font-size: 0.82rem;
+    font-size: 0.75rem;
     cursor: pointer;
     border-bottom: 2px solid transparent;
     transition: all 0.2s;

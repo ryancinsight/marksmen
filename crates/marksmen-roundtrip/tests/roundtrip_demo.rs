@@ -132,7 +132,7 @@ fn test_docx_roundtrip_similarity() -> Result<()> {
     let events = marksmen_core::parsing::parser::parse(body);
     
     // Provide a dummy path for image resolution
-    let docx_bytes = marksmen_docx::translation::document::convert(events, &config, &get_workspace_root())?;
+    let docx_bytes = marksmen_docx::translation::document::convert(events, &config, &get_workspace_root(), None)?;
 
     // 3. Extract back to Markdown string
     let extracted_md = marksmen_docx_read::parse_docx(&docx_bytes, None)?;
@@ -310,6 +310,7 @@ fn test_visual_snapshots() -> Result<()> {
         events,
         &config,
         &root.join("../../"),
+        None,
     )?;
     // DOCX is a ZIP archive; magic bytes are PK (0x50 0x4B).
     assert!(
@@ -475,7 +476,7 @@ fn evaluate_prd_docx_roundtrip() -> Result<()> {
     let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&source_md)?;
     let config = marksmen_core::Config::default();
     let events = marksmen_core::parsing::parser::parse(body);
-    let docx_bytes = marksmen_docx::translation::document::convert(events, &config, &root.join("PRD"))?;
+    let docx_bytes = marksmen_docx::translation::document::convert(events, &config, &root.join("PRD"), None)?;
 
     // 2. Dump DOCX for manual reference
     let docx_out = root.join("PRD/prd.docx");
@@ -524,5 +525,180 @@ fn test_html_conversion() -> Result<()> {
     std::fs::write(&html_out, html_string)?;
     
     println!("HTML exported -> {}", html_out.display());
+    Ok(())
+}
+
+/// Lossless structural roundtrip for the QSR Technical SonALAsense document.
+///
+/// Invariants verified:
+///   1. `word/styles.xml` size ≥ 40,000 B  (full original catalogue reinstated)
+///   2. `word/numbering.xml` size ≥ 30,000 B  (complex numbering reinstated)
+///   3. `word/header1.xml` present  (header passthrough)
+///   4. `word/footer1.xml` present  (footer passthrough)
+///   5. `word/commentsIds.xml` present  (comment-ID anchor passthrough)
+///   6. ≥ 7 distinct `w:id` values in `word/comments.xml`
+///   7. Author "Lenora Henry" preserved in comments
+///   8. Jaro-Winkler(extracted-from-original, extracted-from-roundtrip) ≥ 0.97
+#[test]
+fn test_qsr_lossless_roundtrip() -> Result<()> {
+    use std::io::Read;
+
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../");
+    let src_path = root.join("PRD/QSR Technical_SonALAsense_1AY2AX000034_2026_APR.docx");
+
+    if !src_path.exists() {
+        println!("QSR source DOCX not found at {}; skipping test.", src_path.display());
+        return Ok(());
+    }
+
+    let source_bytes = fs::read(&src_path)?;
+
+    // ── 1. Extract original to Markdown ───────────────────────────────────────
+    let intermediate_md = marksmen_docx_read::parse_docx(&source_bytes, None)?;
+    fs::write(root.join("PRD/QSR_Intermediate_RT.md"), &intermediate_md)?;
+
+    // ── 2. Parse Markdown to AST ──────────────────────────────────────────────
+    let config = marksmen_core::Config::default();
+    let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&intermediate_md)?;
+    let events = marksmen_core::parsing::parser::parse(body);
+
+    // ── 3. Write DOCX with source-passthrough active ──────────────────────────
+    let prd_dir = root.join("PRD");
+    let out_bytes = marksmen_docx::translation::document::convert(
+        events,
+        &config,
+        &prd_dir,
+        Some(&source_bytes),
+    )?;
+    fs::write(prd_dir.join("QSR_Roundtrip.docx"), &out_bytes)?;
+
+    // ── 4. Structural assertions on output ZIP ────────────────────────────────
+    let mut out_zip =
+        zip::ZipArchive::new(std::io::Cursor::new(&out_bytes)).expect("output not a valid ZIP");
+
+    // 4a. styles.xml size
+    {
+        let styles_size = out_zip.by_name("word/styles.xml")
+            .expect("word/styles.xml missing from roundtrip")
+            .size();
+        assert!(
+            styles_size >= 40_000,
+            "word/styles.xml too small after passthrough: {} B (expected ≥ 40,000)",
+            styles_size
+        );
+    }
+
+    // 4b. numbering.xml size
+    {
+        let num_size = out_zip.by_name("word/numbering.xml")
+            .expect("word/numbering.xml missing from roundtrip")
+            .size();
+        assert!(
+            num_size >= 30_000,
+            "word/numbering.xml too small after passthrough: {} B (expected ≥ 30,000)",
+            num_size
+        );
+    }
+
+    // 4c. Presence of header/footer/commentsIds
+    assert!(
+        out_zip.by_name("word/header1.xml").is_ok(),
+        "word/header1.xml absent from roundtrip output"
+    );
+    assert!(
+        out_zip.by_name("word/footer1.xml").is_ok(),
+        "word/footer1.xml absent from roundtrip output"
+    );
+    assert!(
+        out_zip.by_name("word/commentsIds.xml").is_ok(),
+        "word/commentsIds.xml absent from roundtrip output"
+    );
+
+    // 4d. Comment count and author preservation
+    {
+        let mut comments_xml = String::new();
+        out_zip
+            .by_name("word/comments.xml")
+            .expect("word/comments.xml missing")
+            .read_to_string(&mut comments_xml)?;
+
+        // Count distinct w:id values inside <w:comment ...> opening tags only.
+        let id_re = regex::Regex::new(r#"<w:comment\s[^>]*?w:id="([^"]+)""#).unwrap();
+        let distinct_ids: std::collections::HashSet<String> = id_re
+            .captures_iter(&comments_xml)
+            .map(|c| c[1].to_string())
+            .collect();
+        assert!(
+            distinct_ids.len() >= 7,
+            "Expected ≥ 7 distinct comment IDs; got {} ({:?})",
+            distinct_ids.len(),
+            distinct_ids
+        );
+
+        assert!(
+            comments_xml.contains("Lenora Henry"),
+            "Author 'Lenora Henry' not preserved in roundtrip comments.xml"
+        );
+    }
+
+    // ── 5. Semantic similarity ────────────────────────────────────────────────
+    let rt_extracted = marksmen_docx_read::parse_docx(&out_bytes, None)?;
+    let orig_extracted = marksmen_docx_read::parse_docx(&source_bytes, None)?;
+
+    // Strip header/footer sentinel blocks before comparison.
+    // When source_docx passthrough is active, header1.xml is passed through verbatim
+    // and the reader also picks it up from the XML ZIP entry. The body may contain
+    // a duplicate text fragment from the <header> MD sentinel. Strip both to compare
+    // only body-content similarity.
+    fn strip_header_footer_blocks(s: &str) -> String {
+        let mut out = String::with_capacity(s.len());
+        let mut depth = 0usize;
+        let mut i = 0;
+        let bytes = s.as_bytes();
+        while i < bytes.len() {
+            if bytes[i..].starts_with(b"<header") { depth += 1; i += 7; continue; }
+            if bytes[i..].starts_with(b"</header>") {
+                if depth > 0 { depth -= 1; }
+                i += 9; continue;
+            }
+            if bytes[i..].starts_with(b"<footer") { depth += 1; i += 7; continue; }
+            if bytes[i..].starts_with(b"</footer>") {
+                if depth > 0 { depth -= 1; }
+                i += 9; continue;
+            }
+            if depth == 0 {
+                out.push(bytes[i] as char);
+            }
+            i += 1;
+        }
+        out
+    }
+
+    let norm_rt = normalize_whitespace(&strip_vectors_and_html(&strip_header_footer_blocks(&rt_extracted)));
+    let norm_orig = normalize_whitespace(&strip_vectors_and_html(&strip_header_footer_blocks(&orig_extracted)));
+
+    // Remove table separator characters ('|') from both strings before JW comparison.
+    // JW is a character-transposition metric: repeated '|' chars in table-rich documents
+    // produce artificially low scores even when the semantic content is identical.
+    // Single-character differences in '|' insertion cause large JW degradation.
+    fn strip_table_pipes(s: &str) -> String {
+        s.chars().filter(|c| *c != '|').collect()
+    }
+
+    let jw_orig = strip_table_pipes(&norm_orig);
+    let jw_rt = strip_table_pipes(&norm_rt);
+
+    fs::write(root.join("PRD/qsr_norm_orig.txt"), &norm_orig)?;
+    fs::write(root.join("PRD/qsr_norm_rt.txt"), &norm_rt)?;
+
+    let similarity = strsim::normalized_levenshtein(&jw_orig, &jw_rt);
+    println!("QSR Lossless Roundtrip normalized-Levenshtein: {:.4}", similarity);
+
+    assert!(
+        similarity > 0.97,
+        "QSR roundtrip text similarity {:.4} is below threshold 0.97",
+        similarity
+    );
+
     Ok(())
 }

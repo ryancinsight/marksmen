@@ -1,0 +1,11 @@
+[package]
+name = "marksmen-xhtml"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+marksmen-core = { path = "../marksmen-core" }
+marksmen-mermaid = { path = "../marksmen-mermaid" }
+anyhow.workspace = true
+pulldown-cmark.workspace = true
+latex2mathml = "0.2.3"

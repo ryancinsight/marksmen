@@ -17,7 +17,7 @@ fn main() -> Result<()> {
     
     // 1. DOCX Roundtrip
     let events_docx = parse(body);
-    let docx_bytes = marksmen_docx::translation::document::convert(events_docx, &config, &root)?;
+    let docx_bytes = marksmen_docx::translation::document::convert(events_docx, &config, &root, None)?;
     let extracted_docx_md = marksmen_docx_read::parse_docx(&docx_bytes, None)?;
     
     println!("=== Extracted from DOCX Bytes ===");

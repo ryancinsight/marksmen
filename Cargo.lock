@@ -1973,6 +1973,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "marksmen-diff"
+version = "0.1.0"
+dependencies = [
+ "similar",
+]
+
+[[package]]
 name = "marksmen-docx"
 version = "0.1.0"
 dependencies = [
@@ -1983,8 +1990,10 @@ dependencies = [
  "marksmen-render",
  "marksmen-xml",
  "pulldown-cmark",
+ "regex",
  "tracing",
  "uuid",
+ "zip 2.4.2",
 ]
 
 [[package]]
@@ -2032,6 +2041,38 @@ dependencies = [
  "anyhow",
  "ego-tree",
  "scraper",
+]
+
+[[package]]
+name = "marksmen-latex"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "marksmen-core",
+ "pulldown-cmark",
+]
+
+[[package]]
+name = "marksmen-latex-read"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+]
+
+[[package]]
+name = "marksmen-marp"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "marksmen-core",
+ "pulldown-cmark",
+]
+
+[[package]]
+name = "marksmen-marp-read"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
 ]
 
 [[package]]
@@ -2100,6 +2141,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "marksmen-ppt"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "marksmen-core",
+ "marksmen-xml",
+ "pulldown-cmark",
+ "zip 2.4.2",
+]
+
+[[package]]
+name = "marksmen-ppt-read"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "quick-xml 0.36.2",
+ "zip 2.4.2",
+]
+
+[[package]]
 name = "marksmen-render"
 version = "0.1.0"
 dependencies = [
@@ -2127,7 +2188,9 @@ dependencies = [
  "marksmen-odt-read",
  "marksmen-pdf",
  "marksmen-pdf-read",
+ "regex",
  "strsim",
+ "zip 2.4.2",
 ]
 
 [[package]]
@@ -2159,13 +2222,20 @@ dependencies = [
  "axum",
  "base64",
  "marksmen-core",
+ "marksmen-diff",
  "marksmen-docx",
  "marksmen-docx-read",
  "marksmen-html",
  "marksmen-html-read",
+ "marksmen-latex",
+ "marksmen-latex-read",
+ "marksmen-marp",
+ "marksmen-marp-read",
  "marksmen-odt",
  "marksmen-odt-read",
  "marksmen-pdf",
+ "marksmen-ppt",
+ "marksmen-ppt-read",
  "marksmen-render",
  "marksmen-typst",
  "marksmen-typst-read",
@@ -3252,6 +3322,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e320a6c5ad31d271ad523dcf3ad13e2767ad8b1cb8f047f75a8aeaf8da139da2"
 
 [[package]]
+name = "similar"
+version = "2.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
+
+[[package]]
 name = "simplecss"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3465,6 +3541,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "temp_cmark"
+version = "0.1.0"
+dependencies = [
+ "pulldown-cmark",
+]
+
+[[package]]
 name = "tempfile"
 version = "3.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3486,6 +3569,13 @@ dependencies = [
  "futf",
  "mac",
  "utf-8",
+]
+
+[[package]]
+name = "test_align"
+version = "0.1.0"
+dependencies = [
+ "docx-rs",
 ]
 
 [[package]]
