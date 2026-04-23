@@ -36,6 +36,27 @@ pub fn translate(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
         process_html_blob(&buffered, &mut output, &mut state);
     }
 
+    // Emit accumulated header/footer as Typst page overrides.
+    if !state.header_buffer.is_empty() || !state.footer_buffer.is_empty() {
+        let mut page_update = String::from("\n#set page(\n");
+        if !state.header_buffer.is_empty() {
+            let hdr = state.header_buffer.trim().replace('"', "''");
+            page_update.push_str(&format!("  header: context [{}],\n", hdr));
+        }
+        if !state.footer_buffer.is_empty() {
+            let ftr = state.footer_buffer.trim().replace('"', "''");
+            page_update.push_str(&format!("  footer: context [{}],\n", ftr));
+        }
+        page_update.push_str(")\n");
+        // Insert after the preamble, before body content.
+        // Find the first blank line after preamble to insert.
+        if let Some(pos) = output.find("\n\n") {
+            output.insert_str(pos + 2, &page_update);
+        } else {
+            output.push_str(&page_update);
+        }
+    }
+
     Ok(output)
 }
 
@@ -98,6 +119,14 @@ struct TranslatorState {
     html_table_buffer: String,
     /// Maximum computed columns for an HTML table blob.
     html_table_cols: usize,
+    /// Whether we're inside a <header> block (content suppressed from body).
+    in_header_block: bool,
+    /// Whether we're inside a <footer> block (content suppressed from body).
+    in_footer_block: bool,
+    /// Accumulated header content.
+    header_buffer: String,
+    /// Accumulated footer content.
+    footer_buffer: String,
 }
 
 fn emit_preamble(output: &mut String, config: &Config) {
@@ -153,7 +182,7 @@ fn emit_preamble(output: &mut String, config: &Config) {
     output.push_str("#set heading(numbering: none)\n");
 
     // Paragraph spacing.
-    output.push_str("#set par(justify: true)\n");
+    output.push_str("#set par(justify: true, spacing: 1.2em)\n");
 
     output.push('\n');
 
@@ -194,24 +223,32 @@ fn translate_event(
     match event {
         // --- Block elements ---
         Event::Start(Tag::Heading { level, .. }) => {
-            output.push('\n');
-            let prefix = elements::heading_prefix(heading_level_to_u8(level));
-            output.push_str(&prefix);
-            output.push(' ');
+            if !state.in_header_block && !state.in_footer_block {
+                output.push('\n');
+                let prefix = elements::heading_prefix(heading_level_to_u8(level));
+                output.push_str(&prefix);
+                output.push(' ');
+            }
         }
         Event::End(TagEnd::Heading(_)) => {
-            output.push('\n');
+            if !state.in_header_block && !state.in_footer_block {
+                output.push('\n');
+            }
         }
 
         Event::Start(Tag::Paragraph) => {
-            if state.in_blockquote {
+            if state.in_header_block || state.in_footer_block {
+                // Suppressed: content accumulates into header/footer buffer.
+            } else if state.in_blockquote {
                 // Blockquote paragraphs are handled by the blockquote wrapper.
             } else if !state.in_table_cell && state.list_depth == 0 {
                 output.push('\n');
             }
         }
         Event::End(TagEnd::Paragraph) => {
-            if !state.in_table_cell && state.list_depth == 0 {
+            if state.in_header_block || state.in_footer_block {
+                // Suppressed.
+            } else if !state.in_table_cell && state.list_depth == 0 {
                 output.push('\n');
             }
         }
@@ -392,10 +429,7 @@ fn translate_event(
         }
         Event::End(TagEnd::TableHead) => {
             state.in_table_header = false;
-            // Emit header cells as bold with spaces to avoid `[*` lexing errors.
-            for cell in &state.table_row_cells {
-                output.push_str(&format!("  [ *{}* ],\n", cell));
-            }
+            format_table_cells(&state.table_row_cells, true, output);
             state.table_row_cells.clear();
         }
 
@@ -403,9 +437,7 @@ fn translate_event(
             state.table_row_cells.clear();
         }
         Event::End(TagEnd::TableRow) => {
-            for cell in &state.table_row_cells {
-                output.push_str(&format!("  [ {} ],\n", cell));
-            }
+            format_table_cells(&state.table_row_cells, false, output);
             state.table_row_cells.clear();
         }
 
@@ -421,7 +453,11 @@ fn translate_event(
 
         // --- Text content ---
         Event::Text(text) => {
-            if state.in_mermaid_block {
+            if state.in_header_block {
+                state.header_buffer.push_str(&elements::escape_text(&text));
+            } else if state.in_footer_block {
+                state.footer_buffer.push_str(&elements::escape_text(&text));
+            } else if state.in_mermaid_block {
                 state.current_mermaid_text.push_str(&text);
             } else if state.in_table_cell {
                 state.current_cell.push_str(&elements::escape_text(&text));
@@ -655,13 +691,16 @@ fn process_single_tag(lower: &str, original: &str, output: &mut String, state: &
         let dest = if state.in_table_cell { &mut state.current_cell } else { output };
         dest.push(']');
 
+    } else if lower.starts_with("<u") && !lower.starts_with("<ul") {
+        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        dest.push_str("#underline[");
     } else if lower.starts_with("</u") && !lower.starts_with("</ul") {
         let dest = if state.in_table_cell { &mut state.current_cell } else { output };
         dest.push(']');
     // --- <ins> / </ins> ---
     } else if lower.starts_with("<ins") {
         let dest = if state.in_table_cell { &mut state.current_cell } else { output };
-        dest.push_str("#underline(stroke: red)[#text(fill: red)[");
+        dest.push_str("#underline(stroke: blue)[#text(fill: blue)[");
     } else if lower.starts_with("</ins") {
         let dest = if state.in_table_cell { &mut state.current_cell } else { output };
         dest.push_str("]]");
@@ -754,10 +793,11 @@ fn process_single_tag(lower: &str, original: &str, output: &mut String, state: &
 
     // --- <mark> (Comments) ---
     } else if lower.starts_with("<mark") && lower.contains("comment") {
-        let content = extract_attr_from_lower(lower, "data-content").unwrap_or_default();
-        let author = extract_attr_from_lower(lower, "data-author").unwrap_or_else(|| "Author".to_string());
+        let _content = extract_attr_from_lower(lower, "data-content").unwrap_or_default();
+        let _author = extract_attr_from_lower(lower, "data-author").unwrap_or_else(|| "Author".to_string());
         let dest = if state.in_table_cell { &mut state.current_cell } else { output };
-        dest.push_str(&format!("#highlight(fill: yellow.lighten(60%))[{}]#footnote[{} (by {})]", "{", content, author));
+        // We only render the visual anchor; PDF annotation metadata is handled upstream.
+        dest.push_str(&format!("#highlight(fill: yellow.lighten(60%))[{}]", "{"));
     } else if lower.starts_with("</mark") {
         let dest = if state.in_table_cell { &mut state.current_cell } else { output };
         dest.push_str("}");
@@ -860,6 +900,14 @@ fn process_single_tag(lower: &str, original: &str, output: &mut String, state: &
     } else if lower.starts_with("<!-- pagebreak -->") {
         output.push_str("\n#pagebreak()\n");
 
+    // --- Table formatting comments ---
+    } else if lower.starts_with("<!-- colspan -->") || original.starts_with("<!-- COLSPAN") {
+        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        dest.push_str("<!-- COLSPAN -->");
+    } else if lower.starts_with("<!-- bg_color:") || original.starts_with("<!-- BG_COLOR") {
+        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        dest.push_str(original);
+
     // --- <style> ---
     } else if lower.starts_with("<style") {
         state.in_html_style_block = true;
@@ -909,6 +957,32 @@ fn process_single_tag(lower: &str, original: &str, output: &mut String, state: &
     } else if lower.starts_with("</caption") {
         let dest = if state.in_table_cell { &mut state.current_cell } else { output };
         dest.push_str("\n  ],\n");
+    // --- <header> / <footer> block suppression ---
+    } else if lower.starts_with("<header") {
+        state.in_header_block = true;
+    } else if lower.starts_with("</header") {
+        state.in_header_block = false;
+    } else if lower.starts_with("<footer") {
+        state.in_footer_block = true;
+    } else if lower.starts_with("</footer") {
+        state.in_footer_block = false;
+
+    } else if lower.starts_with("<!-- page_num") {
+        if state.in_header_block {
+            state.header_buffer.push_str("#counter(page).display()");
+        } else if state.in_footer_block {
+            state.footer_buffer.push_str("#counter(page).display()");
+        } else {
+            output.push_str("#counter(page).display()");
+        }
+    } else if lower.starts_with("<!-- total_pages") {
+        if state.in_header_block {
+            state.header_buffer.push_str("#counter(page).final().first()");
+        } else if state.in_footer_block {
+            state.footer_buffer.push_str("#counter(page).final().first()");
+        } else {
+            output.push_str("#counter(page).final().first()");
+        }
     } else if lower.starts_with("<thead") || lower.starts_with("</thead")
         || lower.starts_with("<tbody") || lower.starts_with("</tbody")
         || lower.starts_with("<code") || lower.starts_with("</code")
@@ -916,6 +990,44 @@ fn process_single_tag(lower: &str, original: &str, output: &mut String, state: &
         // Silently skip non-structural HTML table markup and inline code tags.
     } else {
         // Catch-all: skip silently to avoid noisy comments polluting Typst source.
+    }
+}
+
+fn format_table_cells(cells: &[String], is_header: bool, output: &mut String) {
+    let mut i = 0;
+    while i < cells.len() {
+        let mut cell_content = cells[i].clone();
+        let mut colspan = 1;
+
+        let mut bg_color = String::new();
+        if let Some(start) = cell_content.find("<!-- BG_COLOR:") {
+            if let Some(end) = cell_content[start..].find("-->") {
+                let hex = cell_content[start + 14..start + end].trim();
+                bg_color = format!("rgb(\"{}\")", hex);
+                cell_content.replace_range(start..start+end+3, "");
+            }
+        }
+
+        let mut j = i + 1;
+        while j < cells.len() && cells[j].contains("<!-- COLSPAN -->") {
+            colspan += 1;
+            j += 1;
+        }
+
+        let mut fill_attr = String::new();
+        if !bg_color.is_empty() {
+            fill_attr = format!("fill: {}, ", bg_color);
+        }
+
+        let content_fmt = if is_header { format!("*{}*", cell_content) } else { cell_content };
+
+        if colspan > 1 || !bg_color.is_empty() {
+            output.push_str(&format!("  table.cell({}colspan: {})[ {} ],\n", fill_attr, colspan, content_fmt));
+        } else {
+            output.push_str(&format!("  [ {} ],\n", content_fmt));
+        }
+
+        i += colspan;
     }
 }
 

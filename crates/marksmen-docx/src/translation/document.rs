@@ -282,13 +282,13 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                                         } else if !is_text && seg_low.starts_with("</u") { text_state.is_underline = false;
                                         } else if !is_text && seg_low.starts_with("<ins") {
                                             text_state.is_ins = true;
-                                            text_state.revision_author = crate::translation::elements::extract_attr(s, "data-author");
-                                            text_state.revision_date = crate::translation::elements::extract_attr(s, "data-date");
+                                            text_state.revision_ins_author = crate::translation::elements::extract_attr(s, "data-author");
+                                            text_state.revision_ins_date = crate::translation::elements::extract_attr(s, "data-date");
                                         } else if !is_text && seg_low.starts_with("</ins") { text_state.is_ins = false;
                                         } else if !is_text && seg_low.starts_with("<del") {
                                             text_state.is_del = true;
-                                            text_state.revision_author = crate::translation::elements::extract_attr(s, "data-author");
-                                            text_state.revision_date = crate::translation::elements::extract_attr(s, "data-date");
+                                            text_state.revision_del_author = crate::translation::elements::extract_attr(s, "data-author");
+                                            text_state.revision_del_date = crate::translation::elements::extract_attr(s, "data-date");
                                         } else if !is_text && seg_low.starts_with("</del") { text_state.is_del = false;
                                         } else if !is_text && seg_low.starts_with("<br") {
                                             n_p = n_p.add_run(Run::new().add_break(docx_rs::BreakType::TextWrapping));
@@ -304,24 +304,24 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                                             if text_state.is_underline { run = run.underline("single"); }
                                             if text_state.is_highlight { run = run.highlight("yellow"); }
                                             
-                                            if text_state.is_ins {
-                                                let mut ins = docx_rs::Insert::new(run);
-                                                if let Some(author) = &text_state.revision_author {
-                                                    ins = ins.author(author);
-                                                }
-                                                if let Some(date) = &text_state.revision_date {
-                                                    ins = ins.date(date);
-                                                }
-                                                n_p = n_p.add_insert(ins);
-                                            } else if text_state.is_del {
+                                            if text_state.is_del {
                                                 let mut del = docx_rs::Delete::new().add_run(run);
-                                                if let Some(author) = &text_state.revision_author {
+                                                if let Some(author) = &text_state.revision_del_author {
                                                     del = del.author(author);
                                                 }
-                                                if let Some(date) = &text_state.revision_date {
+                                                if let Some(date) = &text_state.revision_del_date {
                                                     del = del.date(date);
                                                 }
                                                 n_p = n_p.add_delete(del);
+                                            } else if text_state.is_ins {
+                                                let mut ins = docx_rs::Insert::new(run);
+                                                if let Some(author) = &text_state.revision_ins_author {
+                                                    ins = ins.author(author);
+                                                }
+                                                if let Some(date) = &text_state.revision_ins_date {
+                                                    ins = ins.date(date);
+                                                }
+                                                n_p = n_p.add_insert(ins);
                                             } else {
                                                 n_p = n_p.add_run(run);
                                             }

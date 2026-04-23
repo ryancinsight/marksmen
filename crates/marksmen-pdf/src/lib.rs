@@ -58,8 +58,94 @@ fn embed_roundtrip_markdown(pdf_bytes: &[u8], markdown: &str) -> Result<Vec<u8>>
     info.set(ROUNDTRIP_MARKDOWN_KEY, Object::string_literal(markdown));
 
     let mut out = Vec::new();
+    
+    // --- Phase 2: Native PDF Comment Injection ---
+    // Distribute annotations across pages proportionally based on byte offset.
+    let pages = document.get_pages();
+    let total_pages = pages.len();
+    if total_pages > 0 {
+        let md_len = markdown.len().max(1);
+        
+        // Collect all comment positions and metadata.
+        struct CommentInfo {
+            byte_offset: usize,
+            author: String,
+            content: String,
+        }
+        let mut comments: Vec<CommentInfo> = Vec::new();
+        
+        let mut search_idx = 0;
+        while let Some(start_idx) = markdown[search_idx..].find("<mark class=\"comment\"") {
+            let actual_start = search_idx + start_idx;
+            if let Some(end_idx) = markdown[actual_start..].find("</mark>") {
+                let tag = &markdown[actual_start..actual_start + end_idx + 7];
+                let author = extract_attr(tag, "data-author").unwrap_or_else(|| "Author".to_string());
+                let content = extract_attr(tag, "data-content").unwrap_or_default();
+                comments.push(CommentInfo { byte_offset: actual_start, author, content });
+                search_idx = actual_start + end_idx + 7;
+            } else {
+                break;
+            }
+        }
+        
+        // Group annotations by target page.
+        let mut page_annots: std::collections::BTreeMap<u32, Vec<lopdf::ObjectId>> = std::collections::BTreeMap::new();
+        
+        for comment in &comments {
+            // Map byte offset to page number (1-indexed).
+            let fraction = comment.byte_offset as f64 / md_len as f64;
+            let page_num = ((fraction * total_pages as f64).floor() as u32).clamp(1, total_pages as u32);
+            
+            // Compute vertical offset per page: stack from top.
+            let count = page_annots.entry(page_num).or_default().len();
+            let y_offset = 750.0_f32 - (count as f32 * 30.0);
+            
+            let mut annot_dict = Dictionary::new();
+            annot_dict.set("Type", Object::Name(b"Annot".to_vec()));
+            annot_dict.set("Subtype", Object::Name(b"Text".to_vec()));
+            annot_dict.set("T", Object::string_literal(comment.author.clone()));
+            annot_dict.set("Contents", Object::string_literal(comment.content.clone()));
+            annot_dict.set("MarksmenOrigin", Object::Boolean(true));
+            annot_dict.set("Rect", Object::Array(vec![
+                Object::Real(10.0),
+                Object::Real(y_offset - 20.0),
+                Object::Real(30.0),
+                Object::Real(y_offset),
+            ]));
+            
+            let annot_id = document.add_object(annot_dict);
+            page_annots.entry(page_num).or_default().push(annot_id);
+        }
+        
+        // Attach annotations to their respective pages.
+        for (page_num, annot_obj_ids) in page_annots {
+            if let Some(&page_obj_id) = pages.get(&page_num) {
+                let annot_refs: Vec<Object> = annot_obj_ids.iter().map(|id| Object::Reference(*id)).collect();
+                if let Ok(page_dict) = document.get_object_mut(page_obj_id).and_then(|obj| obj.as_dict_mut()) {
+                    if let Ok(existing_annots) = page_dict.get_mut(b"Annots") {
+                        if let Object::Array(arr) = existing_annots {
+                            arr.extend(annot_refs);
+                        }
+                    } else {
+                        page_dict.set("Annots", Object::Array(annot_refs));
+                    }
+                }
+            }
+        }
+    }
+
     document
         .save_to(&mut out)
         .context("Failed to save PDF with embedded roundtrip metadata")?;
     Ok(out)
+}
+
+fn extract_attr(tag: &str, attr: &str) -> Option<String> {
+    let needle = format!("{}=\"", attr);
+    if let Some(start) = tag.find(&needle) {
+        if let Some(end) = tag[start + needle.len()..].find('"') {
+            return Some(tag[start + needle.len()..start + needle.len() + end].to_string());
+        }
+    }
+    None
 }

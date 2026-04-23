@@ -704,3 +704,94 @@ fn test_qsr_lossless_roundtrip() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_qsr_pdf_roundtrip() -> Result<()> {
+    use std::io::Read;
+
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../");
+    let src_path = root.join("PRD/QSR Technical_SonALAsense_1AY2AX000034_2026_APR.docx");
+
+    if !src_path.exists() {
+        println!("QSR source DOCX not found at {}; skipping test.", src_path.display());
+        return Ok(());
+    }
+
+    let source_bytes = fs::read(&src_path)?;
+
+    // ── 1. Extract original to Markdown (with media extraction) ───────────────
+    let prd_dir = root.join("PRD");
+    let media_dir = prd_dir.join("QSR_media");
+    let _ = fs::create_dir_all(&media_dir);
+    let intermediate_md = marksmen_docx_read::parse_docx(&source_bytes, Some(media_dir.as_path()))?;
+
+    // ── 2. Convert Markdown to PDF ────────────────────────────────────────────
+    let config = marksmen_core::Config::default();
+    let pdf_bytes = marksmen_pdf::convert(&intermediate_md, &config, Some(prd_dir.clone()))?;
+    fs::write(prd_dir.join("QSR_Intermediate_RT.pdf"), &pdf_bytes)?;
+
+    // ── 3. Extract PDF back to Markdown ───────────────────────────────────────
+    let pdf_extracted_md = marksmen_pdf_read::parse_pdf(&pdf_bytes)?;
+
+    // ── 4. Parse Extracted Markdown to AST ────────────────────────────────────
+    let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&pdf_extracted_md)?;
+    let events = marksmen_core::parsing::parser::parse(body);
+
+    // ── 5. Write DOCX from AST ────────────────────────────────────────────────
+    let out_bytes = marksmen_docx::translation::document::convert(
+        events,
+        &config,
+        &prd_dir,
+        Some(&source_bytes),
+    )?;
+    fs::write(prd_dir.join("QSR_PDF_Roundtrip.docx"), &out_bytes)?;
+
+    // ── 6. Semantic similarity ────────────────────────────────────────────────
+    let rt_extracted = marksmen_docx_read::parse_docx(&out_bytes, None)?;
+    let orig_extracted = marksmen_docx_read::parse_docx(&source_bytes, None)?;
+
+    fn strip_header_footer_blocks(s: &str) -> String {
+        let mut out = String::with_capacity(s.len());
+        let mut depth = 0usize;
+        let mut i = 0;
+        let bytes = s.as_bytes();
+        while i < bytes.len() {
+            if bytes[i..].starts_with(b"<header") { depth += 1; i += 7; continue; }
+            if bytes[i..].starts_with(b"</header>") {
+                if depth > 0 { depth -= 1; }
+                i += 9; continue;
+            }
+            if bytes[i..].starts_with(b"<footer") { depth += 1; i += 7; continue; }
+            if bytes[i..].starts_with(b"</footer>") {
+                if depth > 0 { depth -= 1; }
+                i += 9; continue;
+            }
+            if depth == 0 {
+                out.push(bytes[i] as char);
+            }
+            i += 1;
+        }
+        out
+    }
+
+    let norm_rt = normalize_whitespace(&strip_vectors_and_html(&strip_header_footer_blocks(&rt_extracted)));
+    let norm_orig = normalize_whitespace(&strip_vectors_and_html(&strip_header_footer_blocks(&orig_extracted)));
+
+    fn strip_table_pipes(s: &str) -> String {
+        s.chars().filter(|c| *c != '|').collect()
+    }
+
+    let jw_orig = strip_table_pipes(&norm_orig);
+    let jw_rt = strip_table_pipes(&norm_rt);
+
+    let similarity = strsim::normalized_levenshtein(&jw_orig, &jw_rt);
+    println!("QSR PDF Roundtrip normalized-Levenshtein: {:.4}", similarity);
+
+    assert!(
+        similarity > 0.97,
+        "QSR PDF roundtrip text similarity {:.4} is below threshold 0.97",
+        similarity
+    );
+
+    Ok(())
+}

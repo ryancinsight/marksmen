@@ -184,12 +184,15 @@ fn parse_xml_payload(
     let mut p_aligned_center = false;
     let mut p_span_center_emitted = false;
     let mut is_underline = false;
+    let mut is_strike = false;
     let mut is_subscript = false;
     let mut is_superscript = false;
     let mut in_quote = false;
     let mut in_code_block = false;
     let mut is_highlight = false;
     let mut p_custom_style: Option<String> = None; // Non-structural Word style for {.StyleName} emission
+    let mut in_hyperlink_r_id: Option<String> = None;
+    let mut hyperlink_start_idx: Option<usize> = None;
 
     // Field code (w:fldChar / w:instrText) tracking
     // We emit sentinels `<!-- PAGE_NUM -->` and `<!-- TOTAL_PAGES -->` into Markdown
@@ -426,6 +429,8 @@ fn parse_xml_payload(
                                         // Exclude Word-internal names that have no Markdown representation.
                                         let is_internal = style_name == "Normal"
                                             || style_name == "DefaultParagraphFont"
+                                            || style_name == "Header"
+                                            || style_name == "Footer"
                                             || style_name.starts_with("a-")
                                             || style_name.is_empty();
                                         if !is_internal {
@@ -549,6 +554,17 @@ fn parse_xml_payload(
                     b"w:b" => is_bold = true,
                     b"w:i" => is_italic = true,
                     b"w:u" => is_underline = true,
+                    b"w:strike" | b"w:dstrike" => {
+                        let mut strike_val = true;
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == b"w:val" {
+                                if attr.value.as_ref() == b"false" || attr.value.as_ref() == b"0" {
+                                    strike_val = false;
+                                }
+                            }
+                        }
+                        is_strike = strike_val;
+                    }
                     b"w:highlight" => {
                         for attr in e.attributes() {
                             if let Ok(a) = attr {
@@ -579,6 +595,22 @@ fn parse_xml_payload(
                                         is_code = true;
                                     }
                                 }
+                            }
+                        }
+                    }
+                    b"w:hyperlink" => {
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == b"r:id" {
+                                in_hyperlink_r_id = Some(String::from_utf8_lossy(&attr.value).to_string());
+                                hyperlink_start_idx = Some(output.len());
+                            }
+                        }
+                    }
+                    b"w:footnoteReference" => {
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == b"w:id" {
+                                let id = String::from_utf8_lossy(&attr.value);
+                                output.push_str(&format!("[^{}]", id));
                             }
                         }
                     }
@@ -729,13 +761,24 @@ fn parse_xml_payload(
                         output.push_str("<!-- TOTAL_PAGES -->");
                     }
                 }
+                b"w:hyperlink" => {
+                    if let (Some(r_id), Some(start_idx)) = (in_hyperlink_r_id.take(), hyperlink_start_idx.take()) {
+                        let url = rels_map.get(&r_id).cloned().unwrap_or(r_id);
+                        if start_idx < output.len() {
+                            let text_content = output[start_idx..].to_string();
+                            output.truncate(start_idx);
+                            output.push_str(&format!("[{}]({} \"\")", text_content, url));
+                        }
+                    }
+                }
                 b"w:r" => {
                     in_r = false;
                     is_underline = false;
+                    is_strike = false;
                     is_subscript = false;
                     is_superscript = false;
                 }
-                b"w:t" => in_t = false,
+                b"w:t" | b"w:delText" => in_t = false,
                 b"w:tc" => {
                     let mut tc_span = 1;
                     let mut tc_align = 0;
@@ -870,6 +913,7 @@ fn parse_xml_payload(
                                 if is_bold { core_text = format!("**{}**", core_text); }
                                 if is_italic { core_text = format!("*{}*", core_text); }
                                 if is_underline { core_text = format!("<u>{}</u>", core_text); }
+                                if is_strike { core_text = format!("~~{}~~", core_text); }
                                 if is_subscript { core_text = format!("<sub>{}</sub>", core_text); }
                                 if is_superscript { core_text = format!("<sup>{}</sup>", core_text); }
                                 if is_highlight { core_text = format!("<mark class=\"highlight\">{}</mark>", core_text); }
@@ -889,6 +933,7 @@ fn parse_xml_payload(
                                     if is_bold { html_text = format!("<strong>{}</strong>", html_text); }
                                     if is_italic { html_text = format!("<em>{}</em>", html_text); }
                                     if is_underline { html_text = format!("<u>{}</u>", html_text); }
+                                    if is_strike { html_text = format!("~~{}~~", html_text); }
                                     if is_subscript { html_text = format!("<sub>{}</sub>", html_text); }
                                     if is_superscript { html_text = format!("<sup>{}</sup>", html_text); }
                                     if is_highlight { html_text = format!("<mark class=\"highlight\">{}</mark>", html_text); }

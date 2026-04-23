@@ -10,12 +10,16 @@ pub struct TextState {
     pub is_underline: bool,
     pub is_subscript: bool,
     pub is_superscript: bool,
+    pub is_strike: bool,
     pub is_ins: bool,
     pub is_del: bool,
-    pub revision_author: Option<String>,
-    pub revision_date: Option<String>,
+    pub revision_ins_author: Option<String>,
+    pub revision_ins_date: Option<String>,
+    pub revision_del_author: Option<String>,
+    pub revision_del_date: Option<String>,
     pub is_highlight: bool,
     pub has_runs: bool,
+    pub active_link: Option<String>,
     pub comment_id_counter: usize,
     pub active_comment_id: Option<usize>,
     pub in_header: bool,
@@ -104,6 +108,10 @@ pub fn handle_event<'a>(
         Event::End(TagEnd::Strong) => text_state.is_bold = false,
         Event::Start(Tag::Emphasis) => text_state.is_italic = true,
         Event::End(TagEnd::Emphasis) => text_state.is_italic = false,
+        Event::Start(Tag::Strikethrough) => text_state.is_strike = true,
+        Event::End(TagEnd::Strikethrough) => text_state.is_strike = false,
+        Event::Start(Tag::Link { dest_url, .. }) => text_state.active_link = Some(dest_url.to_string()),
+        Event::End(TagEnd::Link) => text_state.active_link = None,
         
         Event::Html(html) | Event::InlineHtml(html) => {
             let original_tag = html.as_ref();
@@ -116,14 +124,14 @@ pub fn handle_event<'a>(
             else if tag.starts_with("</sup") { text_state.is_superscript = false; }
             else if tag.starts_with("<ins") {
                 text_state.is_ins = true;
-                text_state.revision_author = extract_attr(original_tag, "data-author");
-                text_state.revision_date = extract_attr(original_tag, "data-date");
+                text_state.revision_ins_author = extract_attr(original_tag, "data-author");
+                text_state.revision_ins_date = extract_attr(original_tag, "data-date");
             }
             else if tag.starts_with("</ins") { text_state.is_ins = false; }
             else if tag.starts_with("<del") {
                 text_state.is_del = true;
-                text_state.revision_author = extract_attr(original_tag, "data-author");
-                text_state.revision_date = extract_attr(original_tag, "data-date");
+                text_state.revision_del_author = extract_attr(original_tag, "data-author");
+                text_state.revision_del_date = extract_attr(original_tag, "data-date");
             }
             else if tag.starts_with("</del") { text_state.is_del = false; }
             else if tag.starts_with("<header") { text_state.in_header = true; }
@@ -225,6 +233,9 @@ pub fn handle_event<'a>(
             if text_state.is_underline {
                 run = run.underline("single");
             }
+            if text_state.is_strike {
+                run = run.strike();
+            }
             if text_state.is_subscript {
                 run.run_property = run.run_property.vert_align(VertAlignType::SubScript);
             }
@@ -235,29 +246,49 @@ pub fn handle_event<'a>(
                 run = run.highlight("yellow");
             }
             
-            if text_state.is_ins {
-                let mut ins = docx_rs::Insert::new(run);
-                if let Some(author) = &text_state.revision_author {
-                    ins = ins.author(author);
-                }
-                if let Some(date) = &text_state.revision_date {
-                    ins = ins.date(date);
-                }
-                *current_paragraph = current_paragraph.clone().add_insert(ins);
-            } else if text_state.is_del {
+            if text_state.is_del {
                 let mut del = docx_rs::Delete::new().add_run(run);
-                if let Some(author) = &text_state.revision_author {
+                if let Some(author) = &text_state.revision_del_author {
                     del = del.author(author);
                 }
-                if let Some(date) = &text_state.revision_date {
+                if let Some(date) = &text_state.revision_del_date {
                     del = del.date(date);
                 }
                 *current_paragraph = current_paragraph.clone().add_delete(del);
+            } else if text_state.is_ins {
+                let mut ins = docx_rs::Insert::new(run);
+                if let Some(author) = &text_state.revision_ins_author {
+                    ins = ins.author(author);
+                }
+                if let Some(date) = &text_state.revision_ins_date {
+                    ins = ins.date(date);
+                }
+                *current_paragraph = current_paragraph.clone().add_insert(ins);
+            } else if let Some(url) = &text_state.active_link {
+                let hyperlink = docx_rs::Hyperlink::new(url.clone(), docx_rs::HyperlinkType::External).add_run(run);
+                *current_paragraph = current_paragraph.clone().add_hyperlink(hyperlink);
             } else {
                 *current_paragraph = current_paragraph.clone().add_run(run);
             }
             text_state.has_runs = true;
         }
+        Event::TaskListMarker(checked) => {
+            let run = Run::new().add_text(if checked { "[x] ".to_string() } else { "[ ] ".to_string() });
+            *current_paragraph = current_paragraph.clone().add_run(run);
+            text_state.has_runs = true;
+        }
+        Event::FootnoteReference(label) => {
+            let mut run = Run::new().add_text(format!("[^{}]", label));
+            run.run_property = run.run_property.vert_align(VertAlignType::SuperScript);
+            *current_paragraph = current_paragraph.clone().add_run(run);
+            text_state.has_runs = true;
+        }
+        Event::Start(Tag::FootnoteDefinition(label)) => {
+            let run = Run::new().add_text(format!("[^{}]: ", label));
+            *current_paragraph = current_paragraph.clone().add_run(run);
+            text_state.has_runs = true;
+        }
+        Event::End(TagEnd::FootnoteDefinition) => {}
         Event::Code(code_text) => {
             // Inline code segment MUST inherit active structural states to preserve layout
             let mut run = Run::new()
@@ -266,28 +297,32 @@ pub fn handle_event<'a>(
             if text_state.is_bold { run = run.bold(); }
             if text_state.is_italic { run = run.italic(); }
             if text_state.is_underline { run = run.underline("single"); }
+            if text_state.is_strike { run = run.strike(); }
             if text_state.is_subscript { run.run_property = run.run_property.vert_align(VertAlignType::SubScript); }
             if text_state.is_superscript { run.run_property = run.run_property.vert_align(VertAlignType::SuperScript); }
             if text_state.is_highlight { run = run.highlight("yellow"); }
             
-            if text_state.is_ins {
-                let mut ins = docx_rs::Insert::new(run);
-                if let Some(author) = &text_state.revision_author {
-                    ins = ins.author(author);
-                }
-                if let Some(date) = &text_state.revision_date {
-                    ins = ins.date(date);
-                }
-                *current_paragraph = current_paragraph.clone().add_insert(ins);
-            } else if text_state.is_del {
+            if text_state.is_del {
                 let mut del = docx_rs::Delete::new().add_run(run);
-                if let Some(author) = &text_state.revision_author {
+                if let Some(author) = &text_state.revision_del_author {
                     del = del.author(author);
                 }
-                if let Some(date) = &text_state.revision_date {
+                if let Some(date) = &text_state.revision_del_date {
                     del = del.date(date);
                 }
                 *current_paragraph = current_paragraph.clone().add_delete(del);
+            } else if text_state.is_ins {
+                let mut ins = docx_rs::Insert::new(run);
+                if let Some(author) = &text_state.revision_ins_author {
+                    ins = ins.author(author);
+                }
+                if let Some(date) = &text_state.revision_ins_date {
+                    ins = ins.date(date);
+                }
+                *current_paragraph = current_paragraph.clone().add_insert(ins);
+            } else if let Some(url) = &text_state.active_link {
+                let hyperlink = docx_rs::Hyperlink::new(url.clone(), docx_rs::HyperlinkType::External).add_run(run);
+                *current_paragraph = current_paragraph.clone().add_hyperlink(hyperlink);
             } else {
                 *current_paragraph = current_paragraph.clone().add_run(run);
             }
