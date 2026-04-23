@@ -89,12 +89,15 @@ fn traverse_node(node: &SyntaxNode, output: &mut String) {
                  traverse_node(child, output);
              }
         }
+        SyntaxKind::SetRule | SyntaxKind::ShowRule | SyntaxKind::Hash => {
+             // Ignore configuration preamble and AST control characters.
+        }
         _ => {
-            if node.children().count() > 0 {
-                for child in node.children() {
-                    traverse_node(child, output);
-                }
-            } else {
+            // Only emit raw text for unrecognized leaf nodes.
+            // Do NOT recurse into unknown branch nodes — this prevents
+            // preamble configuration (set rules, function calls, closures)
+            // from leaking into the extracted markdown.
+            if node.children().count() == 0 {
                 let text = node.text().as_str();
                 output.push_str(text);
             }

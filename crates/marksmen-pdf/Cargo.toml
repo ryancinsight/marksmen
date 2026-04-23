@@ -17,3 +17,6 @@ tracing-core = "0.1.36"
 typst.workspace = true
 typst-pdf.workspace = true
 typst-render.workspace = true
+
+[dev-dependencies]
+marksmen-pdf-read = { path = "../marksmen-pdf-read" }

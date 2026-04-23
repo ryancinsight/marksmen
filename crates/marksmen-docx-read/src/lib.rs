@@ -197,7 +197,7 @@ fn parse_xml_payload(
     // Field code (w:fldChar / w:instrText) tracking
     // We emit sentinels `<!-- PAGE_NUM -->` and `<!-- TOTAL_PAGES -->` into Markdown
     // so the DOCX writer can reconstruct proper w:fldChar sequences in the footer.
-    let mut in_fld = false;       // true between fldChar begin..end
+    let mut _in_fld = false;       // true between fldChar begin..end
     let mut in_fld_instr = false; // true while reading w:instrText
     let mut fld_instr_buf = String::new(); // accumulates instrText content
     let mut in_fld_cached = false; // true inside fldChar separate..end (skip display text)
@@ -542,9 +542,9 @@ fn parse_xml_payload(
                         for attr in e.attributes().flatten() {
                             if attr.key.as_ref() == b"w:fldCharType" {
                                 match attr.value.as_ref() {
-                                    b"begin" => { in_fld = true; in_fld_cached = false; fld_instr_buf.clear(); }
+                                    b"begin" => { _in_fld = true; in_fld_cached = false; fld_instr_buf.clear(); }
                                     b"separate" => { in_fld_cached = true; }
-                                    b"end" => { in_fld = false; in_fld_cached = false; }
+                                    b"end" => { _in_fld = false; in_fld_cached = false; }
                                     _ => {}
                                 }
                             }

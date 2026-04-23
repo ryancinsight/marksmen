@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 marksmen-core = { path = "../marksmen-core" }
+marksmen-xml = { path = "../marksmen-xml" }
 marksmen-mermaid = { path = "../marksmen-mermaid" }
 anyhow.workspace = true
 pulldown-cmark.workspace = true

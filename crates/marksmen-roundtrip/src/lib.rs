@@ -75,6 +75,21 @@ pub fn structural_similarity(a: &str, b: &str) -> f64 {
         (sa.ordered_items, sb.ordered_items),
         (sa.code_blocks, sb.code_blocks),
         (sa.table_rows, sb.table_rows),
+        (sa.tables, sb.tables),
+        (sa.blockquotes, sb.blockquotes),
+        (sa.math_blocks, sb.math_blocks),
+        (sa.inline_math, sb.inline_math),
+        (sa.bold, sb.bold),
+        (sa.italic, sb.italic),
+        (sa.strikethrough, sb.strikethrough),
+        (sa.hyperlinks, sb.hyperlinks),
+        (sa.footnotes, sb.footnotes),
+        (sa.tasklists, sb.tasklists),
+        (sa.images, sb.images),
+        (sa.comments, sb.comments),
+        (sa.highlights, sb.highlights),
+        (sa.insertions, sb.insertions),
+        (sa.deletions, sb.deletions),
     ];
     let total: f64 = fields
         .iter()
@@ -146,72 +161,65 @@ struct StructureMetrics {
     ordered_items: usize,
     code_blocks: usize,
     table_rows: usize,
+    tables: usize,
+    blockquotes: usize,
+    math_blocks: usize,
+    inline_math: usize,
+    bold: usize,
+    italic: usize,
+    strikethrough: usize,
+    hyperlinks: usize,
+    footnotes: usize,
+    tasklists: usize,
+    images: usize,
+    comments: usize,
+    highlights: usize,
+    insertions: usize,
+    deletions: usize,
 }
 
 fn extract_structure(md: &str) -> StructureMetrics {
     let mut m = StructureMetrics::default();
-    let mut in_code_fence = false;
-    let mut fence_start_col = 0usize;
+    let events = marksmen_core::parsing::parser::parse(md);
 
-    for line in md.lines() {
-        let trimmed = line.trim_start();
-        let leading_spaces = line.len() - trimmed.len();
+    let mut list_ordered_stack = Vec::new();
 
-        // Track fenced code blocks to avoid mis-counting structure inside them.
-        if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
-            if !in_code_fence {
-                in_code_fence = true;
-                fence_start_col = leading_spaces;
-                m.code_blocks += 1;
-            } else if leading_spaces == fence_start_col {
-                in_code_fence = false;
-            }
-            continue;
-        }
-
-        if in_code_fence {
-            continue;
-        }
-
-        // ATX headings: 1–6 `#` chars followed by a space or end.
-        if trimmed.starts_with('#') {
-            let hashes = trimmed.bytes().take_while(|b| *b == b'#').count();
-            if hashes <= 6 {
-                let rest = trimmed[hashes..].trim_start();
-                if !rest.is_empty() || hashes > 0 {
-                    m.headings += 1;
-                    continue;
+    for event in events {
+        use pulldown_cmark::{Event, Tag};
+        match event {
+            Event::Start(Tag::Heading { .. }) => m.headings += 1,
+            Event::Start(Tag::List(start_num)) => list_ordered_stack.push(start_num.is_some()),
+            Event::End(pulldown_cmark::TagEnd::List(_)) => { list_ordered_stack.pop(); },
+            Event::Start(Tag::Item) => {
+                if *list_ordered_stack.last().unwrap_or(&false) {
+                    m.ordered_items += 1;
+                } else {
+                    m.unordered_items += 1;
                 }
             }
-        }
-
-        // Unordered list items: `- `, `* `, or `+ ` followed by content.
-        if (trimmed.starts_with("- ") || trimmed.starts_with("* ") || trimmed.starts_with("+ "))
-            && trimmed.len() > 2
-        {
-            m.unordered_items += 1;
-            continue;
-        }
-
-        // Ordered list items: `N. ` or `N) `.
-        let is_ordered = {
-            let digits: usize = trimmed.bytes().take_while(|b| b.is_ascii_digit()).count();
-            digits > 0
-                && trimmed.len() > digits + 1
-                && (trimmed.as_bytes()[digits] == b'.' || trimmed.as_bytes()[digits] == b')')
-                && trimmed.as_bytes().get(digits + 1) == Some(&b' ')
-        };
-        if is_ordered {
-            m.ordered_items += 1;
-            continue;
-        }
-
-        // Table rows: start with `|`.
-        if trimmed.starts_with('|') {
-            m.table_rows += 1;
-            continue;
+            Event::Start(Tag::CodeBlock(_)) => m.code_blocks += 1,
+            Event::Start(Tag::Table(_)) => m.tables += 1,
+            Event::Start(Tag::TableRow) | Event::Start(Tag::TableHead) => m.table_rows += 1,
+            Event::Start(Tag::BlockQuote(_)) => m.blockquotes += 1,
+            Event::Start(Tag::Strong) => m.bold += 1,
+            Event::Start(Tag::Emphasis) => m.italic += 1,
+            Event::Start(Tag::Strikethrough) => m.strikethrough += 1,
+            Event::Start(Tag::Link { .. }) => m.hyperlinks += 1,
+            Event::Start(Tag::Image { .. }) => m.images += 1,
+            Event::Start(Tag::FootnoteDefinition(_)) => m.footnotes += 1,
+            Event::FootnoteReference(_) => m.footnotes += 1,
+            Event::TaskListMarker(_) => m.tasklists += 1,
+            Event::InlineMath(_) => m.inline_math += 1,
+            Event::DisplayMath(_) => m.math_blocks += 1,
+            _ => {}
         }
     }
+
+    // Count annotation / revision HTML tags that pulldown-cmark does not natively parse.
+    m.comments = md.matches("<mark class=\"comment\"").count();
+    m.highlights = md.matches("<mark class=\"highlight\"").count();
+    m.insertions = md.matches("<ins ").count() + md.matches("<ins>").count();
+    m.deletions = md.matches("<del ").count() + md.matches("<del>").count();
 
     m
 }
@@ -290,8 +298,8 @@ mod tests {
         let a = "# H1\n\n## H2\n\n### H3";
         let b = "# H1";
         let sim = structural_similarity(a, b);
-        // headings: 3 vs 1 → score 1 - 2/4 = 0.5; others 1.0 → mean = (0.5 + 4.0)/5 = 0.9
-        assert!((sim - 0.9).abs() < 1e-9, "expected 0.9 got {sim}");
+        // headings: 3 vs 1 → score 1 - 2/4 = 0.5; others 19*1.0 → mean = 19.5/20 = 0.975
+        assert!((sim - 0.975).abs() < 1e-9, "expected 0.975 got {sim}");
     }
 
     #[test]
@@ -351,7 +359,8 @@ mod tests {
         assert_eq!(s.unordered_items, 1, "unordered_items");
         assert_eq!(s.ordered_items, 1, "ordered_items");
         assert_eq!(s.code_blocks, 1, "code_blocks");
-        assert_eq!(s.table_rows, 3, "table_rows (header + sep + data)");
+        assert_eq!(s.tables, 1, "tables");
+        assert_eq!(s.table_rows, 2, "table_rows (header + data)");
     }
 
     #[test]

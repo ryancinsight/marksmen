@@ -350,10 +350,10 @@ const SLIDE_CX: i64 = 9_144_000; // 10 in * 914400 EMU/in
 const SLIDE_CY: i64 = 6_858_000; // 7.5 in * 914400 EMU/in
 
 /// Title placeholder geometry (top band).
-const TITLE_X: i64 = 457_200;
-const TITLE_Y: i64 = 274_638;
-const TITLE_CX: i64 = 8_229_600;
-const TITLE_CY: i64 = 1_143_000;
+// const TITLE_X: i64 = 457_200;
+// const TITLE_Y: i64 = 274_638;
+// const TITLE_CX: i64 = 8_229_600;
+// const TITLE_CY: i64 = 1_143_000;
 
 /// Body placeholder geometry (lower portion).
 const BODY_X: i64 = 457_200;

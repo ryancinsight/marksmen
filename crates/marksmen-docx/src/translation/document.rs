@@ -235,14 +235,13 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                                 let mut mark_stack = Vec::new();
                                 
                                 while let Some(ev_n) = event_iter.by_ref().next() {
-                                    let mut html_str = None;
                                     let mut is_text = false;
-                                    match &ev_n {
-                                        Event::Html(h) | Event::InlineHtml(h) => html_str = Some(h.as_ref()),
-                                        Event::Text(t) => { html_str = Some(t.as_ref()); is_text = true; },
+                                    let html_str = match &ev_n {
+                                        Event::Html(h) | Event::InlineHtml(h) => Some(h.as_ref()),
+                                        Event::Text(t) => { is_text = true; Some(t.as_ref()) },
                                         Event::SoftBreak | Event::HardBreak => { n_p = n_p.add_run(Run::new().add_break(docx_rs::BreakType::TextWrapping)); continue; },
                                         _ => continue,
-                                    }
+                                    };
                                     if let Some(s) = html_str {
                                         let seg_low = s.to_lowercase();
                                         if !is_text && seg_low.starts_with("</table") { break;

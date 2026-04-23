@@ -10,7 +10,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
     out.push_str("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n");
     out.push_str("  <meta charset=\"UTF-8\">\n");
     out.push_str("  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n");
-    out.push_str(&format!("  <title>{}</title>\n", config.title.escape_default()));
+    out.push_str(&format!("  <title>{}</title>\n", marksmen_xml::escape(&config.title)));
     out.push_str("  <style>\n");
     out.push_str("    body { font-family: 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; max-width: 900px; margin: 0 auto; padding: 2rem; color: #333; }\n");
     out.push_str("    img { max-width: 100%; height: auto; }\n");
@@ -23,10 +23,10 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
     out.push_str("</head>\n<body>\n");
     
     if !config.title.is_empty() {
-        out.push_str(&format!("  <h1>{}</h1>\n", config.title.escape_default()));
+        out.push_str(&format!("  <h1>{}</h1>\n", marksmen_xml::escape(&config.title)));
     }
     if !config.author.is_empty() {
-        out.push_str(&format!("  <p><strong>{}</strong></p>\n", config.author.escape_default()));
+        out.push_str(&format!("  <p><strong>{}</strong></p>\n", marksmen_xml::escape(&config.author)));
     }
     
     let mut in_mermaid_block = false;
@@ -63,7 +63,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
                             out.push_str(&svg_str);
                             out.push_str("\n</div>\n");
                             out.push_str("<pre class=\"marksmen-roundtrip-meta\" style=\"display:none\">```mermaid\n");
-                            out.push_str(&escape_html(&current_mermaid_source));
+                            out.push_str(&marksmen_xml::escape(&current_mermaid_source));
                             out.push_str("\n```</pre>\n");
                         }
                         Err(_) => {
@@ -103,26 +103,26 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
                 out.push_str(&format!("<img src=\"{}\" alt=\"", dest_url));
             },
             Event::End(TagEnd::Image) => out.push_str("\" />"),
-            Event::Code(text) => out.push_str(&format!("<code>{}</code>", escape_html(text.as_ref()))),
+            Event::Code(text) => out.push_str(&format!("<code>{}</code>", marksmen_xml::escape(text.as_ref()))),
             Event::Text(text) => {
                 if in_mermaid_block {
                     current_mermaid_source.push_str(text.as_ref());
                 } else {
-                    out.push_str(&escape_html(text.as_ref()));
+                    out.push_str(&marksmen_xml::escape(text.as_ref()));
                 }
             }
-            Event::Html(html) => out.push_str(&html),
+            Event::Html(html) | Event::InlineHtml(html) => out.push_str(&html),
             Event::SoftBreak | Event::HardBreak => out.push_str("<br />"),
             Event::InlineMath(math) => {
                 match latex2mathml::latex_to_mathml(math.as_ref(), latex2mathml::DisplayStyle::Inline) {
                     Ok(mathml) => out.push_str(&mathml),
-                    Err(_) => out.push_str(&format!("<span class=\"math-inline\">{}</span>", escape_html(math.as_ref()))),
+                    Err(_) => out.push_str(&format!("<span class=\"math-inline\">{}</span>", marksmen_xml::escape(math.as_ref()))),
                 }
             }
             Event::DisplayMath(math) => {
                 match latex2mathml::latex_to_mathml(math.as_ref(), latex2mathml::DisplayStyle::Block) {
                     Ok(mathml) => out.push_str(&mathml),
-                    Err(_) => out.push_str(&format!("<div class=\"math-display\">{}</div>\n", escape_html(math.as_ref()))),
+                    Err(_) => out.push_str(&format!("<div class=\"math-display\">{}</div>\n", marksmen_xml::escape(math.as_ref()))),
                 }
             }
             Event::Rule => out.push_str("<div style=\"page-break-after: always;\"></div>\n"),
@@ -134,13 +134,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
     Ok(out)
 }
 
-fn escape_html(input: &str) -> String {
-    input
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-}
+
 
 /// Helper isolated from marksmen-docx bounds to bypass the rasterizer
 fn render_graph_to_svg(graph: &marksmen_mermaid::layout::coordinate_assign::SpacedGraph) -> String {

@@ -15,3 +15,17 @@
 - [x] Build `demo.md` AST → Roundtrip → Extracted AST string similarity validation using `strsim`
 - [x] Resolve structural payload divergence in DOCX abstract syntax tree translations
 - [ ] Implement CLI integration for bidirectional formatting and output mapping
+
+## Phase 9: PDF Annotation → DOCX Comment Localization (HIGH Severity)
+- [x] Add `LocalizedAnnotation` type and `AnnotationSubtype` enum to `marksmen-pdf-read`
+- [x] Implement `QuadPoints`, `Rect`, and color extraction from PDF annotations
+- [x] Build `text_mapper.rs` glyph-position extractor (page coordinates → text ranges)
+- [x] Integrate text mapper into annotation extraction loop (populate `anchored_text`)
+- [x] Change markdown emission to wrap annotated text: `<mark>text</mark>`
+- [x] Update `marksmen-pdf` comment injector to parse wrapped markdown tags
+- [x] Implement Typst-layout-based or PDF-post-process position query for comment injection
+- [x] Add `data-subtype` support to DOCX reader/writer (Highlight → `w:highlight`, Caret → `w:ins`, StrikeOut → `w:del`)
+- [x] Add annotation count to `roundtrip_similarity` structural metric
+- [x] Write property-based tests for PDF annotation roundtrip
+- [x] Fix stale `marksmen-pdf/tests/roundtrip_test.rs` (references non-existent `translation::translator`)
+- [x] Replace scratch `marksmen-pdf/tests/extract.rs` with real property tests

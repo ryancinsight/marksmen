@@ -43,7 +43,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
     );
     out.push_str(&format!(
         "  <title>{}</title>\n",
-        escape_xml(config.title.as_str())
+        marksmen_xml::escape(config.title.as_str())
     ));
     out.push_str("  <style type=\"text/css\">\n");
     out.push_str("    body { font-family: 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; max-width: 900px; margin: 0 auto; padding: 2rem; color: #333; }\n");
@@ -65,13 +65,13 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
     if !config.title.is_empty() {
         out.push_str(&format!(
             "  <h1>{}</h1>\n",
-            escape_xml(config.title.as_str())
+            marksmen_xml::escape(config.title.as_str())
         ));
     }
     if !config.author.is_empty() {
         out.push_str(&format!(
             "  <p><strong>{}</strong></p>\n",
-            escape_xml(config.author.as_str())
+            marksmen_xml::escape(config.author.as_str())
         ));
     }
 
@@ -132,14 +132,14 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
                             out.push_str(
                                 "<pre class=\"marksmen-roundtrip-meta\" style=\"display:none\">```mermaid\n",
                             );
-                            out.push_str(&escape_xml(&current_mermaid_source));
+                            out.push_str(&marksmen_xml::escape(&current_mermaid_source));
                             out.push_str("\n```</pre>\n");
                         }
                         Err(_) => {
                             out.push_str(
                                 "<pre style=\"color: red;\"><code>[Mermaid Parsing Fault]\n",
                             );
-                            out.push_str(&escape_xml(&current_mermaid_source));
+                            out.push_str(&marksmen_xml::escape(&current_mermaid_source));
                             out.push_str("</code></pre>\n");
                         }
                     }
@@ -179,7 +179,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
             Event::End(TagEnd::Strikethrough) => out.push_str("</del>"),
 
             Event::Start(Tag::Link { dest_url, .. }) => {
-                out.push_str(&format!("<a href=\"{}\">", escape_xml(dest_url.as_ref())))
+                out.push_str(&format!("<a href=\"{}\">", marksmen_xml::escape(dest_url.as_ref())))
             }
             Event::End(TagEnd::Link) => out.push_str("</a>"),
 
@@ -187,25 +187,25 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
             Event::Start(Tag::Image { dest_url, .. }) => {
                 out.push_str(&format!(
                     "<img src=\"{}\" alt=\"",
-                    escape_xml(dest_url.as_ref())
+                    marksmen_xml::escape(dest_url.as_ref())
                 ));
             }
             Event::End(TagEnd::Image) => out.push_str("\" />"),
 
             Event::Code(text) => out.push_str(&format!(
                 "<code>{}</code>",
-                escape_xml(text.as_ref())
+                marksmen_xml::escape(text.as_ref())
             )),
 
             Event::Text(text) => {
                 if in_mermaid_block {
                     current_mermaid_source.push_str(text.as_ref());
                 } else {
-                    out.push_str(&escape_xml(text.as_ref()));
+                    out.push_str(&marksmen_xml::escape(text.as_ref()));
                 }
             }
 
-            Event::Html(raw) => out.push_str(&raw),
+            Event::Html(raw) | Event::InlineHtml(raw) => out.push_str(&raw),
 
             // XHTML: `<br />` not `<br>`.
             Event::SoftBreak | Event::HardBreak => out.push_str("<br />\n"),
@@ -218,7 +218,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
                     Ok(mathml) => out.push_str(&qualify_mathml_ns(&mathml)),
                     Err(_) => out.push_str(&format!(
                         "<span class=\"math-inline\">{}</span>",
-                        escape_xml(math.as_ref())
+                        marksmen_xml::escape(math.as_ref())
                     )),
                 }
             }
@@ -231,7 +231,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
                     Ok(mathml) => out.push_str(&qualify_mathml_ns(&mathml)),
                     Err(_) => out.push_str(&format!(
                         "<div class=\"math-display\">{}</div>\n",
-                        escape_xml(math.as_ref())
+                        marksmen_xml::escape(math.as_ref())
                     )),
                 }
             }
@@ -251,18 +251,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-/// Escapes the five mandatory XML entities.
-///
-/// Invariant: `escape_xml(s)` produces a string safe for XML text content and
-/// attribute values. Specifically, none of `& < > " '` appear unescaped.
-fn escape_xml(input: &str) -> String {
-    input
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&apos;")
-}
+
 
 /// Ensures the top-level `<math>` element carries the W3C MathML namespace
 /// declaration when `latex2mathml` omits it.
@@ -324,7 +313,7 @@ fn render_graph_to_svg(
             r##"  <text x="{}" y="{}" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#666">{}</text>"##,
             subgraph.x + padding + 10.0,
             subgraph.y + padding + 16.0,
-            escape_xml(&subgraph.title),
+            marksmen_xml::escape(&subgraph.title),
         ));
         svg.push('\n');
     }
@@ -371,7 +360,7 @@ fn render_graph_to_svg(
                         r##"  <text x="{}" y="{}" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="#444">{}</text>"##,
                         lx,
                         ly,
-                        escape_xml(label),
+                        marksmen_xml::escape(label),
                     ));
                     svg.push('\n');
                 }
@@ -404,7 +393,7 @@ fn render_graph_to_svg(
             text_x,
             text_y,
             text_fill,
-            escape_xml(&node.label),
+            marksmen_xml::escape(&node.label),
         ));
         svg.push('\n');
     }
@@ -419,14 +408,14 @@ fn render_graph_to_svg(
 
 #[cfg(test)]
 mod tests {
-    use super::{convert, escape_xml, qualify_mathml_ns};
+    use super::{convert, qualify_mathml_ns};
     use marksmen_core::Config;
     use pulldown_cmark::{Event, Tag, TagEnd};
 
     #[test]
     fn escape_xml_covers_all_five_entities() {
         let input = "a & b < c > d \" e ' f";
-        let escaped = escape_xml(input);
+        let escaped = marksmen_xml::escape(input);
         assert_eq!(escaped, "a &amp; b &lt; c &gt; d &quot; e &apos; f");
     }
 

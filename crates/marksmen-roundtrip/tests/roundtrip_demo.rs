@@ -795,3 +795,83 @@ fn test_qsr_pdf_roundtrip() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_xhtml_roundtrip_similarity() -> Result<()> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let demo_md = fs::read_to_string(root.join("../../demo.md"))?;
+    let source_md_stripped = strip_frontmatter(&demo_md);
+    let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
+    let config = marksmen_core::Config::default();
+    let events = marksmen_core::parsing::parser::parse(body);
+    let out = marksmen_xhtml::convert(events, &config)?;
+    let extracted_md = marksmen_xhtml_read::parse_xhtml(&out)?;
+    let normalized_source = normalize_whitespace(&strip_vectors_and_html(&source_md_stripped));
+    let normalized_extracted = normalize_whitespace(&strip_vectors_and_html(&extracted_md));
+    let jw_sim = strsim::jaro_winkler(&normalized_source, &normalized_extracted);
+    assert!(jw_sim > 0.90, "XHTML roundtrip text similarity {:.4} is below threshold 0.90", jw_sim);
+    Ok(())
+}
+
+#[test]
+fn test_ppt_roundtrip_similarity() -> Result<()> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let demo_md = "# Slide One\n\nContent paragraph.\n\n---\n\n# Slide Two\n\n- item 1\n- item 2\n";
+    let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
+    let config = marksmen_core::Config::default();
+    let events = marksmen_core::parsing::parser::parse(body);
+    let out_bytes = marksmen_ppt::convert(events, &config)?;
+    let extracted_md = marksmen_ppt_read::parse_pptx(&out_bytes)?;
+    let normalized_source = normalize_whitespace(demo_md);
+    let normalized_extracted = normalize_whitespace(&extracted_md);
+    let jw_sim = strsim::jaro_winkler(&normalized_source, &normalized_extracted);
+    assert!(jw_sim > 0.85, "PPTX roundtrip text similarity {:.4} is below threshold 0.85", jw_sim);
+    Ok(())
+}
+
+#[test]
+fn test_typst_roundtrip_similarity() -> Result<()> {
+    let demo_md = "# Title\n\nSome text here.";
+    let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
+    let config = marksmen_core::Config::default();
+    let events = marksmen_core::parsing::parser::parse(body);
+    let out_str = marksmen_typst::translator::translate(events, &config)?;
+    let extracted_md = marksmen_typst_read::parse_typst(&out_str)?;
+    let normalized_source = normalize_whitespace(demo_md);
+    let normalized_extracted = normalize_whitespace(&extracted_md);
+    println!("TYPST OUT:\n{}", out_str);
+    println!("TYPST EXTRACTED:\n{}", extracted_md);
+    let jw_sim = strsim::jaro_winkler(&normalized_source, &normalized_extracted);
+    assert!(jw_sim > 0.85, "Typst roundtrip text similarity {:.4} is below threshold 0.85", jw_sim);
+    Ok(())
+}
+
+#[test]
+fn test_latex_roundtrip_similarity() -> Result<()> {
+    let demo_md = "# Heading\n\nMath $x=y$ testing **bold**.";
+    let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
+    let config = marksmen_core::Config::default();
+    let events = marksmen_core::parsing::parser::parse(body);
+    let out_str = marksmen_latex::convert(events, &config)?;
+    let extracted_md = marksmen_latex_read::parse_latex(&out_str)?;
+    let normalized_source = normalize_whitespace(demo_md);
+    let normalized_extracted = normalize_whitespace(&extracted_md);
+    let jw_sim = strsim::jaro_winkler(&normalized_source, &normalized_extracted);
+    assert!(jw_sim > 0.85, "LaTeX roundtrip text similarity {:.4} is below threshold 0.85", jw_sim);
+    Ok(())
+}
+
+#[test]
+fn test_marp_roundtrip_similarity() -> Result<()> {
+    let demo_md = "# Slide 1\n\nBody paragraph.\n\n---\n\n# Slide 2\n\nMore text.";
+    let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
+    let config = marksmen_core::Config::default();
+    let events = marksmen_core::parsing::parser::parse(body);
+    let out_str = marksmen_marp::convert(events, &config)?;
+    let extracted_md = marksmen_marp_read::parse_marp(&out_str)?;
+    let normalized_source = normalize_whitespace(demo_md);
+    let normalized_extracted = normalize_whitespace(&extracted_md);
+    let jw_sim = strsim::jaro_winkler(&normalized_source, &normalized_extracted);
+    assert!(jw_sim > 0.95, "Marp roundtrip text similarity {:.4} is below threshold 0.95", jw_sim);
+    Ok(())
+}

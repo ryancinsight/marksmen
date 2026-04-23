@@ -43,7 +43,7 @@ Instead of relying on web-based JS to render graphics, Typst handles `SVG` vecto
 
 ![Image]()
 
-$$![Image](./architecture.svg)$$
+$$![Image](./diagram1.svg)$$
 Architecture Diagram
 
 ## 5. Native Diagram Rendering (`marksmen-mermaid`)

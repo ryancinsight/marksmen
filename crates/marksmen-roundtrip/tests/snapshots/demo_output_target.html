@@ -19,7 +19,7 @@
 <h2>1. Document Headers &amp; Configuration</h2>
 <p>Headers, footers, and page numbers are intrinsically supported via YAML frontmatter blocks. For example, this document has a custom footer string.</p>
 <h2>2. Advanced Typography &amp; Tables</h2>
-<p>Because the intermediate format is Typst, typography is mathematically precise. Let's look at a standard Markdown table:</p>
+<p>Because the intermediate format is Typst, typography is mathematically precise. Let&apos;s look at a standard Markdown table:</p>
 <table>
   <thead>
     <tr>
@@ -58,11 +58,11 @@
 <h3>2.1 CSS &amp; HTML Handling</h3>
 <p>Typst is an analytical typesetting engine, <strong>not a web browser</strong>. It cannot execute CSS or complex DOM layouts. However, the translator enforces semantic mapping for structural inline HTML subsets:</p>
 <ul>
-<li><strong>Underline</strong>: This text is underlined via <code>&lt;u&gt;</code></li>
-<li><strong>Subscripts</strong>: H2O via <code>&lt;sub&gt;</code></li>
-<li><strong>Superscripts</strong>: E = mc2 via <code>&lt;sup&gt;</code></li>
-<li><strong>Colors</strong>: This text is colored via <code>&lt;span style=&quot;color: ...&quot;&gt;</code></li>
-<li><strong>Line breaks</strong>: Forced HTML break  is translated correctly.</li>
+<li><strong>Underline</strong>: <u style="color:red">This text is underlined</u> via <code>&lt;u&gt;</code></li>
+<li><strong>Subscripts</strong>: H<sub>2</sub>O via <code>&lt;sub&gt;</code></li>
+<li><strong>Superscripts</strong>: E = mc<sup>2</sup> via <code>&lt;sup&gt;</code></li>
+<li><strong>Colors</strong>: <span style="color: #e11d48">This text</span> is colored via <code>&lt;span style=&quot;color: ...&quot;&gt;</code></li>
+<li><strong>Line breaks</strong>: Forced HTML break <br> is translated correctly.</li>
 </ul>
 <p><em>Note: Arbitrary <code>&lt;div style=&quot;padding: 2px&quot;&gt;</code> blocks are ignored, preserving architectural invariants against empirical DOM approximations.</em></p>
 <h2>3. Mathematical Typesetting</h2>
@@ -70,7 +70,7 @@
 <p>Inline equations like <math xmlns="http://www.w3.org/1998/Math/MathML" display="inline"><munder><mi>lim</mi><mrow><mi>x</mi><mo>→</mo><mi mathvariant="normal">∞</mi></mrow></munder><mi>f</mi><mo>(</mo><mi>x</mi><mo>)</mo></math> blend seamlessly with the baseline.</p>
 <h2>4. Linked SVG Figures</h2>
 <p>Instead of relying on web-based JS to render graphics, Typst handles <code>SVG</code> vector embeddings natively without rasterization:</p>
-<p><img src="./architecture.svg" alt="Architecture Diagram" /></p>
+<p><img src="./diagram1.svg" alt="Architecture Diagram" /></p>
 <h2>5. Native Diagram Rendering (<code>marksmen-mermaid</code>)</h2>
 <blockquote><p><strong>Pure-Rust Mermaid Translation:</strong><br />Executing standard <code>mermaid.js</code> typically requires evaluating an entire web runtime (V8/Browser) with empirical DOM measurement APIs, which violates our offline-first pure-Rust correctness guarantees.</p>
 <p><em>Instead, <code>marksmen</code> relies on a mathematically-verified <code>marksmen-mermaid</code> layout engine implementing the Sugiyama Framework. It parses this raw Mermaid block offline and renders it deterministically into Typst spatial vectors!</em></p>

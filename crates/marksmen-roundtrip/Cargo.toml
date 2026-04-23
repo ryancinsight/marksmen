@@ -14,7 +14,18 @@ marksmen-html = { path = "../marksmen-html" }
 marksmen-html-read = { path = "../marksmen-html-read" }
 marksmen-pdf = { version = "0.1.0", path = "../marksmen-pdf" }
 marksmen-pdf-read = { version = "0.1.0", path = "../marksmen-pdf-read" }
+marksmen-ppt = { path = "../marksmen-ppt" }
+marksmen-ppt-read = { path = "../marksmen-ppt-read" }
+marksmen-xhtml = { path = "../marksmen-xhtml" }
+marksmen-xhtml-read = { path = "../marksmen-xhtml-read" }
+marksmen-latex = { path = "../marksmen-latex" }
+marksmen-latex-read = { path = "../marksmen-latex-read" }
+marksmen-marp = { path = "../marksmen-marp" }
+marksmen-marp-read = { path = "../marksmen-marp-read" }
+marksmen-typst = { path = "../marksmen-typst" }
+marksmen-typst-read = { path = "../marksmen-typst-read" }
 strsim = "0.11.1"
+pulldown-cmark.workspace = true
 
 [dev-dependencies]
 zip = { version = "2", default-features = false, features = ["deflate"] }

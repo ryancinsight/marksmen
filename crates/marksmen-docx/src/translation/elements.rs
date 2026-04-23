@@ -76,7 +76,7 @@ pub fn handle_event<'a>(
         Event::Start(Tag::Heading { level, .. }) => {
             if text_state.has_runs {
                 let p = std::mem::replace(current_paragraph, Paragraph::new());
-                container = container.add_paragraph(p);
+                let _ = container.add_paragraph(p);
                 text_state.has_runs = false;
             }
             let level_num = match level {
@@ -95,7 +95,7 @@ pub fn handle_event<'a>(
             // Flush heading
             if text_state.has_runs {
                 let p = std::mem::replace(current_paragraph, Paragraph::new());
-                container = container.add_paragraph(p);
+                let _ = container.add_paragraph(p);
                 text_state.has_runs = false;
             }
         }
@@ -141,6 +141,7 @@ pub fn handle_event<'a>(
             else if tag.starts_with("<mark") && tag.contains("comment") {
                 let author = extract_attr(original_tag, "data-author").unwrap_or_else(|| "Author".to_string());
                 let content = extract_attr(original_tag, "data-content").unwrap_or_default();
+                let subtype = extract_attr(original_tag, "data-subtype").unwrap_or_default();
 
                 // Prefer original source ID to preserve comment anchor consistency with
                 // the verbatim-passed-through comments.xml. Fall back to counter.
@@ -154,6 +155,19 @@ pub fn handle_event<'a>(
                         c
                     });
                 text_state.active_comment_id = Some(id);
+
+                // Subtype drives formatting inside the comment range.
+                if subtype.contains("highlight") || tag.contains("highlight") {
+                    text_state.is_highlight = true;
+                }
+                if subtype.contains("caret") || tag.contains("caret") {
+                    text_state.is_ins = true;
+                    text_state.revision_ins_author = Some(author.clone());
+                }
+                if subtype.contains("strikeout") || tag.contains("strikeout") {
+                    text_state.is_del = true;
+                    text_state.revision_del_author = Some(author.clone());
+                }
 
                 let comment = Comment::new(id)
                     .author(author)
@@ -172,6 +186,8 @@ pub fn handle_event<'a>(
                     *current_paragraph = current_paragraph.clone().add_comment_end(id);
                 }
                 text_state.is_highlight = false;
+                text_state.is_ins = false;
+                text_state.is_del = false;
             }
             else if tag.starts_with("<br") {
                 *current_paragraph = current_paragraph.clone().add_run(Run::new().add_break(BreakType::TextWrapping));
@@ -354,7 +370,7 @@ pub fn handle_event<'a>(
                     } else {
                         p
                     };
-                    container = container.add_paragraph(p);
+                    let _ = container.add_paragraph(p);
                 }
                 text_state.has_runs = false;
             }
@@ -374,7 +390,7 @@ pub fn handle_event<'a>(
                 text_state.has_runs = false;
             }
             let p = Paragraph::new().add_run(Run::new().add_break(BreakType::Page));
-            container = container.add_paragraph(p);
+            let _ = container.add_paragraph(p);
         }
         _ => {}
     }

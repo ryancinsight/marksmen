@@ -2033,6 +2033,7 @@ dependencies = [
  "latex2mathml",
  "marksmen-core",
  "marksmen-mermaid",
+ "marksmen-xml",
  "pulldown-cmark",
 ]
 
@@ -2121,6 +2122,7 @@ dependencies = [
  "lopdf",
  "marksmen-core",
  "marksmen-mermaid",
+ "marksmen-pdf-read",
  "marksmen-render",
  "marksmen-typst",
  "pulldown-cmark",
@@ -2140,6 +2142,7 @@ dependencies = [
  "marksmen-core",
  "marksmen-pdf",
  "pdf-extract",
+ "tracing",
 ]
 
 [[package]]
@@ -2186,10 +2189,21 @@ dependencies = [
  "marksmen-docx-read",
  "marksmen-html",
  "marksmen-html-read",
+ "marksmen-latex",
+ "marksmen-latex-read",
+ "marksmen-marp",
+ "marksmen-marp-read",
  "marksmen-odt",
  "marksmen-odt-read",
  "marksmen-pdf",
  "marksmen-pdf-read",
+ "marksmen-ppt",
+ "marksmen-ppt-read",
+ "marksmen-typst",
+ "marksmen-typst-read",
+ "marksmen-xhtml",
+ "marksmen-xhtml-read",
+ "pulldown-cmark",
  "regex",
  "strsim",
  "zip 2.4.2",
@@ -2260,6 +2274,7 @@ dependencies = [
  "latex2mathml",
  "marksmen-core",
  "marksmen-mermaid",
+ "marksmen-xml",
  "pulldown-cmark",
 ]
 
