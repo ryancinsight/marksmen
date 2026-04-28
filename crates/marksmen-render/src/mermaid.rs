@@ -48,8 +48,7 @@ pub fn render_graph_to_svg(
 
     // Subgraph backgrounds
     let mut ordered_subgraphs = graph.subgraphs.clone();
-    ordered_subgraphs
-        .sort_by(|l, r| l.depth.cmp(&r.depth).then_with(|| l.title.cmp(&r.title)));
+    ordered_subgraphs.sort_by(|l, r| l.depth.cmp(&r.depth).then_with(|| l.title.cmp(&r.title)));
     for sg in &ordered_subgraphs {
         let shade = (248.0 - (sg.depth as f64 * 8.0)).max(228.0) as i32;
         let fill = format!("#{:02x}{:02x}{:02x}", shade, shade, shade);

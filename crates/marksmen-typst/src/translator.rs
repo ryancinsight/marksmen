@@ -9,11 +9,11 @@
 //! - Math expressions translated from LaTeX to Typst syntax
 
 use anyhow::Result;
-use pulldown_cmark::{Event, Tag, TagEnd, HeadingLevel, CodeBlockKind, Alignment};
+use pulldown_cmark::{Alignment, CodeBlockKind, Event, HeadingLevel, Tag, TagEnd};
 
-use marksmen_core::config::Config;
 use super::elements;
 use super::math;
+use marksmen_core::config::Config;
 
 /// Translate a stream of pulldown-cmark events into a Typst markup string.
 ///
@@ -66,6 +66,7 @@ enum HtmlAlign {
     #[default]
     None,
     Center,
+    Indent(f32),
 }
 
 /// Internal state tracked across events.
@@ -125,8 +126,9 @@ struct TranslatorState {
     in_footer_block: bool,
     /// Accumulated header content.
     header_buffer: String,
-    /// Accumulated footer content.
     footer_buffer: String,
+
+    html_span_stack: Vec<bool>,
 }
 
 fn emit_preamble(output: &mut String, config: &Config) {
@@ -160,12 +162,21 @@ fn emit_preamble(output: &mut String, config: &Config) {
     output.push_str(")\n");
 
     // Text defaults.
-    output.push_str("#set text(font: \"Arial\", size: 11pt)\n");
+    let font_size = config.page.font_size.as_deref().unwrap_or("11pt");
+    let font_family = config.page.font_family.as_deref().unwrap_or("Arial");
+    output.push_str(&format!(
+        "#set text(font: \"{}\", size: {})\n",
+        font_family, font_size
+    ));
 
     // Code styling.
-    output.push_str("#show raw: set text(font: (\"Consolas\", \"Courier New\", \"monospace\"), size: 10pt)\n");
+    output.push_str(
+        "#show raw: set text(font: (\"Consolas\", \"Courier New\", \"monospace\"), size: 10pt)\n",
+    );
     // Inline code: light grey highlight behind the text.
-    output.push_str("#show raw.where(block: false): it => highlight(fill: luma(245), extent: 1.5pt)[#it]\n");
+    output.push_str(
+        "#show raw.where(block: false): it => highlight(fill: luma(245), extent: 1.5pt)[#it]\n",
+    );
     // Block code: explicit grey box with padding and rounded corners.
     output.push_str("#show raw.where(block: true): it => block(\n");
     output.push_str("  fill: luma(246),\n");
@@ -180,9 +191,23 @@ fn emit_preamble(output: &mut String, config: &Config) {
 
     // Heading styling.
     output.push_str("#set heading(numbering: none)\n");
+    // Ensure headings inherit the document font and don't force a bold weight
+    // unless the underlying markdown AST natively outputs bold spans!
+    output.push_str(&format!(
+        "#show heading: set text(weight: \"regular\", font: \"{}\")\n",
+        font_family
+    ));
 
     // Paragraph spacing.
-    output.push_str("#set par(justify: true, spacing: 1.2em)\n");
+    let line_spacing = config.page.line_spacing.as_deref().unwrap_or("1.2em");
+    output.push_str(&format!(
+        "#set par(justify: true, spacing: {})\n",
+        line_spacing
+    ));
+
+    // List alignment and indent.
+    output.push_str("#set enum(number-align: start, indent: 1em)\n");
+    output.push_str("#set list(indent: 1em)\n");
 
     output.push('\n');
 
@@ -282,11 +307,14 @@ fn translate_event(
             if state.in_mermaid_block {
                 state.in_mermaid_block = false;
                 let mermaid_src = std::mem::take(&mut state.current_mermaid_text);
-                
+
                 output.push('\n');
                 match marksmen_mermaid::rendering::typst_backend::mermaid_to_typst(&mermaid_src) {
                     Ok(rendered) => output.push_str(&rendered),
-                    Err(e) => output.push_str(&format!("#rect(fill: red.lighten(80%), stroke: red)[*Mermaid Error:* {}]\n", e)),
+                    Err(e) => output.push_str(&format!(
+                        "#rect(fill: red.lighten(80%), stroke: red)[*Mermaid Error:* {}]\n",
+                        e
+                    )),
                 }
                 output.push('\n');
             } else {
@@ -318,7 +346,7 @@ fn translate_event(
             let is_ordered = state.list_ordered.last().copied().unwrap_or(false);
             if is_ordered {
                 let num = state.list_item_number.last_mut().unwrap();
-                output.push_str(&format!("{}+ ", indent));
+                output.push_str(&format!("{}{}. ", indent, num));
                 *num += 1;
             } else {
                 output.push_str(&format!("{}- ", indent));
@@ -331,40 +359,70 @@ fn translate_event(
         // --- Inline styles ---
         Event::Start(Tag::Emphasis) => {
             state.in_emphasis = true;
-            let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+            let dest = if state.in_table_cell {
+                &mut state.current_cell
+            } else {
+                output
+            };
             dest.push_str("#emph[");
         }
         Event::End(TagEnd::Emphasis) => {
             state.in_emphasis = false;
-            let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+            let dest = if state.in_table_cell {
+                &mut state.current_cell
+            } else {
+                output
+            };
             dest.push(']');
         }
 
         Event::Start(Tag::Strong) => {
             state.in_strong = true;
-            let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+            let dest = if state.in_table_cell {
+                &mut state.current_cell
+            } else {
+                output
+            };
             dest.push_str("#strong[");
         }
         Event::End(TagEnd::Strong) => {
             state.in_strong = false;
-            let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+            let dest = if state.in_table_cell {
+                &mut state.current_cell
+            } else {
+                output
+            };
             dest.push(']');
         }
 
         Event::Start(Tag::Strikethrough) => {
             state.in_strikethrough = true;
-            let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+            let dest = if state.in_table_cell {
+                &mut state.current_cell
+            } else {
+                output
+            };
             dest.push_str("#strike[");
         }
         Event::End(TagEnd::Strikethrough) => {
             state.in_strikethrough = false;
-            let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+            let dest = if state.in_table_cell {
+                &mut state.current_cell
+            } else {
+                output
+            };
             dest.push(']');
         }
 
         // --- Links and images ---
-        Event::Start(Tag::Link { dest_url, title: _, .. }) => {
-            let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        Event::Start(Tag::Link {
+            dest_url, title: _, ..
+        }) => {
+            let dest = if state.in_table_cell {
+                &mut state.current_cell
+            } else {
+                output
+            };
             if dest_url.starts_with('#') && dest_url.len() > 1 {
                 dest.push_str(&format!("#link(<{}>)[", &dest_url[1..]));
             } else {
@@ -372,12 +430,22 @@ fn translate_event(
             }
         }
         Event::End(TagEnd::Link) => {
-            let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+            let dest = if state.in_table_cell {
+                &mut state.current_cell
+            } else {
+                output
+            };
             dest.push(']');
         }
 
-        Event::Start(Tag::Image { dest_url, title, .. }) => {
-            let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        Event::Start(Tag::Image {
+            dest_url, title, ..
+        }) => {
+            let dest = if state.in_table_cell {
+                &mut state.current_cell
+            } else {
+                output
+            };
             dest.push_str(&format!("\n#image(\"{}\"", dest_url));
             if !title.is_empty() {
                 dest.push_str(&format!(", alt: \"{}\"", title));
@@ -404,19 +472,15 @@ fn translate_event(
                 .collect();
 
             output.push_str("\n#align(center)[\n#table(\n");
-            
+
             let mut frs = Vec::new();
-            for _ in 0..ncols { frs.push("1fr"); }
-            
-            output.push_str(&format!(
-                "  columns: ({}),\n",
-                frs.join(", ")
-            ));
+            for _ in 0..ncols {
+                frs.push("1fr");
+            }
+
+            output.push_str(&format!("  columns: ({}),\n", frs.join(", ")));
             output.push_str("  inset: 3pt,\n");
-            output.push_str(&format!(
-                "  align: ({}),\n",
-                col_spec.join(", ")
-            ));
+            output.push_str(&format!("  align: ({}),\n", col_spec.join(", ")));
         }
         Event::End(TagEnd::Table) => {
             output.push_str(")\n]\n");
@@ -495,7 +559,7 @@ fn translate_event(
         }
 
         Event::Rule => {
-            output.push_str("\n#pagebreak(weak: true)\n");
+            output.push_str("\n#v(0.2em)\n#line(length: 100%, stroke: 0.5pt)\n#v(0.2em)\n");
         }
 
         // --- Math ---
@@ -584,7 +648,11 @@ fn extract_css_value(lower: &str, property: &str) -> Option<String> {
     if let Some(start) = lower.find(property) {
         let rest = &lower[start + property.len()..];
         let rest = rest.trim_start();
-        let end = rest.find(';').or_else(|| rest.find('"')).or_else(|| rest.find('<')).unwrap_or(rest.len());
+        let end = rest
+            .find(';')
+            .or_else(|| rest.find('"'))
+            .or_else(|| rest.find('<'))
+            .unwrap_or(rest.len());
         let value = rest[..end].trim();
         if !value.is_empty() {
             return Some(value.to_string());
@@ -601,6 +669,8 @@ fn extract_css_value(lower: &str, property: &str) -> Option<String> {
 fn escape_typst_text(text: &str) -> String {
     text.replace('#', "\\#")
         .replace('@', "\\@")
+        .replace('*', "\\*")
+        .replace('_', "\\_")
 }
 
 /// Process a raw HTML blob from pulldown-cmark by splitting it into individual
@@ -623,8 +693,15 @@ fn process_html_blob(html: &str, output: &mut String, state: &mut TranslatorStat
     if lower_html.contains("<table") {
         let mut max_cols = 0;
         for tr in lower_html.split("<tr").skip(1) {
-            let tr_body = if let Some(idx) = tr.find("</tr") { &tr[..idx] } else { tr };
-            let th_count = tr_body.matches("<th").count().saturating_sub(tr_body.matches("<thead").count());
+            let tr_body = if let Some(idx) = tr.find("</tr") {
+                &tr[..idx]
+            } else {
+                tr
+            };
+            let th_count = tr_body
+                .matches("<th")
+                .count()
+                .saturating_sub(tr_body.matches("<thead").count());
             let td_count = tr_body.matches("<td").count();
             let cols = th_count + td_count;
             if cols > max_cols {
@@ -642,7 +719,11 @@ fn process_html_blob(html: &str, output: &mut String, state: &mut TranslatorStat
             // Leading text before any tag — emit as-is if non-empty.
             if !part.is_empty() {
                 let escaped = escape_typst_text(part);
-                let dest = if state.in_table_cell { &mut state.current_cell } else { &mut *output };
+                let dest = if state.in_table_cell {
+                    &mut state.current_cell
+                } else {
+                    &mut *output
+                };
                 dest.push_str(&escaped);
             }
             continue;
@@ -651,7 +732,7 @@ fn process_html_blob(html: &str, output: &mut String, state: &mut TranslatorStat
         // Reconstruct the tag: `<{part}`. The content after `>` is trailing text.
         let full = format!("<{}", part);
         let (tag_str, trailing_text) = if let Some(gt_pos) = full.find('>') {
-            (&full[..gt_pos + 1], full[gt_pos + 1..].trim_start())
+            (&full[..gt_pos + 1], &full[gt_pos + 1..])
         } else {
             (full.as_str(), "")
         };
@@ -662,72 +743,212 @@ fn process_html_blob(html: &str, output: &mut String, state: &mut TranslatorStat
         // Emit any trailing text after the tag.
         if !trailing_text.is_empty() {
             let escaped = escape_typst_text(trailing_text);
-            let dest = if state.in_table_cell { &mut state.current_cell } else { &mut *output };
+            let dest = if state.in_table_cell {
+                &mut state.current_cell
+            } else {
+                &mut *output
+            };
             dest.push_str(&escaped);
         }
     }
 }
 
 /// Process a single HTML tag and emit its Typst equivalent.
-fn process_single_tag(lower: &str, original: &str, output: &mut String, state: &mut TranslatorState) {
+fn process_single_tag(
+    lower: &str,
+    original: &str,
+    output: &mut String,
+    state: &mut TranslatorState,
+) {
     // --- <br> ---
     if lower.starts_with("<br") {
-        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
         dest.push_str("#linebreak()");
 
     // --- <sub> / </sub> ---
     } else if lower.starts_with("<sub") {
-        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
         dest.push_str("#sub[");
     } else if lower.starts_with("</sub") {
-        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
         dest.push(']');
 
     // --- <sup> / </sup> ---
     } else if lower.starts_with("<sup") {
-        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
         dest.push_str("#super[");
     } else if lower.starts_with("</sup") {
-        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
         dest.push(']');
-
+    } else if lower.starts_with("<b")
+        && !lower.starts_with("<br")
+        && !lower.starts_with("<body")
+        && !lower.starts_with("<block")
+        || lower.starts_with("<strong")
+    {
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
+        dest.push_str("#strong[");
+    } else if lower.starts_with("</b")
+        && !lower.starts_with("</body")
+        && !lower.starts_with("</block")
+        || lower.starts_with("</strong")
+    {
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
+        dest.push(']');
+    } else if lower.starts_with("<i")
+        && !lower.starts_with("<img")
+        && !lower.starts_with("<ins")
+        && !lower.starts_with("<iframe")
+        || lower.starts_with("<em")
+    {
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
+        dest.push_str("#emph[");
+    } else if lower.starts_with("</i")
+        && !lower.starts_with("</ins")
+        && !lower.starts_with("</iframe")
+        || lower.starts_with("</em")
+    {
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
+        dest.push(']');
     } else if lower.starts_with("<u") && !lower.starts_with("<ul") {
-        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
         dest.push_str("#underline[");
     } else if lower.starts_with("</u") && !lower.starts_with("</ul") {
-        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
         dest.push(']');
+    // --- <span> ---
+    } else if lower.starts_with("<span") {
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
+        let font_size = extract_css_value(lower, "font-size:");
+        if let Some(ref fs) = font_size {
+            dest.push_str(&format!("#text(size: {})[", fs.trim()));
+            state.html_span_stack.push(true);
+        } else {
+            state.html_span_stack.push(false);
+        }
+    } else if lower.starts_with("</span") {
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
+        if let Some(true) = state.html_span_stack.pop() {
+            dest.push(']');
+        }
     // --- <ins> / </ins> ---
     } else if lower.starts_with("<ins") {
-        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
         dest.push_str("#underline(stroke: blue)[#text(fill: blue)[");
     } else if lower.starts_with("</ins") {
-        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
         dest.push_str("]]");
     // --- <del> / </del> ---
     } else if lower.starts_with("<del") {
-        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
         dest.push_str("#strike(stroke: red)[#text(fill: red)[");
     } else if lower.starts_with("</del") {
-        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
         dest.push_str("]]");
     // --- <div> ---
     } else if lower.starts_with("<div") {
         if lower.contains("page-break") {
             output.push_str("\n\n#pagebreak()\n\n");
-        } else if lower.contains("align=\"center\"") || lower.contains("text-align: center") || lower.contains("text-align:center") {
+        } else if lower.contains("align=\"center\"")
+            || lower.contains("text-align: center")
+            || lower.contains("text-align:center")
+        {
             state.html_align_stack.push(HtmlAlign::Center);
             output.push_str("\n\n#align(center)[\n");
+        } else if let Some(indent_str) = extract_css_value(lower, "margin-left:") {
+            let indent_val = indent_str
+                .replace("pt", "")
+                .replace("px", "")
+                .trim()
+                .parse::<f32>()
+                .unwrap_or(0.0);
+            if indent_val > 0.0 {
+                state.html_align_stack.push(HtmlAlign::Indent(indent_val));
+                output.push_str(&format!("\n\n#pad(left: {}pt)[\n", indent_val));
+            } else {
+                state.html_align_stack.push(HtmlAlign::None);
+                output.push_str("\n\n");
+            }
         } else {
             state.html_align_stack.push(HtmlAlign::None);
             output.push_str("\n\n");
         }
     } else if lower.starts_with("</div") {
         match state.html_align_stack.pop() {
-            Some(HtmlAlign::Center) => {
+            Some(HtmlAlign::Center) | Some(HtmlAlign::Indent(_)) => {
                 output.push_str("]\n\n");
             }
-            _ => { output.push_str("\n\n"); }
+            _ => {
+                output.push_str("\n\n");
+            }
         }
 
     // --- <p> with optional font-size ---
@@ -751,7 +972,10 @@ fn process_single_tag(lower: &str, original: &str, output: &mut String, state: &
     } else if lower.starts_with("<h1") {
         let font_size = extract_css_value(lower, "font-size:");
         let size = font_size.unwrap_or_else(|| "24pt".to_string());
-        output.push_str(&format!("\n\n#text(size: {}, weight: \"bold\")[", size.trim()));
+        output.push_str(&format!(
+            "\n\n#text(size: {}, weight: \"bold\")[",
+            size.trim()
+        ));
     } else if lower.starts_with("</h1") {
         output.push_str("]\n\n");
     } else if lower.starts_with("<h2") {
@@ -763,43 +987,80 @@ fn process_single_tag(lower: &str, original: &str, output: &mut String, state: &
 
     // --- <strong> / <b> ---
     } else if lower.starts_with("<strong") || lower.starts_with("<b>") || lower.starts_with("<b ") {
-        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
         dest.push_str("#strong[");
     } else if lower.starts_with("</strong") || lower.starts_with("</b>") {
-        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
         dest.push(']');
 
     // --- <em> / <i> ---
     } else if lower.starts_with("<em") || lower.starts_with("<i>") || lower.starts_with("<i ") {
-        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
         dest.push_str("#emph[");
     } else if lower.starts_with("</em") || lower.starts_with("</i>") {
-        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
         dest.push(']');
 
     // --- <span color> ---
     } else if lower.starts_with("<span") && lower.contains("color:") {
         if let Some(start) = lower.find("color:") {
             let rest = original[start + 6..].trim();
-            if let Some(end) = rest.find('"').or_else(|| rest.find(';')).or_else(|| rest.find('<')) {
+            if let Some(end) = rest
+                .find('"')
+                .or_else(|| rest.find(';'))
+                .or_else(|| rest.find('<'))
+            {
                 let color = rest[..end].trim();
-                let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+                let dest = if state.in_table_cell {
+                    &mut state.current_cell
+                } else {
+                    output
+                };
                 dest.push_str(&format!("#text(fill: rgb(\"{}\"))[", color));
             }
         }
     } else if lower.starts_with("</span") {
-        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
         dest.push(']');
 
     // --- <mark> (Comments) ---
     } else if lower.starts_with("<mark") && lower.contains("comment") {
         let _content = extract_attr_from_lower(lower, "data-content").unwrap_or_default();
-        let _author = extract_attr_from_lower(lower, "data-author").unwrap_or_else(|| "Author".to_string());
-        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        let _author =
+            extract_attr_from_lower(lower, "data-author").unwrap_or_else(|| "Author".to_string());
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
         // We only render the visual anchor; PDF annotation metadata is handled upstream.
         dest.push_str(&format!("#highlight(fill: yellow.lighten(60%))[{}]", "{"));
     } else if lower.starts_with("</mark") {
-        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
         dest.push_str("}");
 
     // --- <a> with id or href ---
@@ -868,7 +1129,9 @@ fn process_single_tag(lower: &str, original: &str, output: &mut String, state: &
             }
         } else {
             // Check for width in CSS style, avoiding max-width:
-            let style_start = original.find("style=\"").or_else(|| original.find("style='"));
+            let style_start = original
+                .find("style=\"")
+                .or_else(|| original.find("style='"));
             if let Some(s) = style_start {
                 let rest = &original[s + 7..];
                 if let Some(e) = rest.find('"').or_else(|| rest.find('\'')) {
@@ -885,7 +1148,11 @@ fn process_single_tag(lower: &str, original: &str, output: &mut String, state: &
         }
 
         if !src.is_empty() {
-            let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+            let dest = if state.in_table_cell {
+                &mut state.current_cell
+            } else {
+                output
+            };
             dest.push_str(&format!("\n#image(\"{}\"", src));
             if !width.is_empty() {
                 dest.push_str(&format!(", width: {}", width));
@@ -902,10 +1169,18 @@ fn process_single_tag(lower: &str, original: &str, output: &mut String, state: &
 
     // --- Table formatting comments ---
     } else if lower.starts_with("<!-- colspan -->") || original.starts_with("<!-- COLSPAN") {
-        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
         dest.push_str("<!-- COLSPAN -->");
     } else if lower.starts_with("<!-- bg_color:") || original.starts_with("<!-- BG_COLOR") {
-        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
         dest.push_str(original);
 
     // --- <style> ---
@@ -916,8 +1191,16 @@ fn process_single_tag(lower: &str, original: &str, output: &mut String, state: &
 
     // --- HTML Tables ---
     } else if lower.starts_with("<table") {
-        let cols = if state.html_table_cols > 0 { state.html_table_cols } else { 1 };
-        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        let cols = if state.html_table_cols > 0 {
+            state.html_table_cols
+        } else {
+            1
+        };
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
         // For dense tables (6+ cols), reduce font size to prevent overflow.
         if cols >= 6 {
             dest.push_str(&format!(
@@ -931,31 +1214,67 @@ fn process_single_tag(lower: &str, original: &str, output: &mut String, state: &
             ));
         }
     } else if lower.starts_with("</table") {
-        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
         dest.push_str(")\n]\n\n");
     } else if lower.starts_with("<tr") {
         // Typst tables wrap automatically by column count, so TR has no structural equivalent.
     } else if lower.starts_with("</tr") {
-        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
         dest.push('\n');
     } else if lower.starts_with("<th") && !lower.starts_with("<thead") {
-        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
         dest.push_str("  [ #strong[");
     } else if lower.starts_with("</th") && !lower.starts_with("</thead") {
-        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
         dest.push_str("] ],\n");
     } else if lower.starts_with("<td") {
-        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
         dest.push_str("  [ ");
     } else if lower.starts_with("</td") {
-        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
         dest.push_str(" ],\n");
     } else if lower.starts_with("<caption") {
-        let cols = if state.html_table_cols > 0 { state.html_table_cols } else { 1 };
-        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        let cols = if state.html_table_cols > 0 {
+            state.html_table_cols
+        } else {
+            1
+        };
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
         dest.push_str(&format!("  table.cell(colspan: {})[\n    ", cols));
     } else if lower.starts_with("</caption") {
-        let dest = if state.in_table_cell { &mut state.current_cell } else { output };
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
         dest.push_str("\n  ],\n");
     // --- <header> / <footer> block suppression ---
     } else if lower.starts_with("<header") {
@@ -966,7 +1285,6 @@ fn process_single_tag(lower: &str, original: &str, output: &mut String, state: &
         state.in_footer_block = true;
     } else if lower.starts_with("</footer") {
         state.in_footer_block = false;
-
     } else if lower.starts_with("<!-- page_num") {
         if state.in_header_block {
             state.header_buffer.push_str("#counter(page).display()");
@@ -977,15 +1295,22 @@ fn process_single_tag(lower: &str, original: &str, output: &mut String, state: &
         }
     } else if lower.starts_with("<!-- total_pages") {
         if state.in_header_block {
-            state.header_buffer.push_str("#counter(page).final().first()");
+            state
+                .header_buffer
+                .push_str("#counter(page).final().first()");
         } else if state.in_footer_block {
-            state.footer_buffer.push_str("#counter(page).final().first()");
+            state
+                .footer_buffer
+                .push_str("#counter(page).final().first()");
         } else {
             output.push_str("#counter(page).final().first()");
         }
-    } else if lower.starts_with("<thead") || lower.starts_with("</thead")
-        || lower.starts_with("<tbody") || lower.starts_with("</tbody")
-        || lower.starts_with("<code") || lower.starts_with("</code")
+    } else if lower.starts_with("<thead")
+        || lower.starts_with("</thead")
+        || lower.starts_with("<tbody")
+        || lower.starts_with("</tbody")
+        || lower.starts_with("<code")
+        || lower.starts_with("</code")
     {
         // Silently skip non-structural HTML table markup and inline code tags.
     } else {
@@ -1004,7 +1329,7 @@ fn format_table_cells(cells: &[String], is_header: bool, output: &mut String) {
             if let Some(end) = cell_content[start..].find("-->") {
                 let hex = cell_content[start + 14..start + end].trim();
                 bg_color = format!("rgb(\"{}\")", hex);
-                cell_content.replace_range(start..start+end+3, "");
+                cell_content.replace_range(start..start + end + 3, "");
             }
         }
 
@@ -1019,10 +1344,17 @@ fn format_table_cells(cells: &[String], is_header: bool, output: &mut String) {
             fill_attr = format!("fill: {}, ", bg_color);
         }
 
-        let content_fmt = if is_header { format!("*{}*", cell_content) } else { cell_content };
+        let content_fmt = if is_header {
+            format!("*{}*", cell_content)
+        } else {
+            cell_content
+        };
 
         if colspan > 1 || !bg_color.is_empty() {
-            output.push_str(&format!("  table.cell({}colspan: {})[ {} ],\n", fill_attr, colspan, content_fmt));
+            output.push_str(&format!(
+                "  table.cell({}colspan: {})[ {} ],\n",
+                fill_attr, colspan, content_fmt
+            ));
         } else {
             output.push_str(&format!("  [ {} ],\n", content_fmt));
         }
@@ -1074,7 +1406,11 @@ mod tests {
     fn emphasis_translation() {
         let result = translate_md("*italic*");
         // The Typst translator emits emphasis as #emph[…]
-        assert!(result.contains("#emph["), "Expected '#emph[' in: {}", result);
+        assert!(
+            result.contains("#emph["),
+            "Expected '#emph[' in: {}",
+            result
+        );
         assert!(result.contains("italic"));
     }
 
@@ -1082,14 +1418,24 @@ mod tests {
     fn strong_translation() {
         let result = translate_md("**bold**");
         // The Typst translator emits strong as #strong[…]
-        assert!(result.contains("#strong["), "Expected '#strong[' in: {}", result);
+        assert!(
+            result.contains("#strong["),
+            "Expected '#strong[' in: {}",
+            result
+        );
         assert!(result.contains("bold"));
     }
 
     #[test]
     fn inline_math_translation() {
         let result = translate_md("The equation $E = mc^2$ is famous.");
-        assert!(result.contains("$E = mc^2$"));
+        // latex_to_typst inserts spaces between adjacent alphabetic identifiers
+        // to prevent Typst from parsing `mc` as a single multi-letter variable.
+        assert!(
+            result.contains("$E = m c^2$"),
+            "Expected Typst-math output in: {}",
+            result
+        );
     }
 
     #[test]
@@ -1109,8 +1455,16 @@ mod tests {
     fn list_translation() {
         let result = translate_md("- Item 1\n- Item 2");
         // The Typst translator emits list items as `- #[…]`
-        assert!(result.contains("Item 1"), "Expected 'Item 1' in: {}", result);
-        assert!(result.contains("Item 2"), "Expected 'Item 2' in: {}", result);
+        assert!(
+            result.contains("Item 1"),
+            "Expected 'Item 1' in: {}",
+            result
+        );
+        assert!(
+            result.contains("Item 2"),
+            "Expected 'Item 2' in: {}",
+            result
+        );
     }
 
     #[test]

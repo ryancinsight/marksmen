@@ -1,6 +1,6 @@
 use docx_rs::*;
-use pulldown_cmark::{Event, Tag, TagEnd};
 use marksmen_core::Config;
+use pulldown_cmark::{Event, Tag, TagEnd};
 
 #[derive(Default, Debug, Clone)]
 pub struct TextState {
@@ -24,6 +24,7 @@ pub struct TextState {
     pub active_comment_id: Option<usize>,
     pub in_header: bool,
     pub in_footer: bool,
+    pub font_size: Option<f32>,
     /// Optional lookup table built from the source DOCX `comments.xml`.
     /// Maps normalized comment content → original `w:id` value (numeric).
     /// When populated, the comment handler uses the original ID instead of
@@ -35,23 +36,41 @@ pub struct TextState {
 pub enum Container<'a> {
     Doc(&'a mut Docx),
     Header(&'a mut Header),
-    Footer(&'a mut Footer)
+    Footer(&'a mut Footer),
 }
 
 impl<'a> Container<'a> {
     pub fn add_paragraph(mut self, p: Paragraph) -> Self {
         match self {
-            Self::Doc(ref mut d) => { **d = d.clone().add_paragraph(p); self }
-            Self::Header(ref mut h) => { **h = h.clone().add_paragraph(p); self }
-            Self::Footer(ref mut f) => { **f = f.clone().add_paragraph(p); self }
+            Self::Doc(ref mut d) => {
+                **d = d.clone().add_paragraph(p);
+                self
+            }
+            Self::Header(ref mut h) => {
+                **h = h.clone().add_paragraph(p);
+                self
+            }
+            Self::Footer(ref mut f) => {
+                **f = f.clone().add_paragraph(p);
+                self
+            }
         }
     }
-    
+
     pub fn add_table(mut self, t: Table) -> Self {
         match self {
-            Self::Doc(ref mut d) => { **d = d.clone().add_table(t); self }
-            Self::Header(ref mut h) => { **h = h.clone().add_table(t); self }
-            Self::Footer(ref mut f) => { **f = f.clone().add_table(t); self }
+            Self::Doc(ref mut d) => {
+                **d = d.clone().add_table(t);
+                self
+            }
+            Self::Header(ref mut h) => {
+                **h = h.clone().add_table(t);
+                self
+            }
+            Self::Footer(ref mut f) => {
+                **f = f.clone().add_table(t);
+                self
+            }
         }
     }
 }
@@ -63,8 +82,8 @@ impl<'a> Container<'a> {
 /// `AnnotatedEvent` outer loop and takes precedence over both `StyleMap`
 /// defaults and hardcoded fallback names.
 pub fn handle_event<'a>(
-    event: Event<'a>, 
-    mut container: Container, 
+    event: Event<'a>,
+    mut container: Container,
     current_paragraph: &mut Paragraph,
     text_state: &mut TextState,
     in_blockquote: bool,
@@ -87,8 +106,8 @@ pub fn handle_event<'a>(
                 pulldown_cmark::HeadingLevel::H5 => 5,
                 pulldown_cmark::HeadingLevel::H6 => 6,
             };
-            let heading_style = override_style
-                .unwrap_or_else(|| config.style_map.heading_style(level_num));
+            let heading_style =
+                override_style.unwrap_or_else(|| config.style_map.heading_style(level_num));
             *current_paragraph = Paragraph::new().style(heading_style);
         }
         Event::End(TagEnd::Heading(_level)) => {
@@ -99,7 +118,7 @@ pub fn handle_event<'a>(
                 text_state.has_runs = false;
             }
         }
-        
+
         // Tag::List, Tag::Item, TagEnd::List, TagEnd::Item are handled in document.rs
         // via DOCX numbering properties — handled before this fallthrough.
 
@@ -110,43 +129,69 @@ pub fn handle_event<'a>(
         Event::End(TagEnd::Emphasis) => text_state.is_italic = false,
         Event::Start(Tag::Strikethrough) => text_state.is_strike = true,
         Event::End(TagEnd::Strikethrough) => text_state.is_strike = false,
-        Event::Start(Tag::Link { dest_url, .. }) => text_state.active_link = Some(dest_url.to_string()),
+        Event::Start(Tag::Link { dest_url, .. }) => {
+            text_state.active_link = Some(dest_url.to_string())
+        }
         Event::End(TagEnd::Link) => text_state.active_link = None,
-        
+
         Event::Html(html) | Event::InlineHtml(html) => {
             let original_tag = html.as_ref();
             let tag = original_tag.to_lowercase();
-            if tag.starts_with("<u") { text_state.is_underline = true; }
-            else if tag.starts_with("</u") { text_state.is_underline = false; }
-            else if tag.starts_with("<sub") { text_state.is_subscript = true; }
-            else if tag.starts_with("</sub") { text_state.is_subscript = false; }
-            else if tag.starts_with("<sup") { text_state.is_superscript = true; }
-            else if tag.starts_with("</sup") { text_state.is_superscript = false; }
-            else if tag.starts_with("<ins") {
+            if tag.starts_with("<u") {
+                text_state.is_underline = true;
+            } else if tag.starts_with("</u") {
+                text_state.is_underline = false;
+            } else if tag.starts_with("<sub") {
+                text_state.is_subscript = true;
+            } else if tag.starts_with("</sub") {
+                text_state.is_subscript = false;
+            } else if tag.starts_with("<sup") {
+                text_state.is_superscript = true;
+            } else if tag.starts_with("</sup") {
+                text_state.is_superscript = false;
+            } else if tag.starts_with("<ins") {
                 text_state.is_ins = true;
                 text_state.revision_ins_author = extract_attr(original_tag, "data-author");
                 text_state.revision_ins_date = extract_attr(original_tag, "data-date");
-            }
-            else if tag.starts_with("</ins") { text_state.is_ins = false; }
-            else if tag.starts_with("<del") {
+            } else if tag.starts_with("</ins") {
+                text_state.is_ins = false;
+            } else if tag.starts_with("<del") {
                 text_state.is_del = true;
                 text_state.revision_del_author = extract_attr(original_tag, "data-author");
                 text_state.revision_del_date = extract_attr(original_tag, "data-date");
-            }
-            else if tag.starts_with("</del") { text_state.is_del = false; }
-            else if tag.starts_with("<header") { text_state.in_header = true; }
-            else if tag.starts_with("</header") { text_state.in_header = false; }
-            else if tag.starts_with("<footer") { text_state.in_footer = true; }
-            else if tag.starts_with("</footer") { text_state.in_footer = false; }
-            else if tag.starts_with("<mark") && tag.contains("comment") {
-                let author = extract_attr(original_tag, "data-author").unwrap_or_else(|| "Author".to_string());
+            } else if tag.starts_with("</del") {
+                text_state.is_del = false;
+            } else if tag.starts_with("<header") {
+                text_state.in_header = true;
+            } else if tag.starts_with("</header") {
+                text_state.in_header = false;
+            } else if tag.starts_with("<footer") {
+                text_state.in_footer = true;
+            } else if tag.starts_with("</footer") {
+                text_state.in_footer = false;
+            } else if tag.starts_with("<span") && tag.contains("font-size") {
+                let style = extract_attr(original_tag, "style").unwrap_or_default();
+                if let Some(fs_val) = style
+                    .split("font-size:")
+                    .nth(1)
+                    .and_then(|s| s.split(';').next())
+                    .map(|s| s.replace("pt", "").trim().parse::<f32>().unwrap_or(12.0))
+                {
+                    text_state.font_size = Some(fs_val);
+                }
+            } else if tag.starts_with("</span") {
+                text_state.font_size = None;
+            } else if tag.starts_with("<mark") && tag.contains("comment") {
+                let author = extract_attr(original_tag, "data-author")
+                    .unwrap_or_else(|| "Author".to_string());
                 let content = extract_attr(original_tag, "data-content").unwrap_or_default();
                 let subtype = extract_attr(original_tag, "data-subtype").unwrap_or_default();
 
                 // Prefer original source ID to preserve comment anchor consistency with
                 // the verbatim-passed-through comments.xml. Fall back to counter.
                 let content_norm = content.trim().to_ascii_lowercase();
-                let id = text_state.source_comment_ids
+                let id = text_state
+                    .source_comment_ids
                     .get(&content_norm)
                     .copied()
                     .unwrap_or_else(|| {
@@ -174,57 +219,65 @@ pub fn handle_event<'a>(
                     .add_paragraph(Paragraph::new().add_run(Run::new().add_text(content)));
 
                 *current_paragraph = current_paragraph.clone().add_comment_start(comment);
-            }
-            else if tag.starts_with("<mark") && tag.contains("highlight") {
+            } else if tag.starts_with("<mark") && tag.contains("highlight") {
                 text_state.is_highlight = true;
-            }
-            else if tag.starts_with("<mark") && tag.contains("align-center") {
+            } else if tag.starts_with("<mark") && tag.contains("align-center") {
                 *current_paragraph = current_paragraph.clone().align(AlignmentType::Center);
-            }
-            else if tag.starts_with("</mark") {
+            } else if tag.starts_with("<div")
+                && (tag.contains("align=\"center\"")
+                    || tag.contains("text-align: center")
+                    || tag.contains("text-align:center"))
+            {
+                *current_paragraph = current_paragraph.clone().align(AlignmentType::Center);
+            } else if tag.starts_with("</mark") {
                 if let Some(id) = text_state.active_comment_id.take() {
                     *current_paragraph = current_paragraph.clone().add_comment_end(id);
                 }
                 text_state.is_highlight = false;
                 text_state.is_ins = false;
                 text_state.is_del = false;
-            }
-            else if tag.starts_with("<br") {
-                *current_paragraph = current_paragraph.clone().add_run(Run::new().add_break(BreakType::TextWrapping));
+            } else if tag.starts_with("<br") {
+                *current_paragraph = current_paragraph
+                    .clone()
+                    .add_run(Run::new().add_break(BreakType::TextWrapping));
                 text_state.has_runs = true;
-            }
-            else if tag.contains("pagebreak") {
-                *current_paragraph = current_paragraph.clone().add_run(Run::new().add_break(BreakType::Page));
+            } else if tag.contains("pagebreak") {
+                *current_paragraph = current_paragraph
+                    .clone()
+                    .add_run(Run::new().add_break(BreakType::Page));
                 text_state.has_runs = true;
-            }
-            else if tag.contains("<!-- page:") || tag.starts_with("<!-- page:") {
+            } else if tag.contains("<!-- page:") || tag.starts_with("<!-- page:") {
                 // Page geometry metadata comment from reader — consumed silently by the writer.
                 // Page size/margins are applied by the outer convert() from the config or
                 // from the parsed metadata section before the event loop.
-            }
-            else if tag.contains("<!-- page_num -->") {
+            } else if tag.contains("<!-- page_num -->") {
                 // Reconstruct w:fldChar PAGE field in the current paragraph
                 let run_begin = Run::new().add_field_char(FieldCharType::Begin, false);
-                let run_instr = Run::new().add_instr_text(InstrText::Unsupported(" PAGE  \\* Arabic  \\* MERGEFORMAT ".to_string()));
-                let run_sep   = Run::new().add_field_char(FieldCharType::Separate, false);
-                let run_disp  = Run::new().add_text("1".to_string());
-                let run_end   = Run::new().add_field_char(FieldCharType::End, false);
-                *current_paragraph = current_paragraph.clone()
+                let run_instr = Run::new().add_instr_text(InstrText::Unsupported(
+                    " PAGE  \\* Arabic  \\* MERGEFORMAT ".to_string(),
+                ));
+                let run_sep = Run::new().add_field_char(FieldCharType::Separate, false);
+                let run_disp = Run::new().add_text("1".to_string());
+                let run_end = Run::new().add_field_char(FieldCharType::End, false);
+                *current_paragraph = current_paragraph
+                    .clone()
                     .add_run(run_begin)
                     .add_run(run_instr)
                     .add_run(run_sep)
                     .add_run(run_disp)
                     .add_run(run_end);
                 text_state.has_runs = true;
-            }
-            else if tag.contains("<!-- total_pages -->") {
+            } else if tag.contains("<!-- total_pages -->") {
                 // Reconstruct w:fldSimple NUMPAGES field in the current paragraph
                 let run_begin = Run::new().add_field_char(FieldCharType::Begin, false);
-                let run_instr = Run::new().add_instr_text(InstrText::Unsupported(" NUMPAGES  \\* Arabic  \\* MERGEFORMAT ".to_string()));
-                let run_sep   = Run::new().add_field_char(FieldCharType::Separate, false);
-                let run_disp  = Run::new().add_text("1".to_string());
-                let run_end   = Run::new().add_field_char(FieldCharType::End, false);
-                *current_paragraph = current_paragraph.clone()
+                let run_instr = Run::new().add_instr_text(InstrText::Unsupported(
+                    " NUMPAGES  \\* Arabic  \\* MERGEFORMAT ".to_string(),
+                ));
+                let run_sep = Run::new().add_field_char(FieldCharType::Separate, false);
+                let run_disp = Run::new().add_text("1".to_string());
+                let run_end = Run::new().add_field_char(FieldCharType::End, false);
+                *current_paragraph = current_paragraph
+                    .clone()
                     .add_run(run_begin)
                     .add_run(run_instr)
                     .add_run(run_sep)
@@ -241,6 +294,9 @@ pub fn handle_event<'a>(
             }
             if text_state.is_italic {
                 run = run.italic();
+            }
+            if let Some(fs) = text_state.font_size {
+                run = run.size((fs * 2.0).round() as usize);
             }
             if text_state.is_code {
                 // Approximate inline code style (DOCX typically uses a monospaced font run)
@@ -261,7 +317,7 @@ pub fn handle_event<'a>(
             if text_state.is_highlight {
                 run = run.highlight("yellow");
             }
-            
+
             if text_state.is_del {
                 let mut del = docx_rs::Delete::new().add_run(run);
                 if let Some(author) = &text_state.revision_del_author {
@@ -281,7 +337,9 @@ pub fn handle_event<'a>(
                 }
                 *current_paragraph = current_paragraph.clone().add_insert(ins);
             } else if let Some(url) = &text_state.active_link {
-                let hyperlink = docx_rs::Hyperlink::new(url.clone(), docx_rs::HyperlinkType::External).add_run(run);
+                let hyperlink =
+                    docx_rs::Hyperlink::new(url.clone(), docx_rs::HyperlinkType::External)
+                        .add_run(run);
                 *current_paragraph = current_paragraph.clone().add_hyperlink(hyperlink);
             } else {
                 *current_paragraph = current_paragraph.clone().add_run(run);
@@ -289,7 +347,11 @@ pub fn handle_event<'a>(
             text_state.has_runs = true;
         }
         Event::TaskListMarker(checked) => {
-            let run = Run::new().add_text(if checked { "[x] ".to_string() } else { "[ ] ".to_string() });
+            let run = Run::new().add_text(if checked {
+                "[x] ".to_string()
+            } else {
+                "[ ] ".to_string()
+            });
             *current_paragraph = current_paragraph.clone().add_run(run);
             text_state.has_runs = true;
         }
@@ -310,14 +372,28 @@ pub fn handle_event<'a>(
             let mut run = Run::new()
                 .add_text(code_text.to_string())
                 .fonts(RunFonts::new().ascii("Consolas"));
-            if text_state.is_bold { run = run.bold(); }
-            if text_state.is_italic { run = run.italic(); }
-            if text_state.is_underline { run = run.underline("single"); }
-            if text_state.is_strike { run = run.strike(); }
-            if text_state.is_subscript { run.run_property = run.run_property.vert_align(VertAlignType::SubScript); }
-            if text_state.is_superscript { run.run_property = run.run_property.vert_align(VertAlignType::SuperScript); }
-            if text_state.is_highlight { run = run.highlight("yellow"); }
-            
+            if text_state.is_bold {
+                run = run.bold();
+            }
+            if text_state.is_italic {
+                run = run.italic();
+            }
+            if text_state.is_underline {
+                run = run.underline("single");
+            }
+            if text_state.is_strike {
+                run = run.strike();
+            }
+            if text_state.is_subscript {
+                run.run_property = run.run_property.vert_align(VertAlignType::SubScript);
+            }
+            if text_state.is_superscript {
+                run.run_property = run.run_property.vert_align(VertAlignType::SuperScript);
+            }
+            if text_state.is_highlight {
+                run = run.highlight("yellow");
+            }
+
             if text_state.is_del {
                 let mut del = docx_rs::Delete::new().add_run(run);
                 if let Some(author) = &text_state.revision_del_author {
@@ -337,7 +413,9 @@ pub fn handle_event<'a>(
                 }
                 *current_paragraph = current_paragraph.clone().add_insert(ins);
             } else if let Some(url) = &text_state.active_link {
-                let hyperlink = docx_rs::Hyperlink::new(url.clone(), docx_rs::HyperlinkType::External).add_run(run);
+                let hyperlink =
+                    docx_rs::Hyperlink::new(url.clone(), docx_rs::HyperlinkType::External)
+                        .add_run(run);
                 *current_paragraph = current_paragraph.clone().add_hyperlink(hyperlink);
             } else {
                 *current_paragraph = current_paragraph.clone().add_run(run);
@@ -349,8 +427,8 @@ pub fn handle_event<'a>(
             if text_state.has_runs {
                 let mut p = std::mem::replace(current_paragraph, Paragraph::new());
                 if in_blockquote {
-                    let bq_style = override_style
-                        .unwrap_or_else(|| config.style_map.blockquote_style());
+                    let bq_style =
+                        override_style.unwrap_or_else(|| config.style_map.blockquote_style());
                     p = p.style(bq_style);
                 }
                 // Header/footer paragraphs are suppressed from the document body.
@@ -376,11 +454,15 @@ pub fn handle_event<'a>(
             }
         }
         Event::SoftBreak => {
-            *current_paragraph = current_paragraph.clone().add_run(Run::new().add_break(BreakType::TextWrapping));
+            *current_paragraph = current_paragraph
+                .clone()
+                .add_run(Run::new().add_break(BreakType::TextWrapping));
             text_state.has_runs = true;
         }
         Event::HardBreak => {
-            *current_paragraph = current_paragraph.clone().add_run(Run::new().add_break(BreakType::TextWrapping));
+            *current_paragraph = current_paragraph
+                .clone()
+                .add_run(Run::new().add_break(BreakType::TextWrapping));
             text_state.has_runs = true;
         }
         Event::Rule => {

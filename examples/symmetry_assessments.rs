@@ -9,9 +9,13 @@ fn remove_html_and_images(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut in_tag = false;
     for c in s.chars() {
-        if c == '<' { in_tag = true; }
-        else if c == '>' && in_tag { in_tag = false; }
-        else if !in_tag { out.push(c); }
+        if c == '<' {
+            in_tag = true;
+        } else if c == '>' && in_tag {
+            in_tag = false;
+        } else if !in_tag {
+            out.push(c);
+        }
     }
     out
 }
@@ -22,7 +26,10 @@ fn normalize(s: &str) -> String {
     let mut last_space = false;
     for c in stripped.chars() {
         if c.is_whitespace() {
-            if !last_space { out.push(' '); last_space = true; }
+            if !last_space {
+                out.push(' ');
+                last_space = true;
+            }
         } else {
             out.push(c);
             last_space = false;
@@ -40,10 +47,13 @@ fn main() -> Result<()> {
     let normalized_extract = normalize(extracted_source);
 
     let similarity = jaro_winkler(&normalized_truth, &normalized_extract);
-    
+
     println!("Original Target : {}", normalized_truth);
     println!("Extracted String: {}", normalized_extract);
-    println!("\n[>] Continuous String Topological Symmetry: {:.4}", similarity);
+    println!(
+        "\n[>] Continuous String Topological Symmetry: {:.4}",
+        similarity
+    );
 
     if similarity > 0.95 {
         println!("[!] Metric achieved formal parity constraints.");

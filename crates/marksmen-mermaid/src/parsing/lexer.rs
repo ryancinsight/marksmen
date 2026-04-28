@@ -11,17 +11,11 @@ pub enum Token {
     /// A node identifier (e.g., `A`, `Node1`)
     Identifier(String),
     /// A node label with its shape (`[Label]`, `(Label)`, `{Label}`)
-    NodeLabel {
-        text: String,
-        shape: NodeShape,
-    },
+    NodeLabel { text: String, shape: NodeShape },
     /// An edge without a label (`-->`, `---`)
     Edge(EdgeStyle),
     /// An edge with an attached label.
-    LabeledEdge {
-        style: EdgeStyle,
-        label: String,
-    },
+    LabeledEdge { style: EdgeStyle, label: String },
     /// Newline or semicolon indicating end of statement
     StatementTerminator,
     /// End of input
@@ -89,7 +83,11 @@ pub fn lex(input: &str) -> Result<Vec<Token>, LexerError> {
         }
 
         // Handle class modifiers `:::`
-        if pos + 2 < chars.len() && chars[pos] == ':' && chars[pos+1] == ':' && chars[pos+2] == ':' {
+        if pos + 2 < chars.len()
+            && chars[pos] == ':'
+            && chars[pos + 1] == ':'
+            && chars[pos + 2] == ':'
+        {
             pos += 3;
             // skip the class name until whitespace
             while pos < chars.len() && !chars[pos].is_whitespace() {
@@ -109,21 +107,22 @@ pub fn lex(input: &str) -> Result<Vec<Token>, LexerError> {
             match word.as_str() {
                 "graph" | "flowchart" | "sequenceDiagram" => tokens.push(Token::KeywordGraph),
                 "TB" | "TD" | "BT" | "RL" | "LR" => tokens.push(Token::Direction(word)),
-                "classDef" | "class" | "direction" | "participant" | "Note" | "note" | "loop" | "alt" | "else" | "activate" | "deactivate" => {
+                "classDef" | "class" | "direction" | "participant" | "Note" | "note" | "loop"
+                | "alt" | "else" | "activate" | "deactivate" => {
                     // Skip entirely configuration lines and unsupported sequence nodes
                     while pos < chars.len() && chars[pos] != '\n' && chars[pos] != ';' {
                         pos += 1;
                     }
-                },
+                }
                 "subgraph" => {
                     // Subgraph start line
                     while pos < chars.len() && chars[pos] != '\n' {
                         pos += 1;
                     }
-                },
+                }
                 "end" => {
                     // Subgraph or sequence termination - ignore
-                },
+                }
                 _ => tokens.push(Token::Identifier(word)),
             }
             continue;
@@ -153,7 +152,10 @@ pub fn lex(input: &str) -> Result<Vec<Token>, LexerError> {
                 return Err(LexerError::UnterminatedLabel);
             }
             let text: String = chars[start..pos].iter().collect();
-            tokens.push(Token::NodeLabel { text, shape: NodeShape::Square });
+            tokens.push(Token::NodeLabel {
+                text,
+                shape: NodeShape::Square,
+            });
             pos += 1;
             continue;
         }
@@ -169,7 +171,10 @@ pub fn lex(input: &str) -> Result<Vec<Token>, LexerError> {
                     return Err(LexerError::UnterminatedLabel);
                 }
                 let text: String = chars[start..pos].iter().collect();
-                tokens.push(Token::NodeLabel { text, shape: NodeShape::Circle });
+                tokens.push(Token::NodeLabel {
+                    text,
+                    shape: NodeShape::Circle,
+                });
                 pos += 2;
             } else {
                 pos += 1;
@@ -181,7 +186,10 @@ pub fn lex(input: &str) -> Result<Vec<Token>, LexerError> {
                     return Err(LexerError::UnterminatedLabel);
                 }
                 let text: String = chars[start..pos].iter().collect();
-                tokens.push(Token::NodeLabel { text, shape: NodeShape::Round });
+                tokens.push(Token::NodeLabel {
+                    text,
+                    shape: NodeShape::Round,
+                });
                 pos += 1;
             }
             continue;
@@ -197,7 +205,10 @@ pub fn lex(input: &str) -> Result<Vec<Token>, LexerError> {
                 return Err(LexerError::UnterminatedLabel);
             }
             let text: String = chars[start..pos].iter().collect();
-            tokens.push(Token::NodeLabel { text, shape: NodeShape::Rhombus });
+            tokens.push(Token::NodeLabel {
+                text,
+                shape: NodeShape::Rhombus,
+            });
             pos += 1;
             continue;
         }
@@ -212,7 +223,13 @@ pub fn lex(input: &str) -> Result<Vec<Token>, LexerError> {
 
 fn lex_edge_token(chars: &[char], pos: &mut usize) -> Token {
     let start = *pos;
-    while *pos < chars.len() && (chars[*pos] == '<' || chars[*pos] == '-' || chars[*pos] == '=' || chars[*pos] == '.' || chars[*pos] == '>') {
+    while *pos < chars.len()
+        && (chars[*pos] == '<'
+            || chars[*pos] == '-'
+            || chars[*pos] == '='
+            || chars[*pos] == '.'
+            || chars[*pos] == '>')
+    {
         *pos += 1;
     }
     let leading: String = chars[start..*pos].iter().collect();
@@ -276,15 +293,27 @@ mod tests {
     fn lex_basic_graph() {
         let input = "graph TD\n  A[Start] --> B(End)";
         let tokens = lex(input).unwrap();
-        
+
         assert_eq!(tokens[0], Token::KeywordGraph);
         assert_eq!(tokens[1], Token::Direction("TD".to_string()));
         assert_eq!(tokens[2], Token::StatementTerminator);
         assert_eq!(tokens[3], Token::Identifier("A".to_string()));
-        assert_eq!(tokens[4], Token::NodeLabel { text: "Start".to_string(), shape: NodeShape::Square });
+        assert_eq!(
+            tokens[4],
+            Token::NodeLabel {
+                text: "Start".to_string(),
+                shape: NodeShape::Square
+            }
+        );
         assert_eq!(tokens[5], Token::Edge(EdgeStyle::SolidArrow));
         assert_eq!(tokens[6], Token::Identifier("B".to_string()));
-        assert_eq!(tokens[7], Token::NodeLabel { text: "End".to_string(), shape: NodeShape::Round });
+        assert_eq!(
+            tokens[7],
+            Token::NodeLabel {
+                text: "End".to_string(),
+                shape: NodeShape::Round
+            }
+        );
         assert_eq!(tokens[8], Token::Eof);
     }
 
@@ -296,8 +325,20 @@ mod tests {
         assert_eq!(tokens[0], Token::KeywordGraph);
         assert_eq!(tokens[1], Token::Direction("LR".to_string()));
         assert_eq!(tokens[3], Token::Identifier("A".to_string()));
-        assert_eq!(tokens[4], Token::NodeLabel { text: "Start".to_string(), shape: NodeShape::Circle });
-        assert_eq!(tokens[5], Token::LabeledEdge { style: EdgeStyle::SolidArrow, label: "Label".to_string() });
+        assert_eq!(
+            tokens[4],
+            Token::NodeLabel {
+                text: "Start".to_string(),
+                shape: NodeShape::Circle
+            }
+        );
+        assert_eq!(
+            tokens[5],
+            Token::LabeledEdge {
+                style: EdgeStyle::SolidArrow,
+                label: "Label".to_string()
+            }
+        );
         assert_eq!(tokens[6], Token::Identifier("B".to_string()));
     }
 
@@ -306,10 +347,13 @@ mod tests {
         let input = "flowchart LR\nA == OpenIGTLink TLS 256-Bit ==> B";
         let tokens = lex(input).unwrap();
         assert_eq!(tokens[3], Token::Identifier("A".to_string()));
-        assert_eq!(tokens[4], Token::LabeledEdge {
-            style: EdgeStyle::ThickArrow,
-            label: "OpenIGTLink TLS 256-Bit".to_string(),
-        });
+        assert_eq!(
+            tokens[4],
+            Token::LabeledEdge {
+                style: EdgeStyle::ThickArrow,
+                label: "OpenIGTLink TLS 256-Bit".to_string(),
+            }
+        );
         assert_eq!(tokens[5], Token::Identifier("B".to_string()));
     }
 }

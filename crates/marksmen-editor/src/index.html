@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Marksmen Editor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script type="module" src="main.js" defer></script>
+</head>
+<body>
+<div class="app-shell">
+
+    <!-- ── Title Bar ───────────────────────────────────────────── -->
+    <div class="title-bar">
+        <div class="title-bar-left">
+            <svg class="app-icon" viewBox="0 0 24 24" fill="none">
+                <rect width="24" height="24" rx="4" fill="#0f6cbd"/>
+                <path d="M5 7h14M5 12h9M5 17h11" stroke="white" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <span class="app-name">Marksmen</span>
+            <span class="doc-name" id="doc-name">Untitled Document</span>
+        </div>
+        <div class="title-bar-right">
+            <span class="word-count" id="word-count" style="margin-right: 16px; opacity: 0.7; font-size: 11px;">0 words</span>
+            <span class="page-count" id="page-count" style="margin-right: 16px; opacity: 0.8;">Page 1</span>
+            <span class="sync-status" id="sync-status">●&nbsp;Saved</span>
+            <button class="titlebar-btn" id="btn-settings" title="Settings (⚙)" style="margin-left:12px; background:none; border:none; cursor:pointer; color:var(--text-secondary); font-size:16px; padding:2px 6px; border-radius:4px; transition:color 0.15s;" aria-label="Open Settings">⚙️</button>
+        </div>
+    </div>
+
+    <!-- ── Ribbon ───────────────────────────────────────────────── -->
+    <div class="ribbon">
+        <!-- Tab bar -->
+        <div class="ribbon-tab-bar">
+            <button class="rtab rtab--file" id="tab-file-btn">File</button>
+            <button class="rtab rtab--active" data-panel="panel-home">Home</button>
+            <button class="rtab" data-panel="panel-insert">Insert</button>
+            <button class="rtab" data-panel="panel-layout">Layout</button>
+            <button class="rtab" data-panel="panel-review">Review</button>
+            <button class="rtab" data-panel="panel-view">View</button>
+        </div>
+
+        <!-- Home Panel -->
+        <div class="ribbon-panel ribbon-panel--active" id="panel-home">
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <button class="rbtn" title="Paste" onclick="document.execCommand('paste')">
+                        <svg viewBox="0 0 20 20"><path d="M7 2h6a1 1 0 0 1 1 1v1H6V3a1 1 0 0 1 1-1zm-2 3h10a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z" fill="currentColor"/></svg>
+                        <span>Paste</span>
+                    </button>
+                    <button class="rbtn rbtn--small" title="Cut" onclick="document.execCommand('cut')">✂ Cut</button>
+                    <button class="rbtn rbtn--small" title="Copy" onclick="document.execCommand('copy')">⎘ Copy</button>
+                </div>
+                <span class="rgroup-label">Clipboard</span>
+            </div>
+            <div class="rsep"></div>
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <select class="rselect" id="font-family-picker" title="Font Family">
+                        <option value="Inter">Inter</option>
+                        <option value="Georgia">Georgia</option>
+                        <option value="Times New Roman">Times New Roman</option>
+                        <option value="JetBrains Mono">JetBrains Mono</option>
+                        <option value="Arial">Arial</option>
+                    </select>
+                    <select class="rselect rselect--narrow" id="font-size-picker" title="Font Size">
+                        <option>8</option><option>9</option><option>10</option>
+                        <option selected>11</option><option>12</option><option>14</option>
+                        <option>16</option><option>18</option><option>24</option><option>36</option>
+                    </select>
+                </div>
+                <div class="rinline-controls">
+                    <button class="rbtn rbtn--icon" data-cmd="bold" title="Bold (Ctrl+B)"><b>B</b></button>
+                    <button class="rbtn rbtn--icon rbtn--italic" data-cmd="italic" title="Italic (Ctrl+I)"><i>I</i></button>
+                    <button class="rbtn rbtn--icon rbtn--underline" data-cmd="underline" title="Underline (Ctrl+U)"><u>U</u></button>
+                    <button class="rbtn rbtn--icon" data-cmd="strikeThrough" title="Strikethrough"><s>S</s></button>
+                    <button class="rbtn rbtn--icon" data-cmd="superscript" title="Superscript">x²</button>
+                    <button class="rbtn rbtn--icon" data-cmd="subscript" title="Subscript">x₂</button>
+                </div>
+                <span class="rgroup-label">Font</span>
+            </div>
+            <div class="rsep"></div>
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <button class="rbtn rbtn--icon" data-cmd="insertUnorderedList" title="Bullet List">•</button>
+                    <button class="rbtn rbtn--icon" data-cmd="insertOrderedList" title="Numbered List">1.</button>
+                    <button class="rbtn rbtn--icon" data-cmd="outdent" title="Decrease Indent">⇤</button>
+                    <button class="rbtn rbtn--icon" data-cmd="indent" title="Increase Indent">⇥</button>
+                    <button class="rbtn rbtn--icon" data-cmd="justifyLeft" title="Align Left">⫷</button>
+                    <button class="rbtn rbtn--icon" data-cmd="justifyCenter" title="Center">≡</button>
+                    <button class="rbtn rbtn--icon" data-cmd="justifyRight" title="Align Right">⫸</button>
+                </div>
+                <span class="rgroup-label">Paragraph</span>
+            </div>
+            <div class="rsep"></div>
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <button class="rsbtn" data-cmd="formatBlock" data-val="h1">H1</button>
+                    <button class="rsbtn" data-cmd="formatBlock" data-val="h2">H2</button>
+                    <button class="rsbtn" data-cmd="formatBlock" data-val="h3">H3</button>
+                    <button class="rsbtn" data-cmd="formatBlock" data-val="p">Normal</button>
+                    <button class="rsbtn" data-cmd="formatBlock" data-val="blockquote">Quote</button>
+                    <button class="rsbtn" data-cmd="formatBlock" data-val="pre">Code</button>
+                </div>
+                <span class="rgroup-label">Styles</span>
+            </div>
+        </div>
+
+        <!-- Insert Panel -->
+        <div class="ribbon-panel" id="panel-insert">
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <button class="rbtn" id="btn-insert-picture" title="Insert Picture">
+                        <span class="rbtn-icon">🖼</span>
+                        <span>Picture</span>
+                    </button>
+                    <button class="rbtn" id="btn-insert-table" title="Insert Table" aria-haspopup="true">
+                        <span class="rbtn-icon">&#8862;</span>
+                        <span>Table &#9660;</span>
+                    </button>
+                    <!-- Table Grid Picker Popup -->
+                    <div class="table-picker" id="table-picker" hidden>
+                        <div class="tpicker-header">
+                            <span id="tpicker-label">Insert Table</span>
+                        </div>
+                        <div class="tpicker-grid" id="tpicker-grid"></div>
+                        <div class="tpicker-footer">
+                            <button class="tpicker-manual" id="tpicker-manual">Custom size…</button>
+                        </div>
+                    </div>
+                    <button class="rbtn" id="btn-insert-comment" title="Insert Comment">
+                        <span class="rbtn-icon">💬</span>
+                        <span>Comment</span>
+                    </button>
+                    <button class="rbtn" id="btn-insert-link" title="Insert Hyperlink">
+                        <span class="rbtn-icon">🔗</span>
+                        <span>Link</span>
+                    </button>
+                    <button class="rbtn" id="btn-insert-hline" title="Insert Horizontal Rule">
+                        <span class="rbtn-icon">—</span>
+                        <span>H. Rule</span>
+                    </button>
+                    <button class="rbtn" id="btn-insert-footnote" title="Insert Footnote">
+                        <span class="rbtn-icon">[*]</span>
+                        <span>Footnote</span>
+                    </button>
+                    <button class="rbtn" id="btn-insert-equation" title="Insert Equation">
+                        <span class="rbtn-icon">∑</span>
+                        <span>Equation</span>
+                    </button>
+                </div>
+                <span class="rgroup-label">Insert</span>
+            </div>
+        </div>
+
+        <!-- Layout Panel -->
+        <div class="ribbon-panel" id="panel-layout">
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <button class="rbtn rbtn--active-toggle" id="btn-layout-print" title="Print/Page Layout">
+                        <span class="rbtn-icon">📄</span>
+                        <span>Print View</span>
+                    </button>
+                    <button class="rbtn" id="btn-layout-web" title="Web/Continuous Layout">
+                        <span class="rbtn-icon">🌐</span>
+                        <span>Web View</span>
+                    </button>
+                </div>
+                <span class="rgroup-label">Page Setup</span>
+            </div>
+        </div>
+
+        <!-- Review Panel -->
+        <div class="ribbon-panel" id="panel-review">
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <button class="rbtn" id="btn-set-base">
+                        <span class="rbtn-icon">📍</span>
+                        <span>Set Base</span>
+                    </button>
+                    <button class="rbtn" id="btn-diff-toggle">
+                        <span class="rbtn-icon">🔍</span>
+                        <span>Show Changes</span>
+                    </button>
+                </div>
+                <span class="rgroup-label">Tracking</span>
+            </div>
+            <div class="rsep"></div>
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <button class="rbtn" id="btn-toggle-sidebar">
+                        <span class="rbtn-icon">📋</span>
+                        <span>Sidebar</span>
+                    </button>
+                </div>
+                <span class="rgroup-label">Comments</span>
+            </div>
+        </div>
+
+        <!-- View Panel -->
+        <div class="ribbon-panel" id="panel-view">
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <button class="rbtn" onclick="zoomPage(75)"><span>75%</span></button>
+                    <button class="rbtn" onclick="zoomPage(100)"><span>100%</span></button>
+                    <button class="rbtn" onclick="zoomPage(125)"><span>125%</span></button>
+                    <button class="rbtn" onclick="zoomPage(150)"><span>150%</span></button>
+                </div>
+                <span class="rgroup-label">Zoom</span>
+            </div>
+            <div class="rsep"></div>
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <button class="rbtn" id="btn-toggle-theme" title="Toggle Dark/Light Mode">
+                        <span class="rbtn-icon">🌙</span>
+                        <span>Theme</span>
+                    </button>
+                </div>
+                <span class="rgroup-label">Appearance</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Find & Replace Bar ───────────────────────────────── -->
+    <div class="find-bar" id="find-bar" hidden>
+        <div class="find-bar-inner">
+            <div class="find-field-group">
+                <input type="text" id="find-input" placeholder="Find…" autocomplete="off" spellcheck="false">
+                <span class="find-count" id="find-count"></span>
+                <button class="find-btn" id="find-prev" title="Previous (Shift+Enter)">↑</button>
+                <button class="find-btn" id="find-next" title="Next (Enter)">&#8595;</button>
+            </div>
+            <div class="find-field-group" id="replace-fields" hidden>
+                <input type="text" id="replace-input" placeholder="Replace with…" autocomplete="off" spellcheck="false">
+                <button class="find-btn find-btn--accent" id="replace-one">Replace</button>
+                <button class="find-btn find-btn--accent" id="replace-all">All</button>
+            </div>
+            <div class="find-options">
+                <label class="find-opt"><input type="checkbox" id="find-case"> Aa</label>
+                <label class="find-opt"><input type="checkbox" id="find-regex"> .*</label>
+                <button class="find-btn find-opt-toggle" id="find-replace-toggle" title="Toggle Replace">Replace</button>
+                <button class="find-btn find-close" id="find-close" title="Close (Esc)">✕</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── File Menu Dropdown ─────────────────────────────────── -->
+    <div class="file-menu" id="file-menu" hidden>
+        <div class="fmenu-header">File</div>
+        <button class="fmenu-item" id="btn-new">
+            <span class="fmenu-icon">&#128196;</span>
+            <div><strong>New</strong><small>Start blank document</small></div>
+        </button>
+        <button class="fmenu-item" id="btn-open">
+            <span class="fmenu-icon">&#128194;</span>
+            <div><strong>Open</strong><small>Import DOCX, PDF, ODT, HTML, MD, Typst</small></div>
+        </button>
+        <div id="recent-files-section" hidden>
+            <div class="fmenu-sep"></div>
+            <div class="fmenu-section-title">Recent</div>
+            <div id="recent-files-list"></div>
+        </div>
+        <div class="fmenu-section-title">Export As</div>
+        <button class="fmenu-item fmenu-export" data-export="markdown">
+            <span class="fmenu-icon">⬇</span>
+            <div><strong>Markdown</strong><small>.md</small></div>
+        </button>
+        <button class="fmenu-item fmenu-export" data-export="docx">
+            <span class="fmenu-icon">⬇</span>
+            <div><strong>Word Document</strong><small>.docx</small></div>
+        </button>
+        <button class="fmenu-item fmenu-export" data-export="pdf">
+            <span class="fmenu-icon">⬇</span>
+            <div><strong>PDF</strong><small>.pdf</small></div>
+        </button>
+        <button class="fmenu-item fmenu-export" data-export="odt">
+            <span class="fmenu-icon">⬇</span>
+            <div><strong>OpenDocument</strong><small>.odt</small></div>
+        </button>
+        <button class="fmenu-item fmenu-export" data-export="html">
+            <span class="fmenu-icon">⬇</span>
+            <div><strong>HTML5</strong><small>.html</small></div>
+        </button>
+        <button class="fmenu-item fmenu-export" data-export="typst">
+            <span class="fmenu-icon">⬇</span>
+            <div><strong>Typst</strong><small>.typ</small></div>
+        </button>
+    </div>
+    <div class="file-menu-scrim" id="file-menu-scrim" hidden></div>
+
+    <!-- ── Settings Panel ───────────────────────────────── -->
+    <div class="settings-scrim" id="settings-scrim"></div>
+    <aside class="settings-panel" id="settings-panel">
+        <div class="settings-header">
+            <span>&#9881; Settings</span>
+            <button class="settings-close" id="settings-close" title="Close">&times;</button>
+        </div>
+        <div class="settings-body">
+
+            <div class="settings-section">Identity</div>
+            <div class="settings-row">
+                <label class="settings-label" for="s-author">Author Name</label>
+                <input class="settings-input" type="text" id="s-author" placeholder="Your name">
+            </div>
+
+            <div class="settings-section">Appearance</div>
+            <div class="settings-row">
+                <label class="settings-label" for="s-theme">Theme</label>
+                <select class="settings-select" id="s-theme">
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                    <option value="system">System</option>
+                </select>
+            </div>
+            <div class="settings-row">
+                <label class="settings-label" for="s-font-family">Editor Font</label>
+                <select class="settings-select" id="s-font-family">
+                    <option value="Inter, sans-serif">Inter</option>
+                    <option value="Georgia, serif">Georgia</option>
+                    <option value="'Times New Roman', serif">Times New Roman</option>
+                    <option value="'JetBrains Mono', monospace">JetBrains Mono</option>
+                    <option value="Arial, sans-serif">Arial</option>
+                    <option value="system-ui, sans-serif">System Default</option>
+                </select>
+            </div>
+            <div class="settings-row">
+                <label class="settings-label" for="s-font-size">Font Size</label>
+                <div class="settings-row-inner">
+                    <input class="settings-input settings-input--narrow" type="number" id="s-font-size" min="8" max="32" step="1" value="14">
+                    <span style="font-size:12px; color:var(--text-hint);">pt</span>
+                </div>
+            </div>
+            <div class="settings-row">
+                <label class="settings-label" for="s-line-height">Line Spacing</label>
+                <select class="settings-select" id="s-line-height">
+                    <option value="1.4">Compact (1.4)</option>
+                    <option value="1.6" selected>Normal (1.6)</option>
+                    <option value="1.8">Relaxed (1.8)</option>
+                    <option value="2.0">Double (2.0)</option>
+                </select>
+            </div>
+
+            <div class="settings-section">Document</div>
+            <div class="settings-row">
+                <label class="settings-label" for="s-page-size">Page Size</label>
+                <select class="settings-select" id="s-page-size">
+                    <option value="816">US Letter (8.5&quot;)</option>
+                    <option value="794">A4 (210 mm)</option>
+                    <option value="708">B5 (176 mm)</option>
+                </select>
+            </div>
+            <div class="settings-row">
+                <label class="settings-label" for="s-spell">Spell Check</label>
+                <input type="checkbox" id="s-spell" checked>
+            </div>
+            <div class="settings-row">
+                <label class="settings-label" for="s-rulers">Page Rulers</label>
+                <input type="checkbox" id="s-rulers" checked>
+            </div>
+
+            <div class="settings-section">Auto-Save</div>
+            <div class="settings-row">
+                <label class="settings-label" for="s-autosave">Interval (ms)</label>
+                <select class="settings-select" id="s-autosave">
+                    <option value="500">500 ms</option>
+                    <option value="900" selected>900 ms</option>
+                    <option value="2000">2 s</option>
+                    <option value="5000">5 s</option>
+                    <option value="0">Off</option>
+                </select>
+            </div>
+
+            <div class="settings-section">Keyboard Shortcuts</div>
+            <table class="settings-shortcuts">
+                <tr><td><kbd>Ctrl+S</kbd></td><td>Save / Sync</td></tr>
+                <tr><td><kbd>Ctrl+F</kbd></td><td>Find</td></tr>
+                <tr><td><kbd>Ctrl+H</kbd></td><td>Find &amp; Replace</td></tr>
+                <tr><td><kbd>Ctrl+B</kbd></td><td>Bold</td></tr>
+                <tr><td><kbd>Ctrl+I</kbd></td><td>Italic</td></tr>
+                <tr><td><kbd>Ctrl+U</kbd></td><td>Underline</td></tr>
+                <tr><td><kbd>Ctrl+P</kbd></td><td>Print</td></tr>
+                <tr><td><kbd>Escape</kbd></td><td>Close Find Bar</td></tr>
+            </table>
+
+            <div style="margin-top: 20px; text-align: center;">
+                <button class="find-btn find-btn--accent" id="settings-reset">Reset to Defaults</button>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ── Context Menu (table editing) ─────────────────────── -->
+    <ul class="ctx-menu" id="ctx-menu" hidden>
+        <li class="ctx-item ctx-item--header" id="ctx-table-header" hidden>&#9638; Table</li>
+        <li class="ctx-item" id="ctx-add-row-above">&#8593; Add Row Above</li>
+        <li class="ctx-item" id="ctx-add-row-below">&#8595; Add Row Below</li>
+        <li class="ctx-item" id="ctx-add-col-left">&#8592; Add Column Left</li>
+        <li class="ctx-item" id="ctx-add-col-right">&#8594; Add Column Right</li>
+        <li class="ctx-sep"></li>
+        <li class="ctx-item" id="ctx-merge-cells">&#8862; Merge Selected Cells</li>
+        <li class="ctx-item" id="ctx-split-cell">&#8863; Split Cell</li>
+        <li class="ctx-sep"></li>
+        <li class="ctx-item" id="ctx-clear-row">&#9003; Clear Row</li>
+        <li class="ctx-item" id="ctx-clear-col">&#9003; Clear Column</li>
+        <li class="ctx-item" id="ctx-select-table">&#9635; Select Table</li>
+        <li class="ctx-sep"></li>
+        <li class="ctx-item ctx-item--danger" id="ctx-del-row">&#215; Delete Row</li>
+        <li class="ctx-item ctx-item--danger" id="ctx-del-col">&#215; Delete Column</li>
+        <li class="ctx-item ctx-item--danger" id="ctx-del-table">&#215; Delete Table</li>
+    </ul>
+
+    <!-- ── Floating Table Toolbar ──────────────────────────── -->
+    <div class="table-float-bar" id="table-float-bar" hidden>
+        <button class="tfb-btn" id="tfb-add-row-above" title="Add Row Above">&#8593;&#9646;</button>
+        <button class="tfb-btn" id="tfb-add-row-below" title="Add Row Below">&#9646;&#8595;</button>
+        <button class="tfb-btn" id="tfb-add-col-left" title="Add Column Left">&#8592;&#9644;</button>
+        <button class="tfb-btn" id="tfb-add-col-right" title="Add Column Right">&#9644;&#8594;</button>
+        <div class="tfb-sep"></div>
+        <button class="tfb-btn" id="tfb-merge" title="Merge Selected Cells">&#8862;</button>
+        <button class="tfb-btn" id="tfb-split" title="Split Cell">&#8863;</button>
+        <div class="tfb-sep"></div>
+        <button class="tfb-btn" id="tfb-align-left"   title="Align Left">&#8676;</button>
+        <button class="tfb-btn" id="tfb-align-center" title="Align Center">&#8677;</button>
+        <button class="tfb-btn" id="tfb-align-right"  title="Align Right">&#8677;</button>
+        <div class="tfb-sep"></div>
+        <button class="tfb-btn tfb-btn--danger" id="tfb-del-row" title="Delete Row">&#215;Row</button>
+        <button class="tfb-btn tfb-btn--danger" id="tfb-del-col" title="Delete Column">&#215;Col</button>
+        <button class="tfb-btn tfb-btn--danger" id="tfb-del-table" title="Delete Table">&#215;Table</button>
+    </div>
+
+    <!-- ── Main Workspace ────────────────────────────────────── -->
+    <div class="workspace" id="workspace">
+
+        <!-- Overlay for comment arrows -->
+        <svg id="comment-arrows" style="position:fixed; pointer-events:none; z-index:100; inset:0; width:100%; height:100%;"></svg>
+
+        <!-- Page canvas -->
+        <div class="page-canvas" id="page-canvas">
+            <div id="editor"
+                 class="document-page"
+                 contenteditable="true"
+                 spellcheck="true"
+                 data-placeholder="Start typing your document...">
+<h1>Untitled Document</h1>
+<p>Welcome to <strong>Marksmen Editor</strong> — a native desktop document suite powered by Rust.</p>
+<p>Use the Ribbon above to format text, import files, or export to Word, PDF, and more.</p>
+            </div>
+        </div>
+
+        <!-- Sidebar (Comments & Outline) -->
+        <aside class="sidebar collapsed" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-tabs">
+                    <button class="stab stab--active" id="stab-comments" title="Comments">&#128172; Comments</button>
+                    <button class="stab" id="stab-outline" title="Document Outline">&#128203; Outline</button>
+                </div>
+                <button class="sidebar-close" id="sidebar-close">&#10005;</button>
+            </div>
+            <div class="sidebar-body" id="comments-list">
+                <div class="sidebar-empty">
+                    No comments yet.<br>Select text and click <em>&#128172; Comment</em>.
+                </div>
+            </div>
+            <div class="sidebar-body" id="outline-list" hidden></div>
+        </aside>
+
+
+    </div><!-- /.workspace -->
+
+    <!-- \u2500\u2500 Bottom Status Bar \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 -->
+    <div class="status-bar" id="status-bar">
+        <span class="sbar-item" id="sbar-caret">Ln 1, Col 1</span>
+        <span class="sbar-sep"></span>
+        <span class="sbar-item" id="sbar-reading">0 min read</span>
+        <span class="sbar-sep"></span>
+        <span class="sbar-item" id="sbar-format">Markdown</span>
+        <div class="sbar-right">
+            <span class="sbar-item" id="sbar-zoom-label">100%</span>
+            <input type="range" id="sbar-zoom" min="50" max="200" step="10" value="100" title="Zoom" style="width:80px; accent-color: var(--accent);">
+        </div>
+    </div>
+
+</div><!-- /.app-shell -->
+</body>
+</html>

@@ -9,29 +9,29 @@ use anyhow::Result;
 pub fn parse_latex(text: &str) -> Result<String> {
     // Basic extraction loop to find content between \begin{document} and \end{document}
     let body = extract_document_body(text);
-    
+
     // Simplistic text replacement mapping LaTeX tags back to markdown
     let mut mapped = body.to_string();
-    
+
     // Headers
     mapped = mapped.replace("\\section{", "\n# ");
     mapped = mapped.replace("\\subsection{", "\n## ");
     mapped = mapped.replace("\\subsubsection{", "\n### ");
     mapped = mapped.replace("\\paragraph{", "\n#### ");
     mapped = mapped.replace("\\subparagraph{", "\n##### ");
-    
+
     // Formatting
     mapped = mapped.replace("\\textbf{", "**");
     mapped = mapped.replace("\\textit{", "*");
     mapped = mapped.replace("\\sout{", "~~");
     mapped = mapped.replace("\\texttt{", "`");
-    
+
     // Since we just replaced the opening commands with markdown tags but left the trailing '}'
-    // we need to somehow strip matched closing braces. 
-    // For a robust implementation, a proper parser is required. 
+    // we need to somehow strip matched closing braces.
+    // For a robust implementation, a proper parser is required.
     // Here we just naively clear all naked trailing braces that were attached to formatting tags.
     // However, to keep it simple and safe for math tags, we will just use a simplistic custom pass.
-    
+
     Ok(process_replacements(&mapped))
 }
 
@@ -53,9 +53,9 @@ fn extract_document_body(text: &str) -> &str {
 fn process_replacements(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut chars = text.chars().peekable();
-    
+
     let mut brace_depth = 0;
-    
+
     // Very rudimentary parser to strip closing braces for formatting tags that were converted
     while let Some(c) = chars.next() {
         if c == '\\' {
@@ -64,14 +64,21 @@ fn process_replacements(text: &str) -> String {
                     chars.next();
                     out.push('\n'); // convert \\ to newline
                     continue;
-                } else if n == '%' || n == '$' || n == '#' || n == '_' || n == '{' || n == '}' || n == '&' {
+                } else if n == '%'
+                    || n == '$'
+                    || n == '#'
+                    || n == '_'
+                    || n == '{'
+                    || n == '}'
+                    || n == '&'
+                {
                     chars.next();
                     out.push(n);
                     continue;
                 }
             }
         }
-        
+
         if c == '{' {
             brace_depth += 1;
             out.push('{');
@@ -88,7 +95,7 @@ fn process_replacements(text: &str) -> String {
             out.push(c);
         }
     }
-    
+
     // Simple block replacements
     let mut res = out;
     res = res.replace("\\begin{quote}", "> ");
@@ -100,7 +107,7 @@ fn process_replacements(text: &str) -> String {
     res = res.replace("\\item", "-");
     res = res.replace("\\begin{lstlisting}", "```");
     res = res.replace("\\end{lstlisting}", "```");
-    
+
     res.trim().to_string()
 }
 

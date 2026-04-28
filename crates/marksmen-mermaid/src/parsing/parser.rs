@@ -1,10 +1,10 @@
 //! Abstract Syntax Tree (AST) definition and parser.
 
+use super::lexer::{lex, LexerError, Token};
+use crate::graph::directed_graph::StyleSpec;
 use regex::Regex;
 use rustc_hash::FxHashMap;
 use thiserror::Error;
-use crate::graph::directed_graph::StyleSpec;
-use super::lexer::{lex, Token, LexerError};
 
 /// A parsed Mermaid flowchart.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -76,7 +76,11 @@ pub struct Parser {
 
 impl Parser {
     pub fn new(tokens: Vec<Token>, node_styles: FxHashMap<String, StyleSpec>) -> Self {
-        Self { tokens, pos: 0, node_styles }
+        Self {
+            tokens,
+            pos: 0,
+            node_styles,
+        }
     }
 
     fn peek(&self) -> Option<&Token> {
@@ -146,13 +150,19 @@ impl Parser {
         // While there is an edge, keep reading chain
         while let Some(token) = self.peek() {
             let link = match token {
-                Token::Edge(style) => EdgeLink { style: style.clone(), label: None },
-                Token::LabeledEdge { style, label } => EdgeLink { style: style.clone(), label: Some(label.clone()) },
+                Token::Edge(style) => EdgeLink {
+                    style: style.clone(),
+                    label: None,
+                },
+                Token::LabeledEdge { style, label } => EdgeLink {
+                    style: style.clone(),
+                    label: Some(label.clone()),
+                },
                 _ => break,
             };
             edges.push(link);
             self.advance();
-            
+
             let next_node = self.parse_node_def()?;
             nodes.push(next_node);
         }
@@ -176,7 +186,7 @@ impl Parser {
 
     fn parse_node_def(&mut self) -> Result<NodeDef, ParseError> {
         let id_token = self.advance().ok_or(ParseError::UnexpectedEof)?;
-        
+
         let id = match id_token {
             Token::Identifier(name) => name.clone(),
             _ => return Err(ParseError::UnexpectedToken(id_token.clone())),
@@ -185,7 +195,11 @@ impl Parser {
         let mut label = None;
         let mut shape = None;
 
-        if let Some(Token::NodeLabel { text, shape: node_shape }) = self.peek() {
+        if let Some(Token::NodeLabel {
+            text,
+            shape: node_shape,
+        }) = self.peek()
+        {
             label = Some(text.clone());
             shape = Some(node_shape.clone());
             self.advance();
@@ -252,7 +266,9 @@ fn strip_class_annotations(input: &str) -> String {
     while i < chars.len() {
         if i + 2 < chars.len() && chars[i] == ':' && chars[i + 1] == ':' && chars[i + 2] == ':' {
             i += 3;
-            while i < chars.len() && (chars[i].is_alphanumeric() || chars[i] == '_' || chars[i] == '-') {
+            while i < chars.len()
+                && (chars[i].is_alphanumeric() || chars[i] == '_' || chars[i] == '-')
+            {
                 i += 1;
             }
             continue;
@@ -267,7 +283,8 @@ fn strip_class_annotations(input: &str) -> String {
 
 fn extract_node_styles(input: &str) -> FxHashMap<String, StyleSpec> {
     let class_def_re = Regex::new(r"^\s*classDef\s+([A-Za-z0-9_-]+)\s+(.+?);?\s*$").unwrap();
-    let class_stmt_re = Regex::new(r"^\s*class\s+([A-Za-z0-9_,\s-]+)\s+([A-Za-z0-9_-]+);?\s*$").unwrap();
+    let class_stmt_re =
+        Regex::new(r"^\s*class\s+([A-Za-z0-9_,\s-]+)\s+([A-Za-z0-9_-]+);?\s*$").unwrap();
     let inline_class_re = Regex::new(r"([A-Za-z_][A-Za-z0-9_]*)\s*(?:\[[^\]]*\]|\(\([^\)]*\)\)|\([^\)]*\)|\{[^\}]*\})?:::([A-Za-z0-9_-]+)").unwrap();
 
     let mut class_defs: FxHashMap<String, StyleSpec> = FxHashMap::default();
@@ -281,13 +298,23 @@ fn extract_node_styles(input: &str) -> FxHashMap<String, StyleSpec> {
 
         if let Some(caps) = class_stmt_re.captures(line) {
             let class_name = caps[2].trim().to_string();
-            for node_id in caps[1].split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
-                node_classes.entry(node_id.to_string()).or_default().push(class_name.clone());
+            for node_id in caps[1]
+                .split(',')
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+            {
+                node_classes
+                    .entry(node_id.to_string())
+                    .or_default()
+                    .push(class_name.clone());
             }
         }
 
         for caps in inline_class_re.captures_iter(line) {
-            node_classes.entry(caps[1].to_string()).or_default().push(caps[2].to_string());
+            node_classes
+                .entry(caps[1].to_string())
+                .or_default()
+                .push(caps[2].to_string());
         }
     }
 
@@ -310,7 +337,9 @@ fn extract_node_styles(input: &str) -> FxHashMap<String, StyleSpec> {
 fn parse_style_properties(input: &str) -> StyleSpec {
     let mut style = StyleSpec::default();
     for part in input.split(',') {
-        let Some((key, value)) = part.split_once(':') else { continue };
+        let Some((key, value)) = part.split_once(':') else {
+            continue;
+        };
         let key = key.trim();
         let value = value.trim().trim_end_matches(';').to_string();
         match key {
@@ -351,7 +380,10 @@ fn extract_subgraphs(input: &str) -> Vec<SubgraphDef> {
         depth: usize,
     }
 
-    let node_re = Regex::new(r"\b([A-Za-z_][A-Za-z0-9_]*)\b\s*(?:\[[^\]]*\]|\(\([^\)]*\)\)|\([^\)]*\)|\{[^\}]*\})?").unwrap();
+    let node_re = Regex::new(
+        r"\b([A-Za-z_][A-Za-z0-9_]*)\b\s*(?:\[[^\]]*\]|\(\([^\)]*\)\)|\([^\)]*\)|\{[^\}]*\})?",
+    )
+    .unwrap();
     let reserved = ["graph", "flowchart", "subgraph", "end"];
     let mut stack: Vec<SubgraphFrame> = Vec::new();
     let mut subgraphs = Vec::new();
@@ -423,10 +455,10 @@ mod tests {
     fn parse_basic_ast() {
         let input = "graph TD\n  A[Start] --> B(End)";
         let ast = parse(input).unwrap();
-        
+
         assert_eq!(ast.direction, "TD");
         assert_eq!(ast.statements.len(), 1);
-        
+
         match &ast.statements[0] {
             Statement::Edge(e) => {
                 assert_eq!(e.from.id, "A");
@@ -455,7 +487,10 @@ mod tests {
                 assert_eq!(e.to.id, "B");
                 assert_eq!(e.to.shape, Some(crate::parsing::lexer::NodeShape::Circle));
                 assert_eq!(e.label.as_deref(), Some("Labeled Link"));
-                assert_eq!(e.from.style.as_ref().and_then(|s| s.fill.as_deref()), Some("#eef4ff"));
+                assert_eq!(
+                    e.from.style.as_ref().and_then(|s| s.fill.as_deref()),
+                    Some("#eef4ff")
+                );
             }
             _ => panic!("Expected edge statement"),
         }

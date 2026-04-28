@@ -1,11 +1,12 @@
-//! PDF extraction and text reconstruction for marksmen round-trip validation.
+//! PDF extraction and text reconstruction for marksmen.
 //!
-//! Provides text boundary extraction leveraging the `pdf-extract` crate,
-//! plus a glyph-level text mapper for annotation localization.
+//! Uses a native lopdf-based reader with full font encoding (WinAnsi/MacRoman/CMap),
+//! glyph advance width metrics, graphics state, and XObject traversal.
 
 use anyhow::{Context, Result};
 use lopdf::{Document, Object};
 
+mod reader;
 mod text_mapper;
 pub use text_mapper::TextRun;
 
@@ -38,11 +39,14 @@ impl Rect {
     fn from_object(obj: &Object) -> Option<Self> {
         if let Ok(arr) = obj.as_array() {
             if arr.len() == 4 {
-                let nums: Vec<f32> = arr.iter().filter_map(|o| match o {
-                    Object::Real(f) => Some(*f as f32),
-                    Object::Integer(i) => Some(*i as f32),
-                    _ => None,
-                }).collect();
+                let nums: Vec<f32> = arr
+                    .iter()
+                    .filter_map(|o| match o {
+                        Object::Real(f) => Some(*f as f32),
+                        Object::Integer(i) => Some(*i as f32),
+                        _ => None,
+                    })
+                    .collect();
                 if nums.len() == 4 {
                     return Some(Rect {
                         llx: nums[0],
@@ -87,8 +91,18 @@ impl Quad {
 
     /// Approximate bounding rectangle.
     pub fn bbox(&self) -> Rect {
-        let xs = [self.points[0], self.points[2], self.points[4], self.points[6]];
-        let ys = [self.points[1], self.points[3], self.points[5], self.points[7]];
+        let xs = [
+            self.points[0],
+            self.points[2],
+            self.points[4],
+            self.points[6],
+        ];
+        let ys = [
+            self.points[1],
+            self.points[3],
+            self.points[5],
+            self.points[7],
+        ];
         Rect {
             llx: xs.iter().cloned().fold(f32::INFINITY, f32::min),
             lly: ys.iter().cloned().fold(f32::INFINITY, f32::min),
@@ -131,15 +145,17 @@ impl LocalizedAnnotation {
 
     /// Return the text that this annotation anchors to, or the fallback label.
     pub fn display_text(&self) -> String {
-        self.anchored_text.clone().unwrap_or_else(|| self.fallback_label())
+        self.anchored_text
+            .clone()
+            .unwrap_or_else(|| self.fallback_label())
     }
 }
 
 /// Extract all foreign (non-marksmen-origin) annotations from the PDF,
 /// localized to text where possible.
 pub fn extract_annotations(bytes: &[u8]) -> Result<Vec<LocalizedAnnotation>> {
-    let document = Document::load_mem(bytes)
-        .context("Failed to parse PDF bytes for annotation extraction")?;
+    let document =
+        Document::load_mem(bytes).context("Failed to parse PDF bytes for annotation extraction")?;
 
     let pages = document.get_pages();
     let mut annotations: Vec<LocalizedAnnotation> = Vec::new();
@@ -200,35 +216,46 @@ pub fn extract_annotations(bytes: &[u8]) -> Result<Vec<LocalizedAnnotation>> {
             };
 
             // Skip our own origin annotations.
-            let is_marksmen_origin = annot_dict.get(b"MarksmenOrigin")
+            let is_marksmen_origin = annot_dict
+                .get(b"MarksmenOrigin")
                 .and_then(|obj| obj.as_bool())
                 .unwrap_or(false);
             if is_marksmen_origin {
                 continue;
             }
 
-            let author = annot_dict.get(b"T")
+            let author = annot_dict
+                .get(b"T")
                 .ok()
                 .and_then(|obj| obj.as_string().ok())
                 .map(|c| c.into_owned())
                 .unwrap_or_else(|| "Reviewer".to_string());
 
-            let content = annot_dict.get(b"Contents")
+            let content = annot_dict
+                .get(b"Contents")
                 .ok()
                 .and_then(|obj| obj.as_string().ok())
                 .map(|c| c.into_owned())
                 .unwrap_or_default();
 
-            let rect = annot_dict.get(b"Rect")
+            let rect = annot_dict
+                .get(b"Rect")
                 .ok()
                 .and_then(Rect::from_object)
-                .unwrap_or(Rect { llx: 0.0, lly: 0.0, urx: 0.0, ury: 0.0 });
+                .unwrap_or(Rect {
+                    llx: 0.0,
+                    lly: 0.0,
+                    urx: 0.0,
+                    ury: 0.0,
+                });
 
-            let quad_points = annot_dict.get(b"QuadPoints")
+            let quad_points = annot_dict
+                .get(b"QuadPoints")
                 .ok()
                 .and_then(|o| o.as_array().ok())
                 .map(|arr| {
-                    let nums: Vec<f32> = arr.iter()
+                    let nums: Vec<f32> = arr
+                        .iter()
                         .filter_map(|o| match o {
                             Object::Real(f) => Some(*f as f32),
                             Object::Integer(i) => Some(*i as f32),
@@ -241,11 +268,13 @@ pub fn extract_annotations(bytes: &[u8]) -> Result<Vec<LocalizedAnnotation>> {
                 })
                 .unwrap_or_default();
 
-            let color = annot_dict.get(b"C")
+            let color = annot_dict
+                .get(b"C")
                 .ok()
                 .and_then(|o| o.as_array().ok())
                 .and_then(|arr| {
-                    let nums: Vec<f32> = arr.iter()
+                    let nums: Vec<f32> = arr
+                        .iter()
                         .filter_map(|o| match o {
                             Object::Real(f) => Some(*f as f32),
                             Object::Integer(i) => Some(*i as f32),
@@ -259,7 +288,8 @@ pub fn extract_annotations(bytes: &[u8]) -> Result<Vec<LocalizedAnnotation>> {
                     }
                 });
 
-            let date = annot_dict.get(b"M")
+            let date = annot_dict
+                .get(b"M")
                 .ok()
                 .and_then(|obj| obj.as_string().ok())
                 .map(|c| c.into_owned());
@@ -270,7 +300,8 @@ pub fn extract_annotations(bytes: &[u8]) -> Result<Vec<LocalizedAnnotation>> {
                 let mut texts: Vec<String> = Vec::new();
                 for quad in &quad_points {
                     let bbox = quad.bbox();
-                    let mut hits: Vec<&str> = text_runs.iter()
+                    let mut hits: Vec<&str> = text_runs
+                        .iter()
                         .filter(|run| run.rect.intersects(&bbox))
                         .map(|run| run.text.as_str())
                         .collect();
@@ -287,7 +318,8 @@ pub fn extract_annotations(bytes: &[u8]) -> Result<Vec<LocalizedAnnotation>> {
                 }
             } else {
                 // Fall back to Rect intersection.
-                let hits: Vec<&str> = text_runs.iter()
+                let hits: Vec<&str> = text_runs
+                    .iter()
                     .filter(|run| run.rect.intersects(&rect))
                     .map(|run| run.text.as_str())
                     .collect();
@@ -362,8 +394,9 @@ pub fn parse_pdf(bytes: &[u8]) -> Result<String> {
         return Ok(markdown);
     }
 
-    let text = pdf_extract::extract_text_from_mem(bytes)
-        .context("Failed to extract text structures from PDF buffer")?;
+    // Use the native PDF reader: encoding-aware font decoding, real glyph advance
+    // widths, full graphics state (Tc/Tw/Tz/color), Form XObject traversal.
+    let text = reader::pdf_to_markdown(bytes).context("Native PDF reader failed")?;
     Ok(text)
 }
 
@@ -395,7 +428,7 @@ fn extract_embedded_roundtrip_markdown(bytes: &[u8]) -> Result<Option<String>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_pdf, extract_annotations, AnnotationSubtype};
+    use super::{AnnotationSubtype, extract_annotations, parse_pdf};
     use anyhow::Result;
     use marksmen_core::Config;
 

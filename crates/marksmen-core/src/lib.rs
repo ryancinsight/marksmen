@@ -17,13 +17,13 @@
 //!
 //! ## Usage
 //!
-//! ```rust,no_run
-//! use marksmen_core::{convert, Config};
+//! ```rust
+//! use marksmen_core::{parse, Config};
 //!
 //! let markdown = "# Hello\n\nInline math: $E = mc^2$\n\n$$\\int_0^1 x\\,dx = \\frac{1}{2}$$";
 //! let config = Config::default();
-//! let pdf_bytes = convert(markdown, &config).expect("conversion failed");
-//! std::fs::write("output.pdf", &pdf_bytes).unwrap();
+//! let events = parse(markdown);
+//! assert!(!events.is_empty());
 //! ```
 
 pub mod config;
@@ -32,4 +32,4 @@ pub mod parsing;
 pub use config::Config;
 pub use config::StyleMap;
 pub use parsing::parser::parse;
-pub use parsing::{AnnotatedEvent, intercept};
+pub use parsing::{intercept, AnnotatedEvent};

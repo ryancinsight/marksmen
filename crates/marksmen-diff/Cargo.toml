@@ -4,4 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+marksmen-core = { version = "0.1.0", path = "../marksmen-core" }
+marksmen-html = { version = "0.1.0", path = "../marksmen-html" }
+pulldown-cmark.workspace = true
 similar = "2.2"
+tree-sitter = "0.26.8"
+tree-sitter-md = "0.5.3"

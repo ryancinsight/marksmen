@@ -5,8 +5,8 @@
 //!
 //! Currently implements a deterministic continuous layout strategy resembling Brandes-Köpf constraints.
 
-use rustc_hash::FxHashMap;
 use crate::layout::rank_assignment::RankedGraph;
+use rustc_hash::FxHashMap;
 
 #[derive(Debug, Clone)]
 pub struct SpacedGraph {
@@ -53,7 +53,7 @@ pub struct SubgraphGeometry {
 pub fn assign_coordinates(graph: &RankedGraph) -> SpacedGraph {
     let mut node_geometries: FxHashMap<String, NodeGeometry> = FxHashMap::default();
     let horizontal_flow = matches!(graph.direction.as_str(), "LR" | "RL");
-    
+
     // Configurable spacings
     let level_spacing: f64 = 60.0;
     let node_spacing: f64 = 40.0;
@@ -120,7 +120,10 @@ pub fn assign_coordinates(graph: &RankedGraph) -> SpacedGraph {
     // subgraph title bands than a single straight segment.
     let mut edge_geometries = Vec::new();
     for edge in &graph.edges {
-        if let (Some(from_geom), Some(to_geom)) = (node_geometries.get(&edge.from), node_geometries.get(&edge.to)) {
+        if let (Some(from_geom), Some(to_geom)) = (
+            node_geometries.get(&edge.from),
+            node_geometries.get(&edge.to),
+        ) {
             let path = if horizontal_flow {
                 orthogonal_horizontal_path(from_geom, to_geom)
             } else {
@@ -138,7 +141,12 @@ pub fn assign_coordinates(graph: &RankedGraph) -> SpacedGraph {
     let mut subgraph_geometries = Vec::new();
     let mut known_bounds: FxHashMap<String, (f64, f64, f64, f64)> = FxHashMap::default();
     let mut ordered_subgraphs = graph.subgraphs.clone();
-    ordered_subgraphs.sort_by(|left, right| right.depth.cmp(&left.depth).then_with(|| left.title.cmp(&right.title)));
+    ordered_subgraphs.sort_by(|left, right| {
+        right
+            .depth
+            .cmp(&left.depth)
+            .then_with(|| left.title.cmp(&right.title))
+    });
 
     for subgraph in &ordered_subgraphs {
         let mut min_x = f64::INFINITY;
@@ -157,8 +165,14 @@ pub fn assign_coordinates(graph: &RankedGraph) -> SpacedGraph {
             }
         }
 
-        for child in graph.subgraphs.iter().filter(|candidate| candidate.parent_title.as_deref() == Some(subgraph.title.as_str())) {
-            if let Some((child_min_x, child_min_y, child_max_x, child_max_y)) = known_bounds.get(&child.title) {
+        for child in graph
+            .subgraphs
+            .iter()
+            .filter(|candidate| candidate.parent_title.as_deref() == Some(subgraph.title.as_str()))
+        {
+            if let Some((child_min_x, child_min_y, child_max_x, child_max_y)) =
+                known_bounds.get(&child.title)
+            {
                 min_x = min_x.min(*child_min_x);
                 min_y = min_y.min(*child_min_y);
                 max_x = max_x.max(*child_max_x);
@@ -181,7 +195,12 @@ pub fn assign_coordinates(graph: &RankedGraph) -> SpacedGraph {
             };
             known_bounds.insert(
                 geometry.title.clone(),
-                (geometry.x, geometry.y, geometry.x + geometry.width, geometry.y + geometry.height),
+                (
+                    geometry.x,
+                    geometry.y,
+                    geometry.x + geometry.width,
+                    geometry.y + geometry.height,
+                ),
             );
             subgraph_geometries.push(geometry);
         }
@@ -201,12 +220,25 @@ pub fn assign_coordinates(graph: &RankedGraph) -> SpacedGraph {
         nodes: node_geometries,
         edges: edge_geometries,
         subgraphs: subgraph_geometries,
-        width: (if horizontal_flow { primary_offset } else { max_cross_extent }).max(subgraph_right + 24.0),
-        height: (if horizontal_flow { max_cross_extent } else { primary_offset }).max(subgraph_bottom + 24.0),
+        width: (if horizontal_flow {
+            primary_offset
+        } else {
+            max_cross_extent
+        })
+        .max(subgraph_right + 24.0),
+        height: (if horizontal_flow {
+            max_cross_extent
+        } else {
+            primary_offset
+        })
+        .max(subgraph_bottom + 24.0),
     }
 }
 
-fn node_subgraph_path(node_id: &str, subgraphs: &[crate::graph::directed_graph::Subgraph]) -> Vec<usize> {
+fn node_subgraph_path(
+    node_id: &str,
+    subgraphs: &[crate::graph::directed_graph::Subgraph],
+) -> Vec<usize> {
     let mut path: Vec<(usize, usize)> = subgraphs
         .iter()
         .enumerate()

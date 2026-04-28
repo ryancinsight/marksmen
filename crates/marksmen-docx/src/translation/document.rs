@@ -1,16 +1,21 @@
+use crate::translation::elements::{handle_event, Container, TextState};
+use anyhow::Result;
+use docx_rs::*;
+use marksmen_core::Config;
+use marksmen_mermaid::graph::directed_graph;
+use marksmen_mermaid::layout::{coordinate_assign, crossing_reduction, rank_assignment};
+use marksmen_mermaid::parsing::parser;
+use marksmen_render::{render_math_to_png, render_mmd_to_png, svg_bytes_to_png};
+use pulldown_cmark::{CodeBlockKind, Event, Tag, TagEnd};
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
-use anyhow::Result;
-use pulldown_cmark::{Event, CodeBlockKind, Tag, TagEnd};
-use docx_rs::*;
-use crate::translation::elements::{handle_event, TextState, Container};
-use marksmen_mermaid::parsing::parser;
-use marksmen_mermaid::graph::directed_graph;
-use marksmen_mermaid::layout::{rank_assignment, crossing_reduction, coordinate_assign};
-use marksmen_core::Config;
-use marksmen_render::{render_math_to_png, render_mmd_to_png, svg_bytes_to_png};
 
-pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source_docx: Option<&[u8]>) -> Result<Vec<u8>> {
+pub fn convert(
+    events: Vec<Event<'_>>,
+    config: &Config,
+    input_dir: &Path,
+    source_docx: Option<&[u8]>,
+) -> Result<Vec<u8>> {
     let page_width_twips = parse_length_to_twips(&config.page.width).unwrap_or(11906);
     let page_height_twips = parse_length_to_twips(&config.page.height).unwrap_or(16838);
     let margin_top_twips = parse_length_to_twips(&config.page.margin_top).unwrap_or(1701);
@@ -24,38 +29,152 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                 .top(margin_top_twips as i32)
                 .right(margin_right_twips as i32)
                 .bottom(margin_bottom_twips as i32)
-                .left(margin_left_twips as i32)
+                .left(margin_left_twips as i32),
         )
         // Default Typography: Helvetica/Arial 11pt, resolving the overlap crash
-        .default_fonts(RunFonts::new().ascii("Arial").hi_ansi("Arial").cs("Arial").east_asia("Arial"))
+        .default_fonts(
+            RunFonts::new()
+                .ascii("Arial")
+                .hi_ansi("Arial")
+                .cs("Arial")
+                .east_asia("Arial"),
+        )
         .default_size(22) // 22 half-points = 11pt
-        .add_style(Style::new("Heading1", StyleType::Paragraph).name("heading 1").size(48).bold()) // 24pt
-        .add_style(Style::new("Heading2", StyleType::Paragraph).name("heading 2").size(36).bold()) // 18pt
-        .add_style(Style::new("Heading3", StyleType::Paragraph).name("heading 3").size(28).bold()) // 14pt
-        .add_style(Style::new("Heading4", StyleType::Paragraph).name("heading 4").size(24).bold()) // 12pt
-        .add_style(Style::new("Heading5", StyleType::Paragraph).name("heading 5").size(22).bold()) // 11pt
-        .add_style(Style::new("Heading6", StyleType::Paragraph).name("heading 6").size(20).bold()) // 10pt
+        .add_style(
+            Style::new("Heading1", StyleType::Paragraph)
+                .name("heading 1")
+                .size(48)
+                .bold(),
+        ) // 24pt
+        .add_style(
+            Style::new("Heading2", StyleType::Paragraph)
+                .name("heading 2")
+                .size(36)
+                .bold(),
+        ) // 18pt
+        .add_style(
+            Style::new("Heading3", StyleType::Paragraph)
+                .name("heading 3")
+                .size(28)
+                .bold(),
+        ) // 14pt
+        .add_style(
+            Style::new("Heading4", StyleType::Paragraph)
+                .name("heading 4")
+                .size(24)
+                .bold(),
+        ) // 12pt
+        .add_style(
+            Style::new("Heading5", StyleType::Paragraph)
+                .name("heading 5")
+                .size(22)
+                .bold(),
+        ) // 11pt
+        .add_style(
+            Style::new("Heading6", StyleType::Paragraph)
+                .name("heading 6")
+                .size(20)
+                .bold(),
+        ) // 10pt
         .add_style(Style::new("CodeBlock", StyleType::Paragraph).name("CodeBlock"))
         // Bullet list: numbering-id 1
         .add_abstract_numbering(
             AbstractNumbering::new(1)
-                .add_level(Level::new(0, Start::new(1), NumberFormat::new("bullet"), LevelText::new("\u{2022}"), LevelJc::new("left"))
-                    .indent(Some(720), Some(SpecialIndentType::Hanging(360)), None, None))
-                .add_level(Level::new(1, Start::new(1), NumberFormat::new("bullet"), LevelText::new("\u{25E6}"), LevelJc::new("left"))
-                    .indent(Some(1440), Some(SpecialIndentType::Hanging(360)), None, None))
-                .add_level(Level::new(2, Start::new(1), NumberFormat::new("bullet"), LevelText::new("\u{25AA}"), LevelJc::new("left"))
-                    .indent(Some(2160), Some(SpecialIndentType::Hanging(360)), None, None))
+                .add_level(
+                    Level::new(
+                        0,
+                        Start::new(1),
+                        NumberFormat::new("bullet"),
+                        LevelText::new("\u{2022}"),
+                        LevelJc::new("left"),
+                    )
+                    .indent(
+                        Some(720),
+                        Some(SpecialIndentType::Hanging(360)),
+                        None,
+                        None,
+                    ),
+                )
+                .add_level(
+                    Level::new(
+                        1,
+                        Start::new(1),
+                        NumberFormat::new("bullet"),
+                        LevelText::new("\u{25E6}"),
+                        LevelJc::new("left"),
+                    )
+                    .indent(
+                        Some(1440),
+                        Some(SpecialIndentType::Hanging(360)),
+                        None,
+                        None,
+                    ),
+                )
+                .add_level(
+                    Level::new(
+                        2,
+                        Start::new(1),
+                        NumberFormat::new("bullet"),
+                        LevelText::new("\u{25AA}"),
+                        LevelJc::new("left"),
+                    )
+                    .indent(
+                        Some(2160),
+                        Some(SpecialIndentType::Hanging(360)),
+                        None,
+                        None,
+                    ),
+                ),
         )
         .add_numbering(Numbering::new(1, 1))
         // Decimal list: numbering-id 2
         .add_abstract_numbering(
             AbstractNumbering::new(2)
-                .add_level(Level::new(0, Start::new(1), NumberFormat::new("decimal"), LevelText::new("%1."), LevelJc::new("left"))
-                    .indent(Some(720), Some(SpecialIndentType::Hanging(360)), None, None))
-                .add_level(Level::new(1, Start::new(1), NumberFormat::new("decimal"), LevelText::new("%2."), LevelJc::new("left"))
-                    .indent(Some(1440), Some(SpecialIndentType::Hanging(360)), None, None))
-                .add_level(Level::new(2, Start::new(1), NumberFormat::new("decimal"), LevelText::new("%3."), LevelJc::new("left"))
-                    .indent(Some(2160), Some(SpecialIndentType::Hanging(360)), None, None))
+                .add_level(
+                    Level::new(
+                        0,
+                        Start::new(1),
+                        NumberFormat::new("decimal"),
+                        LevelText::new("%1."),
+                        LevelJc::new("left"),
+                    )
+                    .indent(
+                        Some(720),
+                        Some(SpecialIndentType::Hanging(360)),
+                        None,
+                        None,
+                    ),
+                )
+                .add_level(
+                    Level::new(
+                        1,
+                        Start::new(1),
+                        NumberFormat::new("decimal"),
+                        LevelText::new("%2."),
+                        LevelJc::new("left"),
+                    )
+                    .indent(
+                        Some(1440),
+                        Some(SpecialIndentType::Hanging(360)),
+                        None,
+                        None,
+                    ),
+                )
+                .add_level(
+                    Level::new(
+                        2,
+                        Start::new(1),
+                        NumberFormat::new("decimal"),
+                        LevelText::new("%3."),
+                        LevelJc::new("left"),
+                    )
+                    .indent(
+                        Some(2160),
+                        Some(SpecialIndentType::Hanging(360)),
+                        None,
+                        None,
+                    ),
+                ),
         )
         .add_numbering(Numbering::new(2, 2));
 
@@ -64,34 +183,31 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
         doc = doc.add_paragraph(
             Paragraph::new()
                 .align(AlignmentType::Center)
-                .add_run(Run::new().size(48).bold().add_text(&config.title))
+                .add_run(Run::new().size(48).bold().add_text(&config.title)),
         );
         doc = doc.add_paragraph(Paragraph::new()); // blank line
     }
-    
+
     if !config.author.is_empty() {
         doc = doc.add_paragraph(
             Paragraph::new()
                 .align(AlignmentType::Center)
-                .add_run(Run::new().size(28).add_text(&config.author))
+                .add_run(Run::new().size(28).add_text(&config.author)),
         );
     }
-    
+
     if !config.date.is_empty() {
         doc = doc.add_paragraph(
             Paragraph::new()
                 .align(AlignmentType::Center)
-                .add_run(Run::new().size(22).add_text(&config.date))
+                .add_run(Run::new().size(22).add_text(&config.date)),
         );
         doc = doc.add_paragraph(Paragraph::new()); // blank line
     }
-    
+
     // Page Break after Title Page to physically drop onto Page 2
     if !config.title.is_empty() {
-        doc = doc.add_paragraph(
-            Paragraph::new()
-                .add_run(Run::new().add_break(BreakType::Page))
-        );
+        doc = doc.add_paragraph(Paragraph::new().add_run(Run::new().add_break(BreakType::Page)));
     }
 
     let mut current_paragraph = Paragraph::new();
@@ -108,8 +224,9 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                 // Match <w:comment ...> opening tag + first <w:t>...</w:t> in the block.
                 // Attribute order in source comments.xml is w:id then w:author then w:date.
                 let cmeta_re = regex::Regex::new(
-                    r#"(?s)<w:comment\s[^>]*?w:id="([^"]+)"[^>]*?>.*?<w:t[^>]*>([^<]*)</w:t>"#
-                ).unwrap();
+                    r#"(?s)<w:comment\s[^>]*?w:id="([^"]+)"[^>]*?>.*?<w:t[^>]*>([^<]*)</w:t>"#,
+                )
+                .unwrap();
                 for cap in cmeta_re.captures_iter(&cxml) {
                     let id: usize = cap[1].trim().parse().unwrap_or(0);
                     let text_norm = cap[2].trim().to_ascii_lowercase();
@@ -138,7 +255,72 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
         margin_top_twips,
         margin_bottom_twips,
     );
-    
+
+    // Extract Footnotes in first pass before main loop
+    let mut footnote_map: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
+    let mut footnote_counter: usize = 1;
+    for event in &events {
+        if let Event::Start(Tag::FootnoteDefinition(label)) = event {
+            footnote_map.insert(label.to_string(), footnote_counter);
+            footnote_counter += 1;
+        }
+    }
+
+    // Two-pass footnote resolution:
+    // Pass 1 – scan the event slice, collect paragraph content for each
+    //          FootnoteDefinition keyed by the numeric id from footnote_map.
+    //          This must run before the consuming main loop.
+    let mut footnote_content: std::collections::HashMap<usize, Vec<Paragraph>> =
+        std::collections::HashMap::new();
+    {
+        let mut scan_iter = events.iter().peekable();
+        while let Some(ev) = scan_iter.next() {
+            if let Event::Start(Tag::FootnoteDefinition(label)) = ev {
+                let fn_id = footnote_map.get(label.as_ref()).copied().unwrap_or(0);
+                if fn_id == 0 {
+                    continue;
+                }
+                let mut fn_paragraphs: Vec<Paragraph> = Vec::new();
+                let mut fn_paragraph = Paragraph::new();
+                let mut fn_has_runs = false;
+                for inner in scan_iter.by_ref() {
+                    match inner {
+                        Event::End(TagEnd::FootnoteDefinition) => break,
+                        Event::End(TagEnd::Paragraph) => {
+                            if fn_has_runs {
+                                fn_paragraphs
+                                    .push(std::mem::replace(&mut fn_paragraph, Paragraph::new()));
+                                fn_has_runs = false;
+                            }
+                        }
+                        Event::Text(t) => {
+                            fn_paragraph = fn_paragraph.add_run(Run::new().add_text(t.to_string()));
+                            fn_has_runs = true;
+                        }
+                        Event::Code(t) => {
+                            fn_paragraph = fn_paragraph.add_run(
+                                Run::new()
+                                    .fonts(RunFonts::new().ascii("Consolas"))
+                                    .add_text(t.to_string()),
+                            );
+                            fn_has_runs = true;
+                        }
+                        Event::Start(Tag::Strong)
+                        | Event::End(TagEnd::Strong)
+                        | Event::Start(Tag::Emphasis)
+                        | Event::End(TagEnd::Emphasis) => {}
+                        _ => {}
+                    }
+                }
+                if fn_has_runs {
+                    fn_paragraphs.push(fn_paragraph);
+                }
+                footnote_content.insert(fn_id, fn_paragraphs);
+            }
+        }
+    }
+
     // Process markdown token stream into DOCX elements
     let mut event_iter = events.into_iter();
     while let Some(event) = event_iter.next() {
@@ -156,7 +338,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                 let mut current_tc = TableCell::new();
                 let mut current_cell_p = Paragraph::new();
                 let mut cell_index = 0;
-                
+
                 let mut cell_grid_spans: Vec<usize> = Vec::new();
                 let mut current_cell_is_colspan = false;
 
@@ -169,7 +351,8 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                             cell_index = 0;
                         }
                         Event::End(TagEnd::TableRow) | Event::End(TagEnd::TableHead) => {
-                            for (cell, span) in current_cells.iter_mut().zip(cell_grid_spans.iter()) {
+                            for (cell, span) in current_cells.iter_mut().zip(cell_grid_spans.iter())
+                            {
                                 if *span > 1 {
                                     *cell = cell.clone().grid_span(*span);
                                 }
@@ -183,7 +366,8 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                             if cell_index < aligns.len() {
                                 match aligns[cell_index] {
                                     pulldown_cmark::Alignment::Center => {
-                                        current_cell_p = current_cell_p.align(AlignmentType::Center);
+                                        current_cell_p =
+                                            current_cell_p.align(AlignmentType::Center);
                                     }
                                     pulldown_cmark::Alignment::Right => {
                                         current_cell_p = current_cell_p.align(AlignmentType::Right);
@@ -194,8 +378,12 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                         }
                         Event::End(TagEnd::TableCell) => {
                             if !current_cell_is_colspan {
-                                current_tc = current_tc.add_paragraph(std::mem::replace(&mut current_cell_p, Paragraph::new()));
-                                current_cells.push(std::mem::replace(&mut current_tc, TableCell::new()));
+                                current_tc = current_tc.add_paragraph(std::mem::replace(
+                                    &mut current_cell_p,
+                                    Paragraph::new(),
+                                ));
+                                current_cells
+                                    .push(std::mem::replace(&mut current_tc, TableCell::new()));
                                 cell_grid_spans.push(1);
                             }
                             cell_index += 1;
@@ -211,13 +399,29 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                                         }
                                         continue;
                                     } else if tlow.contains("<!-- bg_color:") {
-                                        let bg = tlow.split("<!-- bg_color:").nth(1).unwrap_or("").split("-->").next().unwrap_or("").trim().to_uppercase();
+                                        let bg = tlow
+                                            .split("<!-- bg_color:")
+                                            .nth(1)
+                                            .unwrap_or("")
+                                            .split("-->")
+                                            .next()
+                                            .unwrap_or("")
+                                            .trim()
+                                            .to_uppercase();
                                         if !bg.is_empty() {
-                                            current_tc = current_tc.shading(docx_rs::Shading::new().fill(bg).shd_type(docx_rs::ShdType::Clear).color("auto"));
+                                            current_tc = current_tc.shading(
+                                                docx_rs::Shading::new()
+                                                    .fill(bg)
+                                                    .shd_type(docx_rs::ShdType::Clear)
+                                                    .color("auto"),
+                                            );
                                         }
                                         continue;
                                     } else if tlow.contains("<!-- p_br -->") {
-                                        current_tc = current_tc.add_paragraph(std::mem::replace(&mut current_cell_p, Paragraph::new()));
+                                        current_tc = current_tc.add_paragraph(std::mem::replace(
+                                            &mut current_cell_p,
+                                            Paragraph::new(),
+                                        ));
                                         continue;
                                     }
                                     tlow.starts_with("<table") && tlow.contains("nested")
@@ -233,79 +437,211 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                                 let mut in_td = false;
                                 let mut n_is_bold = false;
                                 let mut mark_stack = Vec::new();
-                                
+
                                 while let Some(ev_n) = event_iter.by_ref().next() {
                                     let mut is_text = false;
                                     let html_str = match &ev_n {
                                         Event::Html(h) | Event::InlineHtml(h) => Some(h.as_ref()),
-                                        Event::Text(t) => { is_text = true; Some(t.as_ref()) },
-                                        Event::SoftBreak | Event::HardBreak => { n_p = n_p.add_run(Run::new().add_break(docx_rs::BreakType::TextWrapping)); continue; },
+                                        Event::Text(t) => {
+                                            is_text = true;
+                                            Some(t.as_ref())
+                                        }
+                                        Event::SoftBreak | Event::HardBreak => {
+                                            n_p = n_p.add_run(
+                                                Run::new()
+                                                    .add_break(docx_rs::BreakType::TextWrapping),
+                                            );
+                                            continue;
+                                        }
                                         _ => continue,
                                     };
                                     if let Some(s) = html_str {
                                         let seg_low = s.to_lowercase();
-                                        if !is_text && seg_low.starts_with("</table") { break;
-                                        } else if !is_text && seg_low.starts_with("<tr") { n_cells.clear();
-                                        } else if !is_text && seg_low.starts_with("</tr") { n_rows.push(TableRow::new(std::mem::take(&mut n_cells)));
-                                        } else if !is_text && seg_low.starts_with("<td") { in_td = true; n_tc = TableCell::new(); n_p = Paragraph::new();
-                                        } else if !is_text && seg_low.starts_with("</td") { in_td = false; n_cells.push(std::mem::replace(&mut n_tc, TableCell::new()).add_paragraph(std::mem::replace(&mut n_p, Paragraph::new())));
-                                        } else if !is_text && seg_low.starts_with("<!-- bg_color:") {
-                                            let bg = seg_low.split("<!-- bg_color:").nth(1).unwrap_or("").split("-->").next().unwrap_or("").trim().to_uppercase();
+                                        if !is_text && seg_low.starts_with("</table") {
+                                            break;
+                                        } else if !is_text && seg_low.starts_with("<tr") {
+                                            n_cells.clear();
+                                        } else if !is_text && seg_low.starts_with("</tr") {
+                                            n_rows
+                                                .push(TableRow::new(std::mem::take(&mut n_cells)));
+                                        } else if !is_text && seg_low.starts_with("<td") {
+                                            in_td = true;
+                                            n_tc = TableCell::new();
+                                            n_p = Paragraph::new();
+                                        } else if !is_text && seg_low.starts_with("</td") {
+                                            in_td = false;
+                                            n_cells.push(
+                                                std::mem::replace(&mut n_tc, TableCell::new())
+                                                    .add_paragraph(std::mem::replace(
+                                                        &mut n_p,
+                                                        Paragraph::new(),
+                                                    )),
+                                            );
+                                        } else if !is_text && seg_low.starts_with("<!-- bg_color:")
+                                        {
+                                            let bg = seg_low
+                                                .split("<!-- bg_color:")
+                                                .nth(1)
+                                                .unwrap_or("")
+                                                .split("-->")
+                                                .next()
+                                                .unwrap_or("")
+                                                .trim()
+                                                .to_uppercase();
                                             if !bg.is_empty() {
-                                                n_tc = n_tc.shading(docx_rs::Shading::new().fill(bg).shd_type(docx_rs::ShdType::Clear).color("auto"));
+                                                n_tc = n_tc.shading(
+                                                    docx_rs::Shading::new()
+                                                        .fill(bg)
+                                                        .shd_type(docx_rs::ShdType::Clear)
+                                                        .color("auto"),
+                                                );
                                             }
                                         } else if !is_text && seg_low.starts_with("<!-- colspan:") {
-                                            let span = seg_low.split("<!-- colspan:").nth(1).unwrap_or("").split("-->").next().unwrap_or("").trim().parse().unwrap_or(1);
+                                            let span = seg_low
+                                                .split("<!-- colspan:")
+                                                .nth(1)
+                                                .unwrap_or("")
+                                                .split("-->")
+                                                .next()
+                                                .unwrap_or("")
+                                                .trim()
+                                                .parse()
+                                                .unwrap_or(1);
                                             if span > 1 {
                                                 n_tc = n_tc.grid_span(span);
                                             }
-                                        } else if !is_text && seg_low.starts_with("<mark") && seg_low.contains("comment") {
+                                        } else if !is_text
+                                            && seg_low.starts_with("<mark")
+                                            && seg_low.contains("comment")
+                                        {
                                             mark_stack.push("comment");
-                                            let author = crate::translation::elements::extract_attr(s, "data-author").unwrap_or_default();
-                                            let content = crate::translation::elements::extract_attr(s, "data-content").unwrap_or_default();
-                                            let id = text_state.comment_id_counter; text_state.comment_id_counter += 1; text_state.active_comment_id = Some(id);
-                                            let comment = Comment::new(id).author(author).add_paragraph(Paragraph::new().add_run(Run::new().add_text(content)));
+                                            let author =
+                                                crate::translation::elements::extract_attr(
+                                                    s,
+                                                    "data-author",
+                                                )
+                                                .unwrap_or_default();
+                                            let content =
+                                                crate::translation::elements::extract_attr(
+                                                    s,
+                                                    "data-content",
+                                                )
+                                                .unwrap_or_default();
+                                            let id = text_state.comment_id_counter;
+                                            text_state.comment_id_counter += 1;
+                                            text_state.active_comment_id = Some(id);
+                                            let comment =
+                                                Comment::new(id).author(author).add_paragraph(
+                                                    Paragraph::new()
+                                                        .add_run(Run::new().add_text(content)),
+                                                );
                                             n_p = n_p.add_comment_start(comment);
-                                        } else if !is_text && seg_low.starts_with("<mark") && seg_low.contains("align-center") {
+                                        } else if !is_text
+                                            && seg_low.starts_with("<mark")
+                                            && seg_low.contains("align-center")
+                                        {
                                             mark_stack.push("align");
+                                            n_p = n_p.align(AlignmentType::Center);
+                                        } else if !is_text
+                                            && seg_low.starts_with("<div")
+                                            && (seg_low.contains("align=\"center\"")
+                                                || seg_low.contains("text-align: center")
+                                                || seg_low.contains("text-align:center"))
+                                        {
                                             n_p = n_p.align(AlignmentType::Center);
                                         } else if !is_text && seg_low.starts_with("</mark") {
                                             if let Some(m) = mark_stack.pop() {
                                                 if m == "comment" {
-                                                    if let Some(id) = text_state.active_comment_id.take() { n_p = n_p.add_comment_end(id); }
+                                                    if let Some(id) =
+                                                        text_state.active_comment_id.take()
+                                                    {
+                                                        n_p = n_p.add_comment_end(id);
+                                                    }
                                                 }
                                             }
-                                        } else if !is_text && seg_low.starts_with("<strong") { n_is_bold = true;
-                                        } else if !is_text && seg_low.starts_with("</strong") { n_is_bold = false;
-                                        } else if !is_text && seg_low.starts_with("<u") { text_state.is_underline = true;
-                                        } else if !is_text && seg_low.starts_with("</u") { text_state.is_underline = false;
+                                        } else if !is_text && seg_low.starts_with("<strong") {
+                                            n_is_bold = true;
+                                        } else if !is_text && seg_low.starts_with("</strong") {
+                                            n_is_bold = false;
+                                        } else if !is_text && seg_low.starts_with("<u") {
+                                            text_state.is_underline = true;
+                                        } else if !is_text && seg_low.starts_with("</u") {
+                                            text_state.is_underline = false;
                                         } else if !is_text && seg_low.starts_with("<ins") {
                                             text_state.is_ins = true;
-                                            text_state.revision_ins_author = crate::translation::elements::extract_attr(s, "data-author");
-                                            text_state.revision_ins_date = crate::translation::elements::extract_attr(s, "data-date");
-                                        } else if !is_text && seg_low.starts_with("</ins") { text_state.is_ins = false;
+                                            text_state.revision_ins_author =
+                                                crate::translation::elements::extract_attr(
+                                                    s,
+                                                    "data-author",
+                                                );
+                                            text_state.revision_ins_date =
+                                                crate::translation::elements::extract_attr(
+                                                    s,
+                                                    "data-date",
+                                                );
+                                        } else if !is_text && seg_low.starts_with("</ins") {
+                                            text_state.is_ins = false;
                                         } else if !is_text && seg_low.starts_with("<del") {
                                             text_state.is_del = true;
-                                            text_state.revision_del_author = crate::translation::elements::extract_attr(s, "data-author");
-                                            text_state.revision_del_date = crate::translation::elements::extract_attr(s, "data-date");
-                                        } else if !is_text && seg_low.starts_with("</del") { text_state.is_del = false;
+                                            text_state.revision_del_author =
+                                                crate::translation::elements::extract_attr(
+                                                    s,
+                                                    "data-author",
+                                                );
+                                            text_state.revision_del_date =
+                                                crate::translation::elements::extract_attr(
+                                                    s,
+                                                    "data-date",
+                                                );
+                                        } else if !is_text && seg_low.starts_with("</del") {
+                                            text_state.is_del = false;
                                         } else if !is_text && seg_low.starts_with("<br") {
-                                            n_p = n_p.add_run(Run::new().add_break(docx_rs::BreakType::TextWrapping));
+                                            n_p = n_p.add_run(
+                                                Run::new()
+                                                    .add_break(docx_rs::BreakType::TextWrapping),
+                                            );
                                         } else if !is_text && seg_low.starts_with("<img") {
-                                            let src = crate::translation::elements::extract_attr(s, "src").unwrap_or_default();
-                                            let alt = crate::translation::elements::extract_attr(s, "alt").unwrap_or_default();
-                                            let run = resolve_image_to_run(&src, &alt, input_dir, max_figure_width_px, max_figure_height_px);
-                                            n_tc = n_tc.add_paragraph(std::mem::replace(&mut n_p, Paragraph::new()));
-                                            n_tc = n_tc.add_paragraph(Paragraph::new().align(AlignmentType::Center).add_run(run));
+                                            let src = crate::translation::elements::extract_attr(
+                                                s, "src",
+                                            )
+                                            .unwrap_or_default();
+                                            let alt = crate::translation::elements::extract_attr(
+                                                s, "alt",
+                                            )
+                                            .unwrap_or_default();
+                                            let run = resolve_image_to_run(
+                                                &src,
+                                                &alt,
+                                                input_dir,
+                                                max_figure_width_px,
+                                                max_figure_height_px,
+                                            );
+                                            n_tc = n_tc.add_paragraph(std::mem::replace(
+                                                &mut n_p,
+                                                Paragraph::new(),
+                                            ));
+                                            n_tc = n_tc.add_paragraph(
+                                                Paragraph::new()
+                                                    .align(AlignmentType::Center)
+                                                    .add_run(run),
+                                            );
                                         } else if is_text && in_td {
                                             let mut run = Run::new().add_text(s);
-                                            if n_is_bold { run = run.bold(); }
-                                            if text_state.is_underline { run = run.underline("single"); }
-                                            if text_state.is_highlight { run = run.highlight("yellow"); }
-                                            
+                                            if n_is_bold {
+                                                run = run.bold();
+                                            }
+                                            if text_state.is_underline {
+                                                run = run.underline("single");
+                                            }
+                                            if text_state.is_highlight {
+                                                run = run.highlight("yellow");
+                                            }
+
                                             if text_state.is_del {
                                                 let mut del = docx_rs::Delete::new().add_run(run);
-                                                if let Some(author) = &text_state.revision_del_author {
+                                                if let Some(author) =
+                                                    &text_state.revision_del_author
+                                                {
                                                     del = del.author(author);
                                                 }
                                                 if let Some(date) = &text_state.revision_del_date {
@@ -314,7 +650,9 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                                                 n_p = n_p.add_delete(del);
                                             } else if text_state.is_ins {
                                                 let mut ins = docx_rs::Insert::new(run);
-                                                if let Some(author) = &text_state.revision_ins_author {
+                                                if let Some(author) =
+                                                    &text_state.revision_ins_author
+                                                {
                                                     ins = ins.author(author);
                                                 }
                                                 if let Some(date) = &text_state.revision_ins_date {
@@ -327,17 +665,34 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                                         }
                                     }
                                 }
-                                let n_cols = n_rows.first().map(|r| r.cells.len()).unwrap_or(1).max(1);
+                                let n_cols =
+                                    n_rows.first().map(|r| r.cells.len()).unwrap_or(1).max(1);
                                 let grid: Vec<usize> = (0..n_cols).map(|_| 9000 / n_cols).collect();
-                                let nested_tbl = Table::new(std::mem::take(&mut n_rows)).layout(TableLayoutType::Autofit).width(5000, WidthType::Pct).set_grid(grid);
-                                current_tc = current_tc.add_paragraph(std::mem::replace(&mut current_cell_p, Paragraph::new()));
+                                let nested_tbl = Table::new(std::mem::take(&mut n_rows))
+                                    .layout(TableLayoutType::Autofit)
+                                    .width(5000, WidthType::Pct)
+                                    .set_grid(grid);
+                                current_tc = current_tc.add_paragraph(std::mem::replace(
+                                    &mut current_cell_p,
+                                    Paragraph::new(),
+                                ));
                                 current_tc = current_tc.add_table(nested_tbl);
                                 current_cell_p = Paragraph::new();
                             } else {
-                                handle_event(ev, Container::Doc(&mut doc), &mut current_cell_p, &mut text_state, in_blockquote, config, None);
+                                handle_event(
+                                    ev,
+                                    Container::Doc(&mut doc),
+                                    &mut current_cell_p,
+                                    &mut text_state,
+                                    in_blockquote,
+                                    config,
+                                    None,
+                                );
                             }
                         }
-                        Event::Start(Tag::Image { dest_url, title, .. }) => {
+                        Event::Start(Tag::Image {
+                            dest_url, title, ..
+                        }) => {
                             let mut alt_text = String::new();
                             loop {
                                 match event_iter.next() {
@@ -346,16 +701,41 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                                     _ => {}
                                 }
                             }
-                            let caption = if !title.is_empty() { title.to_string() } else { alt_text };
-                            let run = resolve_image_to_run(dest_url.as_ref(), &caption, input_dir, max_figure_width_px, max_figure_height_px);
-                            current_tc = current_tc.add_paragraph(std::mem::replace(&mut current_cell_p, Paragraph::new()));
-                            current_tc = current_tc.add_paragraph(Paragraph::new().align(AlignmentType::Center).add_run(run));
+                            let caption = if !title.is_empty() {
+                                title.to_string()
+                            } else {
+                                alt_text
+                            };
+                            let run = resolve_image_to_run(
+                                dest_url.as_ref(),
+                                &caption,
+                                input_dir,
+                                max_figure_width_px,
+                                max_figure_height_px,
+                            );
+                            current_tc = current_tc.add_paragraph(std::mem::replace(
+                                &mut current_cell_p,
+                                Paragraph::new(),
+                            ));
+                            current_tc = current_tc.add_paragraph(
+                                Paragraph::new().align(AlignmentType::Center).add_run(run),
+                            );
                         }
-                        _ => handle_event(te, Container::Doc(&mut doc), &mut current_cell_p, &mut text_state, in_blockquote, config, None),
+                        _ => handle_event(
+                            te,
+                            Container::Doc(&mut doc),
+                            &mut current_cell_p,
+                            &mut text_state,
+                            in_blockquote,
+                            config,
+                            None,
+                        ),
                     }
                 }
-                
-                let table = Table::new(std::mem::take(&mut rows)).layout(TableLayoutType::Autofit).width(5000, WidthType::Pct);
+
+                let table = Table::new(std::mem::take(&mut rows))
+                    .layout(TableLayoutType::Autofit)
+                    .width(5000, WidthType::Pct);
                 doc = doc.add_table(table);
                 continue;
             }
@@ -384,24 +764,24 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
             }
             Event::End(TagEnd::CodeBlock) if in_mermaid_block => {
                 in_mermaid_block = false;
-                
+
                 // Parse, calculate graph topology, and solve coordinates
                 let ast = match parser::parse(&current_mermaid_source) {
                     Ok(a) => a,
                     Err(_) => {
                         // Skip corrupted blocks
                         doc = doc.add_paragraph(
-                            Paragraph::new().add_run(Run::new().add_text(&current_mermaid_source))
+                            Paragraph::new().add_run(Run::new().add_text(&current_mermaid_source)),
                         );
                         continue;
                     }
                 };
-                
+
                 let directed_graph = directed_graph::ast_to_graph(ast);
                 let mut ranked_graph = rank_assignment::assign_ranks(&directed_graph);
                 crossing_reduction::minimize_crossings(&mut ranked_graph);
                 let spaced_graph = coordinate_assign::assign_coordinates(&ranked_graph);
-                
+
                 // Render the SpacedGraph to PNG via marksmen_render
                 let png_result = marksmen_render::mermaid::render_graph_to_svg(&spaced_graph);
                 let png_result = marksmen_render::svg_bytes_to_png(png_result.as_bytes());
@@ -414,16 +794,21 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                 }
 
                 if let Some((png_bytes, width, height)) = png_result {
-                    let (width, height) = fit_image_to_bounds(width, height, max_figure_width_px, max_figure_height_px);
+                    let (width, height) = fit_image_to_bounds(
+                        width,
+                        height,
+                        max_figure_width_px,
+                        max_figure_height_px,
+                    );
                     let pic = Pic::new_with_dimensions(png_bytes, width, height);
                     let run = Run::new().add_image(pic);
-                    doc = doc.add_paragraph(
-                        Paragraph::new()
-                            .align(AlignmentType::Center)
-                            .add_run(run)
-                    );
+                    doc = doc
+                        .add_paragraph(Paragraph::new().align(AlignmentType::Center).add_run(run));
                     // Inject metadata invisibly so `marksmen-docx-read` can restore the AST.
-                    let mut meta_run = Run::new().vanish().add_text("```mermaid").add_break(BreakType::TextWrapping);
+                    let mut meta_run = Run::new()
+                        .vanish()
+                        .add_text("```mermaid")
+                        .add_break(BreakType::TextWrapping);
                     for line in current_mermaid_source.lines() {
                         meta_run = meta_run.add_text(line).add_break(BreakType::TextWrapping);
                     }
@@ -431,7 +816,8 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                     doc = doc.add_paragraph(Paragraph::new().add_run(meta_run));
                 } else {
                     // Fallback: raw mermaid source as code text
-                    let run = Run::new().fonts(RunFonts::new().ascii("Consolas"))
+                    let run = Run::new()
+                        .fonts(RunFonts::new().ascii("Consolas"))
                         .add_text(format!("```mermaid\n{}\n```", &current_mermaid_source));
                     doc = doc.add_paragraph(Paragraph::new().add_run(run));
                 }
@@ -467,17 +853,21 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
             }
             Event::InlineMath(latex) => {
                 if let Some((png, w, h)) = render_math_to_png(&latex, false) {
-                    let (w, h) = fit_image_to_bounds(w, h, max_figure_width_px, max_figure_height_px / 4);
-                    current_paragraph = current_paragraph.add_run(
-                        Run::new().add_image(Pic::new_with_dimensions(png, w, h))
-                    );
+                    let (w, h) =
+                        fit_image_to_bounds(w, h, max_figure_width_px, max_figure_height_px / 4);
+                    current_paragraph = current_paragraph
+                        .add_run(Run::new().add_image(Pic::new_with_dimensions(png, w, h)));
                 } else {
                     // Fallback: italic Cambria Math text
                     current_paragraph = current_paragraph.add_run(
                         Run::new()
                             .italic()
-                            .fonts(RunFonts::new().ascii("Cambria Math").hi_ansi("Cambria Math"))
-                            .add_text(format!(" {} ", &latex))
+                            .fonts(
+                                RunFonts::new()
+                                    .ascii("Cambria Math")
+                                    .hi_ansi("Cambria Math"),
+                            )
+                            .add_text(format!(" {} ", &latex)),
                     );
                 }
                 continue;
@@ -490,28 +880,33 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                     text_state.has_runs = false;
                 }
                 if let Some((png, w, h)) = render_math_to_png(&latex, true) {
-                    let (w, h) = fit_image_to_bounds(w, h, max_figure_width_px, max_figure_height_px / 2);
+                    let (w, h) =
+                        fit_image_to_bounds(w, h, max_figure_width_px, max_figure_height_px / 2);
                     doc = doc.add_paragraph(
                         Paragraph::new()
                             .align(AlignmentType::Center)
-                            .add_run(Run::new().add_image(Pic::new_with_dimensions(png, w, h)))
+                            .add_run(Run::new().add_image(Pic::new_with_dimensions(png, w, h))),
                     );
                 } else {
                     // Fallback: centred italic paragraph
                     doc = doc.add_paragraph(
-                        Paragraph::new()
-                            .align(AlignmentType::Center)
-                            .add_run(
-                                Run::new()
-                                    .italic()
-                                    .fonts(RunFonts::new().ascii("Cambria Math").hi_ansi("Cambria Math"))
-                                    .add_text(latex.to_string())
-                            )
+                        Paragraph::new().align(AlignmentType::Center).add_run(
+                            Run::new()
+                                .italic()
+                                .fonts(
+                                    RunFonts::new()
+                                        .ascii("Cambria Math")
+                                        .hi_ansi("Cambria Math"),
+                                )
+                                .add_text(latex.to_string()),
+                        ),
                     );
                 }
                 continue;
             }
-            Event::Start(Tag::Image { dest_url, title, .. }) => {
+            Event::Start(Tag::Image {
+                dest_url, title, ..
+            }) => {
                 // Consume all inline events up to End(Image), collecting alt text.
                 // This prevents alt-text Text events from leaking into the paragraph stream.
                 let mut alt_text = String::new();
@@ -537,7 +932,13 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                 }
 
                 let img_path_str = dest_url.as_ref();
-                let run = resolve_image_to_run(img_path_str, &caption, input_dir, max_figure_width_px, max_figure_height_px);
+                let run = resolve_image_to_run(
+                    img_path_str,
+                    &caption,
+                    input_dir,
+                    max_figure_width_px,
+                    max_figure_height_px,
+                );
                 doc = doc.add_paragraph(Paragraph::new().align(AlignmentType::Center).add_run(run));
                 continue;
             }
@@ -558,7 +959,8 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
             Event::Start(Tag::Item) => {
                 // Flush any pending paragraph before starting a list item paragraph.
                 if text_state.has_runs {
-                    doc = doc.add_paragraph(std::mem::replace(&mut current_paragraph, Paragraph::new()));
+                    doc = doc
+                        .add_paragraph(std::mem::replace(&mut current_paragraph, Paragraph::new()));
                     text_state.has_runs = false;
                 }
                 let depth = list_ordered_stack.len().saturating_sub(1) as usize;
@@ -572,8 +974,45 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                 doc = doc.add_paragraph(p);
                 text_state.has_runs = false;
             }
+            // --- Native DOCX Footnote Reference (inline superscript anchor) ---
+            Event::FootnoteReference(label) => {
+                if let Some(&fn_id) = footnote_map.get(label.as_ref()) {
+                    // Embed definition content directly so collect_footnotes() can
+                    // extract it via FootnoteReference -> Footnote conversion.
+                    let content = footnote_content.get(&fn_id).cloned().unwrap_or_default();
+                    let footnote = Footnote { id: fn_id, content };
+                    let fn_run = Run::new().add_footnote_reference(footnote);
+                    current_paragraph = current_paragraph.add_run(fn_run);
+                    text_state.has_runs = true;
+                } else {
+                    // Fallback: superscript text when label has no definition.
+                    let mut run = Run::new().add_text(format!("[^{}]", label));
+                    run.run_property = run.run_property.vert_align(VertAlignType::SuperScript);
+                    current_paragraph = current_paragraph.add_run(run);
+                    text_state.has_runs = true;
+                }
+            }
+            // FootnoteDefinition bodies were consumed in the pre-pass; skip here.
+            Event::Start(Tag::FootnoteDefinition(_)) => {
+                // Drain inner events until the matching end tag.
+                loop {
+                    match event_iter.next() {
+                        None | Some(Event::End(TagEnd::FootnoteDefinition)) => break,
+                        _ => {}
+                    }
+                }
+            }
+            Event::End(TagEnd::FootnoteDefinition) => {}
             _ => {
-                handle_event(event, Container::Doc(&mut doc), &mut current_paragraph, &mut text_state, in_blockquote, config, None);
+                handle_event(
+                    event,
+                    Container::Doc(&mut doc),
+                    &mut current_paragraph,
+                    &mut text_state,
+                    in_blockquote,
+                    config,
+                    None,
+                );
             }
         }
     }
@@ -593,12 +1032,11 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
     // header/footer, comment metadata) are reinstated verbatim from the source.
     // This is the canonical approach to lossless roundtrip: the intermediate
     // format carries semantic content; the source ZIP carries structural assets.
-    let mut source_archive = source_docx.and_then(|b| {
-        zip::ZipArchive::new(std::io::Cursor::new(b)).ok()
-    });
+    let mut source_archive =
+        source_docx.and_then(|b| zip::ZipArchive::new(std::io::Cursor::new(b)).ok());
     // By omitting the few core files authored by marksmen, we effectively
-    // blanket-passthrough all advanced Office payload components (e.g. 
-    // multiple headers, footers, comments, glossaries, endnotes, themes, 
+    // blanket-passthrough all advanced Office payload components (e.g.
+    // multiple headers, footers, comments, glossaries, endnotes, themes,
     // extensions, docProps, etc.) to guarantee identical structural fidelity.
 
     // Collect verbatim passthrough bytes from source for each candidate.
@@ -622,7 +1060,10 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
         let file_count = sa.len();
         for idx in 0..file_count {
             let (name, _cm, raw) = {
-                let mut f = match sa.by_index(idx) { Ok(f) => f, Err(_) => continue };
+                let mut f = match sa.by_index(idx) {
+                    Ok(f) => f,
+                    Err(_) => continue,
+                };
                 let nm = f.name().to_string();
                 let compression = f.compression();
                 let mut buf = Vec::new();
@@ -638,7 +1079,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                 || name == "word/comments.xml"
                 || name == "word/commentsExtended.xml"
                 || name.starts_with("word/media/") // allow docx-rs to re-pack media
-                || name.ends_with('/');             // implicitly handled directories
+                || name.ends_with('/'); // implicitly handled directories
 
             if !is_core_file {
                 passthrough_map.insert(name.clone(), raw.clone());
@@ -647,7 +1088,8 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
             // ── Track source section formatting (margins, header/footer refs) ─
             if name == "word/document.xml" {
                 if let Ok(doc_xml) = String::from_utf8(raw.clone()) {
-                    let sect_re = regex::Regex::new(r#"(?s)<w:sectPr\b[^>]*>.*?</w:sectPr>"#).unwrap();
+                    let sect_re =
+                        regex::Regex::new(r#"(?s)<w:sectPr\b[^>]*>.*?</w:sectPr>"#).unwrap();
                     if let Some(mat) = sect_re.find(&doc_xml) {
                         source_sect_pr = Some(mat.as_str().to_string());
                     }
@@ -670,7 +1112,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                     let rel_re = regex::Regex::new(r#"(?s)<Relationship\b[^>]*/>"#).unwrap();
                     for cap in rel_re.find_iter(&rels_xml) {
                         let entry = cap.as_str();
-                        // Omit the core structural relations minted cleanly by docx-rs, 
+                        // Omit the core structural relations minted cleanly by docx-rs,
                         // harvest everything else (headers, footers, glossaries, notes).
                         if !entry.contains("Target=\"styles.xml\"")
                             && !entry.contains("Target=\"numbering.xml\"")
@@ -691,14 +1133,18 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
             if name == "word/comments.xml" {
                 if let Ok(cxml) = String::from_utf8(raw) {
                     let cmeta_re = regex::Regex::new(
-                        r#"(?s)<w:comment\s[^>]*?w:id="([^"]+)"[^>]*?>.*?<w:t[^>]*>([^<]*)</w:t>"#
-                    ).unwrap();
+                        r#"(?s)<w:comment\s[^>]*?w:id="([^"]+)"[^>]*?>.*?<w:t[^>]*>([^<]*)</w:t>"#,
+                    )
+                    .unwrap();
                     for cap in cmeta_re.captures_iter(&cxml) {
                         let id_str = cap[1].trim().to_string();
                         let text_norm = cap[2].trim().to_ascii_lowercase();
                         if let Ok(id_num) = id_str.parse::<usize>() {
                             if !text_norm.is_empty() {
-                                src_comment_meta.insert(text_norm, (id_str, String::new(), String::new(), String::new()));
+                                src_comment_meta.insert(
+                                    text_norm,
+                                    (id_str, String::new(), String::new(), String::new()),
+                                );
                                 // Also update the per-usize map used in text_state (already built before event loop)
                                 let _ = id_num;
                             }
@@ -777,10 +1223,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                         if let Some(pn_end) = pn_rest.find('"') {
                             let part = &pn_rest[..pn_end];
                             if !ct_str.contains(&format!("PartName=\"{}\"", part)) {
-                                ct_str = ct_str.replace(
-                                    "</Types>",
-                                    &format!("{}</Types>", entry),
-                                );
+                                ct_str = ct_str.replace("</Types>", &format!("{}</Types>", entry));
                             }
                         }
                     }
@@ -805,7 +1248,8 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                 let mut last = 0;
                 for mat in del_re.find_iter(&doc_str) {
                     rebuilt.push_str(&doc_str[last..mat.start()]);
-                    let fixed_del = mat.as_str()
+                    let fixed_del = mat
+                        .as_str()
                         .replace("<w:t>", "<w:delText xml:space=\"preserve\">")
                         .replace("<w:t ", "<w:delText ")
                         .replace("</w:t>", "</w:delText>");
@@ -813,7 +1257,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                     last = mat.end();
                 }
                 rebuilt.push_str(&doc_str[last..]);
-                
+
                 // Offset docx-rs generated r:id values to prevent collisions with source r:id values
                 let rid_re = regex::Regex::new(r#"r:(id|embed|link)="rId(\d+)""#).unwrap();
                 let mut offset_doc = String::new();
@@ -828,13 +1272,14 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config, input_dir: &Path, source
                 }
                 offset_doc.push_str(&rebuilt[d_last..]);
                 rebuilt = offset_doc;
-                
+
                 // ── Inject source <w:sectPr> to preserve header/footer refs and margins ──
                 if let Some(src_sect) = &source_sect_pr {
-                    let sect_re = regex::Regex::new(r#"(?s)<w:sectPr\b[^>]*>.*?</w:sectPr>"#).unwrap();
+                    let sect_re =
+                        regex::Regex::new(r#"(?s)<w:sectPr\b[^>]*>.*?</w:sectPr>"#).unwrap();
                     rebuilt = sect_re.replace(&rebuilt, src_sect.as_str()).to_string();
                 }
-                
+
                 zip_writer.start_file(&path, options)?;
                 std::io::Write::write_all(&mut zip_writer, rebuilt.as_bytes())?;
             } else {
@@ -923,8 +1368,6 @@ fn image_dimensions(data: &[u8]) -> Option<(u32, u32)> {
     None
 }
 
-
-
 fn parse_length_to_twips(input: &str) -> Option<u32> {
     let trimmed = input.trim().to_ascii_lowercase();
     let (value, unit) = trimmed
@@ -951,8 +1394,10 @@ fn figure_bounds_px(
     margin_top_twips: u32,
     margin_bottom_twips: u32,
 ) -> (u32, u32) {
-    let content_width_twips = page_width_twips.saturating_sub(margin_left_twips + margin_right_twips);
-    let content_height_twips = page_height_twips.saturating_sub(margin_top_twips + margin_bottom_twips);
+    let content_width_twips =
+        page_width_twips.saturating_sub(margin_left_twips + margin_right_twips);
+    let content_height_twips =
+        page_height_twips.saturating_sub(margin_top_twips + margin_bottom_twips);
 
     let max_width_px = twips_to_px(content_width_twips).max(320);
     // Keep figures visually aligned with PDF output and avoid page overflow in Word.
@@ -994,14 +1439,17 @@ fn resolve_image_to_run(
 
     let is_mmd = img_path_str.ends_with(".mmd");
     if is_mmd {
-        return match std::fs::read_to_string(&resolved).ok()
+        return match std::fs::read_to_string(&resolved)
+            .ok()
             .and_then(|src| render_mmd_to_png(&src))
         {
             Some((png, w, h)) => {
                 let (w, h) = fit_image_to_bounds(w, h, max_figure_width_px, max_figure_height_px);
                 Run::new().add_image(Pic::new_with_dimensions(png, w, h))
             }
-            None => Run::new().italic().add_text(format!("[Diagram: {}]", caption))
+            None => Run::new()
+                .italic()
+                .add_text(format!("[Diagram: {}]", caption)),
         };
     }
 
@@ -1013,19 +1461,19 @@ fn resolve_image_to_run(
         let (png_bytes, width, height) = if is_svg {
             match svg_bytes_to_png(&raw_bytes) {
                 Some(result) => result,
-                None => return Run::new().add_text(format!("![{}]({})", caption, img_path_str))
+                None => return Run::new().add_text(format!("![{}]({})", caption, img_path_str)),
             }
         } else {
             let (w, h) = image_dimensions(&raw_bytes).unwrap_or((640, 480));
             (raw_bytes, w, h)
         };
 
-        let (width, height) = fit_image_to_bounds(width, height, max_figure_width_px, max_figure_height_px);
+        let (width, height) =
+            fit_image_to_bounds(width, height, max_figure_width_px, max_figure_height_px);
         Run::new().add_image(Pic::new_with_dimensions(png_bytes, width, height))
     } else {
-        Run::new().italic().add_text(format!("[Missing image: {}]", img_path_str))
+        Run::new()
+            .italic()
+            .add_text(format!("[Missing image: {}]", img_path_str))
     }
 }
-
-
-

@@ -40,10 +40,16 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
     out.push_str("paginate: true\n");
     out.push_str("theme: default\n");
     if !config.title.is_empty() {
-        out.push_str(&format!("title: \"{}\"\n", config.title.replace('"', "\\\"")));
+        out.push_str(&format!(
+            "title: \"{}\"\n",
+            config.title.replace('"', "\\\"")
+        ));
     }
     if !config.author.is_empty() {
-        out.push_str(&format!("author: \"{}\"\n", config.author.replace('"', "\\\"")));
+        out.push_str(&format!(
+            "author: \"{}\"\n",
+            config.author.replace('"', "\\\"")
+        ));
     }
     if !config.date.is_empty() {
         out.push_str(&format!("date: \"{}\"\n", config.date.replace('"', "\\\"")));
@@ -67,7 +73,9 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
                 // H1 and H2 start a new Marp slide (headingDivider: 2 handles this
                 // at render time, but we also emit explicit `---` separators
                 // for readers that do not respect headingDivider).
-                if (*level == HeadingLevel::H1 || *level == HeadingLevel::H2) && state.heading_count > 0 {
+                if (*level == HeadingLevel::H1 || *level == HeadingLevel::H2)
+                    && state.heading_count > 0
+                {
                     out.push_str("\n---\n\n");
                 }
                 state.in_heading = true;
@@ -193,7 +201,9 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
             }
             Event::Start(Tag::Strikethrough) => state.strikethrough = true,
             Event::End(TagEnd::Strikethrough) => state.strikethrough = false,
-            Event::Start(Tag::Link { dest_url, title, .. }) => {
+            Event::Start(Tag::Link {
+                dest_url, title, ..
+            }) => {
                 state.link_url = dest_url.as_ref().to_string();
                 state.link_title = title.as_ref().to_string();
                 state.in_link = true;
@@ -209,7 +219,9 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
                 };
                 push_text(&mut state, &mut out, &link_md, false);
             }
-            Event::Start(Tag::Image { dest_url, title, .. }) => {
+            Event::Start(Tag::Image {
+                dest_url, title, ..
+            }) => {
                 state.image_url = dest_url.as_ref().to_string();
                 state.image_title = title.as_ref().to_string();
                 state.image_alt_buf.clear();
@@ -428,7 +440,10 @@ mod tests {
         let marp = convert(events, &Config::default()).unwrap();
         assert!(marp.starts_with("---\n"), "front matter missing");
         assert!(marp.contains("marp: true"), "marp directive missing");
-        assert!(marp.contains("paginate: true"), "paginate directive missing");
+        assert!(
+            marp.contains("paginate: true"),
+            "paginate directive missing"
+        );
     }
 
     #[test]
@@ -443,7 +458,11 @@ mod tests {
         // after_fm[1] = "\nmarp: true\n..."  (front matter body)
         // after_fm[2] = "\n\n# First\n..."
         // after_fm[3] = "\n\n# Second\n..."  (slide two)
-        assert!(after_fm.len() >= 4, "expected at least 4 `---` splits, got: {}", after_fm.len());
+        assert!(
+            after_fm.len() >= 4,
+            "expected at least 4 `---` splits, got: {}",
+            after_fm.len()
+        );
     }
 
     #[test]
@@ -455,7 +474,10 @@ mod tests {
         let body_start = marp.find("---\n\n").expect("no front matter");
         // Skip the FM sentinel.
         let after_fm = &marp[body_start + 5..];
-        assert!(after_fm.contains("---"), "rule separator not forwarded to marp output");
+        assert!(
+            after_fm.contains("---"),
+            "rule separator not forwarded to marp output"
+        );
     }
 
     #[test]

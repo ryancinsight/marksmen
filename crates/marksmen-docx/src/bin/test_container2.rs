@@ -7,7 +7,10 @@ pub enum Container<'a> {
 impl<'a> Container<'a> {
     pub fn add_paragraph(mut self, p: Paragraph) -> Self {
         match self {
-            Self::Header(ref mut h) => { **h = h.clone().add_paragraph(p); self }
+            Self::Header(ref mut h) => {
+                **h = h.clone().add_paragraph(p);
+                self
+            }
         }
     }
 }

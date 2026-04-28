@@ -378,7 +378,10 @@ A --> B
 </html>"#;
         let md = parse_xhtml(xhtml).unwrap();
         assert!(md.contains("## Section"), "heading must be restored");
-        assert!(md.contains("$x+y$"), "inline math fallback must be restored");
+        assert!(
+            md.contains("$x+y$"),
+            "inline math fallback must be restored"
+        );
         assert!(md.contains("$$\nz^2\n$$"), "display math must be restored");
         assert!(
             md.contains("```mermaid"),
@@ -424,8 +427,7 @@ A --> B
     /// Verifies that self-closing `<br />` is reconstructed as a newline.
     #[test]
     fn parses_self_closing_br_as_newline() {
-        let xhtml =
-            r#"<html xmlns="http://www.w3.org/1999/xhtml"><body><p>Line1<br />Line2</p></body></html>"#;
+        let xhtml = r#"<html xmlns="http://www.w3.org/1999/xhtml"><body><p>Line1<br />Line2</p></body></html>"#;
         let md = parse_xhtml(xhtml).unwrap();
         assert!(md.contains("Line1") && md.contains("Line2"));
     }

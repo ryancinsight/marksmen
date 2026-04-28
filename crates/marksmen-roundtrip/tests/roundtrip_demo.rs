@@ -67,7 +67,7 @@ fn strip_vectors_and_html(s: &str) -> String {
     let mut in_image_bracket = false;
     let mut in_image_paren = false;
     let mut chars = s.chars().peekable();
-    
+
     while let Some(c) = chars.next() {
         if c == '<' {
             in_tag = true;
@@ -78,7 +78,7 @@ fn strip_vectors_and_html(s: &str) -> String {
         } else if in_tag {
             continue;
         }
-        
+
         if c == '!' && chars.peek() == Some(&'[') {
             in_image_bracket = true;
             chars.next(); // Eat '['
@@ -97,7 +97,7 @@ fn strip_vectors_and_html(s: &str) -> String {
         } else if in_image_bracket || in_image_paren {
             continue;
         }
-        
+
         out.push(c);
     }
     out
@@ -123,28 +123,34 @@ fn normalize_whitespace(s: &str) -> String {
 #[test]
 fn test_docx_roundtrip_similarity() -> Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    
+
     // 1. Setup Source Text
     let demo_md = fs::read_to_string(root.join("../../demo.md"))?;
     // 2. Compile to DOCX natively
     let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
     let config = marksmen_core::Config::default();
     let events = marksmen_core::parsing::parser::parse(body);
-    
+
     // Provide a dummy path for image resolution
-    let docx_bytes = marksmen_docx::translation::document::convert(events, &config, &get_workspace_root(), None)?;
+    let docx_bytes = marksmen_docx::translation::document::convert(
+        events,
+        &config,
+        &get_workspace_root(),
+        None,
+    )?;
 
     // 3. Extract back to Markdown string
     let extracted_md = marksmen_docx_read::parse_docx(&docx_bytes, None)?;
     // 4. Mathematical Similarity Threshold
-    let normalized_source = normalize_whitespace(&strip_vectors_and_html(&strip_frontmatter(&demo_md)));
+    let normalized_source =
+        normalize_whitespace(&strip_vectors_and_html(&strip_frontmatter(&demo_md)));
     let normalized_extracted = normalize_whitespace(&strip_vectors_and_html(&extracted_md));
     std::fs::write("docx_norm_src.txt", &normalized_source).unwrap();
     std::fs::write("docx_norm_ext.txt", &normalized_extracted).unwrap();
-    
+
     let jw_sim = strsim::jaro_winkler(&normalized_source, &normalized_extracted);
     println!("DOCX Roundtrip Jaro-Winkler Similarity: {:.4}", jw_sim);
-    
+
     // The DOCX format has two known structural limitations that cap achievable similarity:
     //   1. Trailing-space stripping: OOXML <w:t> elements require xml:space="preserve" to
     //      retain significant whitespace; without it, XML processors strip leading/trailing
@@ -167,29 +173,31 @@ fn test_docx_roundtrip_similarity() -> Result<()> {
 #[test]
 fn test_odt_roundtrip_similarity() -> Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    
+
     // 1. Setup Source Text
     let demo_md = fs::read_to_string(root.join("../../demo.md"))?;
     // 2. Compile to ODT natively
     let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
     let config = marksmen_core::Config::default();
     let events = marksmen_core::parsing::parser::parse(body);
-    
+
     let odt_bytes = marksmen_odt::translate_and_render(&events, &config, root)?;
 
     // 3. Extract back to Markdown string
-    let extracted_md = marksmen_odt_read::parse_odt(&odt_bytes)?;
+    let extracted_md = marksmen_odt_read::parse_odt(&odt_bytes, None)?;
     fs::write(root.join("extracted_odt.md"), &extracted_md)?;
 
     // 4. Mathematical Similarity Threshold
-    let normalized_source = normalize_whitespace(&strip_vectors_and_html(&strip_frontmatter(&demo_md)));
-    let normalized_extracted = normalize_whitespace(&strip_vectors_and_html(&strip_frontmatter(&extracted_md)));
+    let normalized_source =
+        normalize_whitespace(&strip_vectors_and_html(&strip_frontmatter(&demo_md)));
+    let normalized_extracted =
+        normalize_whitespace(&strip_vectors_and_html(&strip_frontmatter(&extracted_md)));
     std::fs::write("odt_norm_src.txt", &normalized_source).unwrap();
     std::fs::write("odt_norm_ext.txt", &normalized_extracted).unwrap();
-    
+
     let jw_sim = strsim::jaro_winkler(&normalized_source, &normalized_extracted);
     println!("ODT Roundtrip Jaro-Winkler Similarity: {:.4}", jw_sim);
-    
+
     assert!(
         jw_sim > 0.80,
         "ODT round-trip extraction degraded below 0.80 similarity threshold (Actual: {:.4})",
@@ -259,10 +267,10 @@ Inline math: $x+y$.
     let normalized_extracted = strip_vectors_and_html(&normalize_whitespace(&extracted_stripped));
     std::fs::write("pdf_norm_src.txt", &normalized_source).unwrap();
     std::fs::write("pdf_norm_ext.txt", &normalized_extracted).unwrap();
-    
+
     let jw_sim = strsim::jaro_winkler(&normalized_source, &normalized_extracted);
     println!("PDF Roundtrip Jaro-Winkler Similarity: {:.4}", jw_sim);
-    
+
     // For marksmen-generated PDFs, the source Markdown is embedded into PDF metadata
     // and preferred by the reader, preserving style markers for roundtrip testing.
     // External PDFs still fall back to plain text extraction and remain lossy.
@@ -306,12 +314,8 @@ fn test_visual_snapshots() -> Result<()> {
     // ── DOCX ─────────────────────────────────────────────────────────────────
     let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
     let events = marksmen_core::parsing::parser::parse(body);
-    let docx_bytes = marksmen_docx::translation::document::convert(
-        events,
-        &config,
-        &root.join("../../"),
-        None,
-    )?;
+    let docx_bytes =
+        marksmen_docx::translation::document::convert(events, &config, &root.join("../../"), None)?;
     // DOCX is a ZIP archive; magic bytes are PK (0x50 0x4B).
     assert!(
         docx_bytes.starts_with(&[0x50, 0x4B]),
@@ -319,7 +323,11 @@ fn test_visual_snapshots() -> Result<()> {
     );
     let docx_path = snapshots_dir.join("demo_output.docx");
     fs::write(&docx_path, &docx_bytes)?;
-    println!("DOCX → {} ({} bytes)", docx_path.display(), docx_bytes.len());
+    println!(
+        "DOCX → {} ({} bytes)",
+        docx_path.display(),
+        docx_bytes.len()
+    );
 
     // ── ODT ──────────────────────────────────────────────────────────────────
     let (body2, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
@@ -385,7 +393,10 @@ fn test_visual_snapshots() -> Result<()> {
     );
     let viewer_path = snapshots_dir.join("index.html");
     fs::write(&viewer_path, viewer_html)?;
-    println!("HTML → {} (open in browser for visual review)", viewer_path.display());
+    println!(
+        "HTML → {} (open in browser for visual review)",
+        viewer_path.display()
+    );
 
     Ok(())
 }
@@ -471,12 +482,13 @@ fn evaluate_prd_docx_roundtrip() -> Result<()> {
     }
 
     let source_md = std::fs::read_to_string(&prd_md_path)?;
-    
+
     // 1. Convert to DOCX
     let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&source_md)?;
     let config = marksmen_core::Config::default();
     let events = marksmen_core::parsing::parser::parse(body);
-    let docx_bytes = marksmen_docx::translation::document::convert(events, &config, &root.join("PRD"), None)?;
+    let docx_bytes =
+        marksmen_docx::translation::document::convert(events, &config, &root.join("PRD"), None)?;
 
     // 2. Dump DOCX for manual reference
     let docx_out = root.join("PRD/prd.docx");
@@ -484,7 +496,7 @@ fn evaluate_prd_docx_roundtrip() -> Result<()> {
 
     // 3. Extract back from DOCX to MD
     let extracted_md = marksmen_docx_read::parse_docx(&docx_bytes, None)?;
-    
+
     // 4. Dump Markdown for discrepancy analysis
     let md_out = root.join("PRD/PRD_Roundtrip_Extracted.md");
     std::fs::write(&md_out, &extracted_md)?;
@@ -507,23 +519,32 @@ fn evaluate_prd_docx_roundtrip() -> Result<()> {
 fn test_html_conversion() -> Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let demo_md = std::fs::read_to_string(root.join("../../demo.md"))?;
-    
+
     let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
     let config = marksmen_core::Config::default();
     let events = marksmen_core::parsing::parser::parse(body);
-    
+
     let html_string = marksmen_html::convert(events, &config)?;
-    
+
     // Validate output bounds
-    assert!(html_string.contains("<!DOCTYPE html>"), "Missing HTML DOCTYPE");
-    assert!(html_string.contains("<svg"), "Missing inline Mermaid SVG injection");
-    assert!(html_string.contains("<table"), "Missing Table parsing bounds");
-    
+    assert!(
+        html_string.contains("<!DOCTYPE html>"),
+        "Missing HTML DOCTYPE"
+    );
+    assert!(
+        html_string.contains("<svg"),
+        "Missing inline Mermaid SVG injection"
+    );
+    assert!(
+        html_string.contains("<table"),
+        "Missing Table parsing bounds"
+    );
+
     let snapshots_dir = root.join("tests/snapshots");
     std::fs::create_dir_all(&snapshots_dir)?;
     let html_out = snapshots_dir.join("demo_output_target.html");
     std::fs::write(&html_out, html_string)?;
-    
+
     println!("HTML exported -> {}", html_out.display());
     Ok(())
 }
@@ -547,7 +568,10 @@ fn test_qsr_lossless_roundtrip() -> Result<()> {
     let src_path = root.join("PRD/QSR Technical_SonALAsense_1AY2AX000034_2026_APR.docx");
 
     if !src_path.exists() {
-        println!("QSR source DOCX not found at {}; skipping test.", src_path.display());
+        println!(
+            "QSR source DOCX not found at {}; skipping test.",
+            src_path.display()
+        );
         return Ok(());
     }
 
@@ -580,7 +604,8 @@ fn test_qsr_lossless_roundtrip() -> Result<()> {
 
     // 4a. styles.xml size
     {
-        let styles_size = out_zip.by_name("word/styles.xml")
+        let styles_size = out_zip
+            .by_name("word/styles.xml")
             .expect("word/styles.xml missing from roundtrip")
             .size();
         assert!(
@@ -592,7 +617,8 @@ fn test_qsr_lossless_roundtrip() -> Result<()> {
 
     // 4b. numbering.xml size
     {
-        let num_size = out_zip.by_name("word/numbering.xml")
+        let num_size = out_zip
+            .by_name("word/numbering.xml")
             .expect("word/numbering.xml missing from roundtrip")
             .size();
         assert!(
@@ -658,15 +684,29 @@ fn test_qsr_lossless_roundtrip() -> Result<()> {
         let mut i = 0;
         let bytes = s.as_bytes();
         while i < bytes.len() {
-            if bytes[i..].starts_with(b"<header") { depth += 1; i += 7; continue; }
-            if bytes[i..].starts_with(b"</header>") {
-                if depth > 0 { depth -= 1; }
-                i += 9; continue;
+            if bytes[i..].starts_with(b"<header") {
+                depth += 1;
+                i += 7;
+                continue;
             }
-            if bytes[i..].starts_with(b"<footer") { depth += 1; i += 7; continue; }
+            if bytes[i..].starts_with(b"</header>") {
+                if depth > 0 {
+                    depth -= 1;
+                }
+                i += 9;
+                continue;
+            }
+            if bytes[i..].starts_with(b"<footer") {
+                depth += 1;
+                i += 7;
+                continue;
+            }
             if bytes[i..].starts_with(b"</footer>") {
-                if depth > 0 { depth -= 1; }
-                i += 9; continue;
+                if depth > 0 {
+                    depth -= 1;
+                }
+                i += 9;
+                continue;
             }
             if depth == 0 {
                 out.push(bytes[i] as char);
@@ -676,8 +716,12 @@ fn test_qsr_lossless_roundtrip() -> Result<()> {
         out
     }
 
-    let norm_rt = normalize_whitespace(&strip_vectors_and_html(&strip_header_footer_blocks(&rt_extracted)));
-    let norm_orig = normalize_whitespace(&strip_vectors_and_html(&strip_header_footer_blocks(&orig_extracted)));
+    let norm_rt = normalize_whitespace(&strip_vectors_and_html(&strip_header_footer_blocks(
+        &rt_extracted,
+    )));
+    let norm_orig = normalize_whitespace(&strip_vectors_and_html(&strip_header_footer_blocks(
+        &orig_extracted,
+    )));
 
     // Remove table separator characters ('|') from both strings before JW comparison.
     // JW is a character-transposition metric: repeated '|' chars in table-rich documents
@@ -694,7 +738,10 @@ fn test_qsr_lossless_roundtrip() -> Result<()> {
     fs::write(root.join("PRD/qsr_norm_rt.txt"), &norm_rt)?;
 
     let similarity = strsim::normalized_levenshtein(&jw_orig, &jw_rt);
-    println!("QSR Lossless Roundtrip normalized-Levenshtein: {:.4}", similarity);
+    println!(
+        "QSR Lossless Roundtrip normalized-Levenshtein: {:.4}",
+        similarity
+    );
 
     assert!(
         similarity > 0.97,
@@ -713,7 +760,10 @@ fn test_qsr_pdf_roundtrip() -> Result<()> {
     let src_path = root.join("PRD/QSR Technical_SonALAsense_1AY2AX000034_2026_APR.docx");
 
     if !src_path.exists() {
-        println!("QSR source DOCX not found at {}; skipping test.", src_path.display());
+        println!(
+            "QSR source DOCX not found at {}; skipping test.",
+            src_path.display()
+        );
         return Ok(());
     }
 
@@ -756,15 +806,29 @@ fn test_qsr_pdf_roundtrip() -> Result<()> {
         let mut i = 0;
         let bytes = s.as_bytes();
         while i < bytes.len() {
-            if bytes[i..].starts_with(b"<header") { depth += 1; i += 7; continue; }
-            if bytes[i..].starts_with(b"</header>") {
-                if depth > 0 { depth -= 1; }
-                i += 9; continue;
+            if bytes[i..].starts_with(b"<header") {
+                depth += 1;
+                i += 7;
+                continue;
             }
-            if bytes[i..].starts_with(b"<footer") { depth += 1; i += 7; continue; }
+            if bytes[i..].starts_with(b"</header>") {
+                if depth > 0 {
+                    depth -= 1;
+                }
+                i += 9;
+                continue;
+            }
+            if bytes[i..].starts_with(b"<footer") {
+                depth += 1;
+                i += 7;
+                continue;
+            }
             if bytes[i..].starts_with(b"</footer>") {
-                if depth > 0 { depth -= 1; }
-                i += 9; continue;
+                if depth > 0 {
+                    depth -= 1;
+                }
+                i += 9;
+                continue;
             }
             if depth == 0 {
                 out.push(bytes[i] as char);
@@ -774,8 +838,12 @@ fn test_qsr_pdf_roundtrip() -> Result<()> {
         out
     }
 
-    let norm_rt = normalize_whitespace(&strip_vectors_and_html(&strip_header_footer_blocks(&rt_extracted)));
-    let norm_orig = normalize_whitespace(&strip_vectors_and_html(&strip_header_footer_blocks(&orig_extracted)));
+    let norm_rt = normalize_whitespace(&strip_vectors_and_html(&strip_header_footer_blocks(
+        &rt_extracted,
+    )));
+    let norm_orig = normalize_whitespace(&strip_vectors_and_html(&strip_header_footer_blocks(
+        &orig_extracted,
+    )));
 
     fn strip_table_pipes(s: &str) -> String {
         s.chars().filter(|c| *c != '|').collect()
@@ -785,7 +853,10 @@ fn test_qsr_pdf_roundtrip() -> Result<()> {
     let jw_rt = strip_table_pipes(&norm_rt);
 
     let similarity = strsim::normalized_levenshtein(&jw_orig, &jw_rt);
-    println!("QSR PDF Roundtrip normalized-Levenshtein: {:.4}", similarity);
+    println!(
+        "QSR PDF Roundtrip normalized-Levenshtein: {:.4}",
+        similarity
+    );
 
     assert!(
         similarity > 0.97,
@@ -809,7 +880,11 @@ fn test_xhtml_roundtrip_similarity() -> Result<()> {
     let normalized_source = normalize_whitespace(&strip_vectors_and_html(&source_md_stripped));
     let normalized_extracted = normalize_whitespace(&strip_vectors_and_html(&extracted_md));
     let jw_sim = strsim::jaro_winkler(&normalized_source, &normalized_extracted);
-    assert!(jw_sim > 0.90, "XHTML roundtrip text similarity {:.4} is below threshold 0.90", jw_sim);
+    assert!(
+        jw_sim > 0.90,
+        "XHTML roundtrip text similarity {:.4} is below threshold 0.90",
+        jw_sim
+    );
     Ok(())
 }
 
@@ -825,7 +900,11 @@ fn test_ppt_roundtrip_similarity() -> Result<()> {
     let normalized_source = normalize_whitespace(demo_md);
     let normalized_extracted = normalize_whitespace(&extracted_md);
     let jw_sim = strsim::jaro_winkler(&normalized_source, &normalized_extracted);
-    assert!(jw_sim > 0.85, "PPTX roundtrip text similarity {:.4} is below threshold 0.85", jw_sim);
+    assert!(
+        jw_sim > 0.85,
+        "PPTX roundtrip text similarity {:.4} is below threshold 0.85",
+        jw_sim
+    );
     Ok(())
 }
 
@@ -842,7 +921,11 @@ fn test_typst_roundtrip_similarity() -> Result<()> {
     println!("TYPST OUT:\n{}", out_str);
     println!("TYPST EXTRACTED:\n{}", extracted_md);
     let jw_sim = strsim::jaro_winkler(&normalized_source, &normalized_extracted);
-    assert!(jw_sim > 0.85, "Typst roundtrip text similarity {:.4} is below threshold 0.85", jw_sim);
+    assert!(
+        jw_sim > 0.85,
+        "Typst roundtrip text similarity {:.4} is below threshold 0.85",
+        jw_sim
+    );
     Ok(())
 }
 
@@ -857,7 +940,11 @@ fn test_latex_roundtrip_similarity() -> Result<()> {
     let normalized_source = normalize_whitespace(demo_md);
     let normalized_extracted = normalize_whitespace(&extracted_md);
     let jw_sim = strsim::jaro_winkler(&normalized_source, &normalized_extracted);
-    assert!(jw_sim > 0.85, "LaTeX roundtrip text similarity {:.4} is below threshold 0.85", jw_sim);
+    assert!(
+        jw_sim > 0.85,
+        "LaTeX roundtrip text similarity {:.4} is below threshold 0.85",
+        jw_sim
+    );
     Ok(())
 }
 
@@ -872,6 +959,10 @@ fn test_marp_roundtrip_similarity() -> Result<()> {
     let normalized_source = normalize_whitespace(demo_md);
     let normalized_extracted = normalize_whitespace(&extracted_md);
     let jw_sim = strsim::jaro_winkler(&normalized_source, &normalized_extracted);
-    assert!(jw_sim > 0.95, "Marp roundtrip text similarity {:.4} is below threshold 0.95", jw_sim);
+    assert!(
+        jw_sim > 0.95,
+        "Marp roundtrip text similarity {:.4} is below threshold 0.95",
+        jw_sim
+    );
     Ok(())
 }

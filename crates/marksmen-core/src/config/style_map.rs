@@ -89,9 +89,7 @@ impl StyleMap {
             "Heading1", "Heading2", "Heading3", "Heading4", "Heading5", "Heading6",
         ];
         let idx = level.saturating_sub(1).min(5);
-        self.heading[idx]
-            .as_deref()
-            .unwrap_or(DEFAULTS[idx])
+        self.heading[idx].as_deref().unwrap_or(DEFAULTS[idx])
     }
 
     /// Returns the effective blockquote style name. Default: `"Quote"`.
@@ -133,7 +131,10 @@ mod tests {
 
     #[test]
     fn blockquote_override_is_returned() {
-        let sm = StyleMap { blockquote: Some("QuoteBox".to_string()), ..Default::default() };
+        let sm = StyleMap {
+            blockquote: Some("QuoteBox".to_string()),
+            ..Default::default()
+        };
         assert_eq!(sm.blockquote_style(), "QuoteBox");
     }
 

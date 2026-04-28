@@ -1,7 +1,7 @@
 use anyhow::Result;
-use typst::syntax::{ast, SyntaxKind, SyntaxNode};
+use typst::syntax::{SyntaxKind, SyntaxNode, ast};
 
-/// Parse Typst source text and map its syntactical primitives back into a 
+/// Parse Typst source text and map its syntactical primitives back into a
 /// Markdown string mapping.
 pub fn parse_typst(text: &str) -> Result<String> {
     let node = typst::syntax::parse(text);
@@ -43,11 +43,11 @@ fn traverse_node(node: &SyntaxNode, output: &mut String) {
             } else {
                 1
             };
-            
+
             output.push_str("\n");
             output.push_str(&"#".repeat(level));
             output.push_str(" ");
-            
+
             for child in node.children() {
                 if child.kind() != SyntaxKind::HeadingMarker && child.kind() != SyntaxKind::Space {
                     traverse_node(child, output);
@@ -66,10 +66,10 @@ fn traverse_node(node: &SyntaxNode, output: &mut String) {
             }
         }
         SyntaxKind::CodeBlock => {
-             // Incomplete CodeBlock mapping placeholder
-             output.push_str("```\n");
-             output.push_str(node.text().as_str());
-             output.push_str("\n```\n");
+            // Incomplete CodeBlock mapping placeholder
+            output.push_str("```\n");
+            output.push_str(node.text().as_str());
+            output.push_str("\n```\n");
         }
         SyntaxKind::EnumItem => {
             for child in node.children() {
@@ -77,20 +77,20 @@ fn traverse_node(node: &SyntaxNode, output: &mut String) {
             }
         }
         SyntaxKind::ListItem => {
-             output.push_str("\n- ");
-             for child in node.children() {
-                 if child.kind() != SyntaxKind::ListMarker && child.kind() != SyntaxKind::Space {
-                     traverse_node(child, output);
-                 }
-             }
+            output.push_str("\n- ");
+            for child in node.children() {
+                if child.kind() != SyntaxKind::ListMarker && child.kind() != SyntaxKind::Space {
+                    traverse_node(child, output);
+                }
+            }
         }
         SyntaxKind::TermItem | SyntaxKind::Markup | SyntaxKind::Equation => {
-             for child in node.children() {
-                 traverse_node(child, output);
-             }
+            for child in node.children() {
+                traverse_node(child, output);
+            }
         }
         SyntaxKind::SetRule | SyntaxKind::ShowRule | SyntaxKind::Hash => {
-             // Ignore configuration preamble and AST control characters.
+            // Ignore configuration preamble and AST control characters.
         }
         _ => {
             // Only emit raw text for unrecognized leaf nodes.

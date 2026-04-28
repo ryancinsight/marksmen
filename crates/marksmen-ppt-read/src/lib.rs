@@ -15,8 +15,8 @@
 //!   `marksmen-ppt`.
 
 use anyhow::{Context, Result};
-use quick_xml::events::Event as XmlEvent;
 use quick_xml::Reader;
+use quick_xml::events::Event as XmlEvent;
 use std::io::{Cursor, Read};
 use zip::ZipArchive;
 
@@ -84,12 +84,12 @@ fn parse_slide_xml(xml_str: &str) -> Result<String> {
     let mut current_para = String::new();
 
     // State machine flags.
-    let mut in_title_sp = false;   // inside the title shape (<p:sp> with ph type="title")
-    let mut in_body_sp = false;    // inside any non-title shape
+    let mut in_title_sp = false; // inside the title shape (<p:sp> with ph type="title")
+    let mut in_body_sp = false; // inside any non-title shape
     let mut ph_seen_title = false; // <p:ph type="title"/> encountered in current <p:sp>
-    let mut in_sp = false;         // inside any <p:sp>
-    let mut in_para = false;       // inside <a:p>
-    let mut reading_t = false;     // inside <a:t>
+    let mut in_sp = false; // inside any <p:sp>
+    let mut in_para = false; // inside <a:p>
+    let mut reading_t = false; // inside <a:t>
 
     let mut buf = Vec::new();
     loop {
@@ -128,27 +128,25 @@ fn parse_slide_xml(xml_str: &str) -> Result<String> {
                     _ => {}
                 }
             }
-            XmlEvent::End(ref e) => {
-                match e.name().as_ref() {
-                    b"p:sp" => {
-                        in_sp = false;
-                        in_title_sp = false;
-                        in_body_sp = false;
-                        ph_seen_title = false;
-                    }
-                    b"a:p" => {
-                        if in_para && in_body_sp && !current_para.trim().is_empty() {
-                            body_paras.push(current_para.trim().to_string());
-                        }
-                        current_para.clear();
-                        in_para = false;
-                    }
-                    b"a:t" => {
-                        reading_t = false;
-                    }
-                    _ => {}
+            XmlEvent::End(ref e) => match e.name().as_ref() {
+                b"p:sp" => {
+                    in_sp = false;
+                    in_title_sp = false;
+                    in_body_sp = false;
+                    ph_seen_title = false;
                 }
-            }
+                b"a:p" => {
+                    if in_para && in_body_sp && !current_para.trim().is_empty() {
+                        body_paras.push(current_para.trim().to_string());
+                    }
+                    current_para.clear();
+                    in_para = false;
+                }
+                b"a:t" => {
+                    reading_t = false;
+                }
+                _ => {}
+            },
             XmlEvent::Text(ref e) => {
                 if reading_t {
                     let text = e.unescape().unwrap_or_default();
@@ -217,6 +215,9 @@ mod tests {
 
         let md = parse_slide_xml(slide_xml).unwrap();
         assert!(md.contains("# Hello World"), "title not extracted: {md}");
-        assert!(md.contains("Body paragraph one."), "body not extracted: {md}");
+        assert!(
+            md.contains("Body paragraph one."),
+            "body not extracted: {md}"
+        );
     }
 }

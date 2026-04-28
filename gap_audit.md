@@ -152,5 +152,30 @@ pub struct LocalizedAnnotation {
 ## Other Minor Gaps (All Resolved)
 
 - **[CLOSED]** `marksmen-pdf/tests/extract.rs` was a scratch file; it remains but the real tests are now in `roundtrip_test.rs`.
-- **[CLOSED]** `marksmen-pdf/tests/roundtrip_test.rs` was stale (referenced non-existent `translation::translator`); rewritten to test the actual PDF → Markdown roundtrip via `marksmen_pdf_read`.
-- **[CLOSED]** `marksmen-roundtrip/src/lib.rs` `extract_structure` now counts comments, highlights, insertions, and deletions.
+- [x] `marksmen-roundtrip/src/lib.rs` `extract_structure` now counts comments, highlights, insertions, and deletions.
+
+---
+
+## OPEN: Advanced Format Feature Gap Audit (DOCX, PDF, ODT)
+
+### Severity: MEDIUM
+
+### 1. Summary of Current State (Gaps Active)
+
+A comprehensive capability gap audit across the `marksmen-docx`, `marksmen-pdf`, and `marksmen-odt` bidirectional translation pipelines identified structural deficiencies preventing completely lossless, high-fidelity document modeling. While core structures are mathematically sound, edge cases around advanced formatting drop information.
+
+### 2. Invariant Violations (Format Gaps)
+
+| Invariant | Expected | Actual | Impact |
+|-----------|----------|--------|--------|
+| **ODT Image Embedding** | Images render inline utilizing internal layout coordinates | Image payloads emit as string `[Figure: path]` placeholders | Visual payload fidelity is dropped completely in OpenDocument generation. |
+| **DOCX Field Codes & Footnotes** | Complex fields, tables, tracking faithfully pass through | Ignored / partial logic exists but requires absolute parity | Reduced mapping limits roundtripping complex structural references. |
+| **PDF Geometrics** | Tables, charts, complex math bounding boxes map structurally | Native extraction utilizes heuristical text run estimates | Complex layouts fail geometric translation on ingest unless the `RoundtripMarkdown` meta dictionary natively exists. |
+| **Nested Tables (ODT)** | Complete recursive grids | Incomplete structure (flat rendering layer logic) | Loss of data dimensional integrity in spreadsheets/forms. |
+| **Tracked Changes (ODT)** | Native `<text:tracked-changes>` mappings | None | Reviewer capabilities missing for OpenDocument generated payloads. |
+
+### 3. Root Cause Analysis
+
+- **ODT Image Mapping**: Missing ZIP archive BLOB re-packing pipeline in `marksmen-odt` translator. It outputs an XML tree containing drawing nodes mapped to phantom URIs without natively interleaving the bytestream into `/Pictures`.
+- **PDF Geometric Extraction**: Relies on heuristical bounding box combination via localized font matrix measurements (`Tm`/`ctm`) rather than parsing the absolute bounding quad layout mapping of typst containers/lines.
+- **DOCX Parity**: Lack of Markdown AST standard element mappings for semantic footnotes and embedded multi-row/col modifications restricts scaling of the `docx-rs` structural injection logic.

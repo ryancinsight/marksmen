@@ -14,9 +14,14 @@ const ROUNDTRIP_MARKDOWN_KEY: &str = "MarksmenRoundtripMarkdown";
 /// 3. Translates events to Typst markup
 /// 4. Compiles Typst markup to a PDF document
 /// 5. Exports the document as PDF bytes
-pub fn convert(markdown: &str, config: &Config, base_path: Option<std::path::PathBuf>) -> Result<Vec<u8>> {
+pub fn convert(
+    markdown: &str,
+    config: &Config,
+    base_path: Option<std::path::PathBuf>,
+) -> Result<Vec<u8>> {
     // Step 1: Parse front-matter and merge with provided config.
-    let (body, front_matter_config) = marksmen_core::config::frontmatter::parse_frontmatter(markdown)?;
+    let (body, front_matter_config) =
+        marksmen_core::config::frontmatter::parse_frontmatter(markdown)?;
     let merged_config = config.merge_frontmatter(&front_matter_config);
 
     // Step 2: Parse the markdown body into events.
@@ -34,7 +39,10 @@ pub fn convert(markdown: &str, config: &Config, base_path: Option<std::path::Pat
     let pdf_bytes = rendering::compiler::compile_to_pdf(&typst_source, &merged_config, base_path)?;
     let pdf_bytes = embed_roundtrip_markdown(&pdf_bytes, markdown)?;
 
-    tracing::info!(pdf_bytes_len = pdf_bytes.len(), "PDF generated successfully");
+    tracing::info!(
+        pdf_bytes_len = pdf_bytes.len(),
+        "PDF generated successfully"
+    );
 
     Ok(pdf_bytes)
 }
@@ -86,13 +94,19 @@ fn embed_roundtrip_markdown(pdf_bytes: &[u8], markdown: &str) -> Result<Vec<u8>>
                 let full_tag = &markdown[actual_start..actual_start + end_idx + 7];
                 // Extract class attribute.
                 let class = extract_attr(full_tag, "class").unwrap_or_default();
-                if !class.contains("comment") && !class.contains("highlight") && !class.contains("caret") && !class.contains("strikeout") {
+                if !class.contains("comment")
+                    && !class.contains("highlight")
+                    && !class.contains("caret")
+                    && !class.contains("strikeout")
+                {
                     search_idx = actual_start + 1;
                     continue;
                 }
-                let author = extract_attr(full_tag, "data-author").unwrap_or_else(|| "Author".to_string());
+                let author =
+                    extract_attr(full_tag, "data-author").unwrap_or_else(|| "Author".to_string());
                 let content = extract_attr(full_tag, "data-content").unwrap_or_default();
-                let subtype = extract_attr(full_tag, "data-subtype").unwrap_or_else(|| class.clone());
+                let subtype =
+                    extract_attr(full_tag, "data-subtype").unwrap_or_else(|| class.clone());
                 // Extract inner text between the opening tag and </mark>.
                 let inner_text = if let Some(gt) = full_tag.find('>') {
                     let inner = &full_tag[gt + 1..full_tag.len() - 7]; // strip after '>' and '</mark>'
@@ -117,11 +131,13 @@ fn embed_roundtrip_markdown(pdf_bytes: &[u8], markdown: &str) -> Result<Vec<u8>>
             }
         }
 
-        let mut page_annots: std::collections::BTreeMap<u32, Vec<lopdf::ObjectId>> = std::collections::BTreeMap::new();
+        let mut page_annots: std::collections::BTreeMap<u32, Vec<lopdf::ObjectId>> =
+            std::collections::BTreeMap::new();
 
         for comment in &comments {
             let fraction = comment.byte_offset as f64 / md_len as f64;
-            let page_num = ((fraction * total_pages as f64).floor() as u32).clamp(1, total_pages as u32);
+            let page_num =
+                ((fraction * total_pages as f64).floor() as u32).clamp(1, total_pages as u32);
 
             let count = page_annots.entry(page_num).or_default().len();
             let y_offset = 750.0_f32 - (count as f32 * 30.0);
@@ -148,12 +164,15 @@ fn embed_roundtrip_markdown(pdf_bytes: &[u8], markdown: &str) -> Result<Vec<u8>>
             };
             annot_dict.set("Contents", Object::string_literal(display_content));
             annot_dict.set("MarksmenOrigin", Object::Boolean(true));
-            annot_dict.set("Rect", Object::Array(vec![
-                Object::Real(10.0),
-                Object::Real(y_offset - 20.0),
-                Object::Real(30.0),
-                Object::Real(y_offset),
-            ]));
+            annot_dict.set(
+                "Rect",
+                Object::Array(vec![
+                    Object::Real(10.0),
+                    Object::Real(y_offset - 20.0),
+                    Object::Real(30.0),
+                    Object::Real(y_offset),
+                ]),
+            );
 
             let annot_id = document.add_object(annot_dict);
             page_annots.entry(page_num).or_default().push(annot_id);
@@ -161,8 +180,14 @@ fn embed_roundtrip_markdown(pdf_bytes: &[u8], markdown: &str) -> Result<Vec<u8>>
 
         for (page_num, annot_obj_ids) in page_annots {
             if let Some(&page_obj_id) = pages.get(&page_num) {
-                let annot_refs: Vec<Object> = annot_obj_ids.iter().map(|id| Object::Reference(*id)).collect();
-                if let Ok(page_dict) = document.get_object_mut(page_obj_id).and_then(|obj| obj.as_dict_mut()) {
+                let annot_refs: Vec<Object> = annot_obj_ids
+                    .iter()
+                    .map(|id| Object::Reference(*id))
+                    .collect();
+                if let Ok(page_dict) = document
+                    .get_object_mut(page_obj_id)
+                    .and_then(|obj| obj.as_dict_mut())
+                {
                     if let Ok(existing_annots) = page_dict.get_mut(b"Annots") {
                         if let Object::Array(arr) = existing_annots {
                             arr.extend(annot_refs);

@@ -15,7 +15,7 @@ use anyhow::{Context, Result};
 use marksmen_core::config::Config;
 use pulldown_cmark::{Event, HeadingLevel, Tag, TagEnd};
 use std::io::Write;
-use zip::{write::SimpleFileOptions, ZipWriter};
+use zip::{ZipWriter, write::SimpleFileOptions};
 
 pub mod ooxml;
 
@@ -76,7 +76,12 @@ struct BodyParagraph {
 impl BodyParagraph {
     fn plain(text: impl Into<String>, indent: u32) -> Self {
         Self {
-            runs: vec![Run { text: text.into(), bold: false, italic: false, code: false }],
+            runs: vec![Run {
+                text: text.into(),
+                bold: false,
+                italic: false,
+                code: false,
+            }],
             indent,
             prefix: None,
             is_heading: false,
@@ -103,10 +108,16 @@ fn segment_slides(events: Vec<Event<'_>>, config: &Config) -> Vec<Slide> {
     if !config.title.is_empty() {
         current.title = config.title.clone();
         if !config.author.is_empty() {
-            current.body.push(SlideContent::Para(BodyParagraph::plain(format!("{}", config.author), 0)));
+            current.body.push(SlideContent::Para(BodyParagraph::plain(
+                format!("{}", config.author),
+                0,
+            )));
         }
         if !config.date.is_empty() {
-            current.body.push(SlideContent::Para(BodyParagraph::plain(format!("{}", config.date), 0)));
+            current.body.push(SlideContent::Para(BodyParagraph::plain(
+                format!("{}", config.date),
+                0,
+            )));
         }
     }
 
@@ -137,27 +148,41 @@ fn segment_slides(events: Vec<Event<'_>>, config: &Config) -> Vec<Slide> {
         // ── Table events (highest priority guard) ────────────────────────
         if in_table {
             match &event {
-                Event::Start(Tag::TableHead) => { in_table_head = true; }
+                Event::Start(Tag::TableHead) => {
+                    in_table_head = true;
+                }
                 Event::End(TagEnd::TableHead) => {
                     in_table_head = false;
                     table_headers = std::mem::take(&mut current_row)
-                        .into_iter().map(|c| c.trim().to_string()).collect();
+                        .into_iter()
+                        .map(|c| c.trim().to_string())
+                        .collect();
                 }
-                Event::Start(Tag::TableRow) => { current_row.clear(); }
+                Event::Start(Tag::TableRow) => {
+                    current_row.clear();
+                }
                 Event::End(TagEnd::TableRow) => {
                     if !in_table_head {
                         table_rows.push(
                             std::mem::take(&mut current_row)
-                                .into_iter().map(|c| c.trim().to_string()).collect()
+                                .into_iter()
+                                .map(|c| c.trim().to_string())
+                                .collect(),
                         );
                     }
                 }
-                Event::Start(Tag::TableCell) => { current_cell.clear(); }
+                Event::Start(Tag::TableCell) => {
+                    current_cell.clear();
+                }
                 Event::End(TagEnd::TableCell) => {
                     current_row.push(std::mem::take(&mut current_cell));
                 }
-                Event::Text(t) => { current_cell.push_str(t.as_ref()); }
-                Event::Code(t) => { current_cell.push_str(t.as_ref()); }
+                Event::Text(t) => {
+                    current_cell.push_str(t.as_ref());
+                }
+                Event::Code(t) => {
+                    current_cell.push_str(t.as_ref());
+                }
                 Event::End(TagEnd::Table) => {
                     in_table = false;
                     current.body.push(SlideContent::Table(SlideTable {
@@ -223,8 +248,12 @@ fn segment_slides(events: Vec<Event<'_>>, config: &Config) -> Vec<Slide> {
             }
 
             // ── Lists ─────────────────────────────────────────────────────
-            Event::Start(Tag::List(start)) => { list_stack.push(start); }
-            Event::End(TagEnd::List(_)) => { list_stack.pop(); }
+            Event::Start(Tag::List(start)) => {
+                list_stack.push(start);
+            }
+            Event::End(TagEnd::List(_)) => {
+                list_stack.pop();
+            }
             Event::Start(Tag::Item) => {
                 flush_para(&mut current_para, &mut current);
                 let depth = list_stack.len().saturating_sub(1) as u32;
@@ -236,10 +265,14 @@ fn segment_slides(events: Vec<Event<'_>>, config: &Config) -> Vec<Slide> {
                             *counter += 1;
                         }
                     }
-                    _ => { current_para.prefix = Some("• ".to_string()); }
+                    _ => {
+                        current_para.prefix = Some("• ".to_string());
+                    }
                 }
             }
-            Event::End(TagEnd::Item) => { flush_para(&mut current_para, &mut current); }
+            Event::End(TagEnd::Item) => {
+                flush_para(&mut current_para, &mut current);
+            }
 
             // ── Code blocks ───────────────────────────────────────────────
             Event::Start(Tag::CodeBlock(ref kind)) => {
@@ -254,15 +287,23 @@ fn segment_slides(events: Vec<Event<'_>>, config: &Config) -> Vec<Slide> {
             Event::End(TagEnd::CodeBlock) => {
                 in_code_block = false;
                 if code_lang == "mermaid" {
-                    current.body.push(SlideContent::MermaidPlaceholder(
-                        format!("[Mermaid diagram: {}]",
-                            code_block_buf.lines().next().unwrap_or("").trim())
-                    ));
+                    current.body.push(SlideContent::MermaidPlaceholder(format!(
+                        "[Mermaid diagram: {}]",
+                        code_block_buf.lines().next().unwrap_or("").trim()
+                    )));
                 } else {
                     for line in code_block_buf.lines() {
                         current.body.push(SlideContent::Para(BodyParagraph {
-                            runs: vec![Run { text: line.to_string(), bold: false, italic: false, code: true }],
-                            indent: 0, prefix: None, is_heading: false, heading_sz: 0,
+                            runs: vec![Run {
+                                text: line.to_string(),
+                                bold: false,
+                                italic: false,
+                                code: true,
+                            }],
+                            indent: 0,
+                            prefix: None,
+                            is_heading: false,
+                            heading_sz: 0,
                         }));
                     }
                 }
@@ -278,7 +319,9 @@ fn segment_slides(events: Vec<Event<'_>>, config: &Config) -> Vec<Slide> {
             Event::Start(Tag::Link { .. }) | Event::End(TagEnd::Link) => {}
             Event::Start(Tag::Image { .. }) | Event::End(TagEnd::Image) => {}
 
-            Event::Code(text) => { push_run(&mut current_para, text.as_ref(), bold, italic, true); }
+            Event::Code(text) => {
+                push_run(&mut current_para, text.as_ref(), bold, italic, true);
+            }
             Event::Text(text) => {
                 if in_code_block {
                     code_block_buf.push_str(text.as_ref());
@@ -297,11 +340,19 @@ fn segment_slides(events: Vec<Event<'_>>, config: &Config) -> Vec<Slide> {
             }
             // Math: display as styled paragraph with formula notation.
             Event::InlineMath(m) => {
-                push_run(&mut current_para, &format!("${}$", m.as_ref()), false, true, true);
+                push_run(
+                    &mut current_para,
+                    &format!("${}$", m.as_ref()),
+                    false,
+                    true,
+                    true,
+                );
             }
             Event::DisplayMath(m) => {
                 flush_para(&mut current_para, &mut current);
-                current.body.push(SlideContent::Math(m.as_ref().to_string()));
+                current
+                    .body
+                    .push(SlideContent::Math(m.as_ref().to_string()));
             }
 
             _ => {}
@@ -319,19 +370,27 @@ fn segment_slides(events: Vec<Event<'_>>, config: &Config) -> Vec<Slide> {
 }
 
 fn push_run(para: &mut BodyParagraph, text: &str, bold: bool, italic: bool, code: bool) {
-    para.runs.push(Run { text: text.to_string(), bold, italic, code });
+    para.runs.push(Run {
+        text: text.to_string(),
+        bold,
+        italic,
+        code,
+    });
 }
 
 fn flush_para(para: &mut BodyParagraph, slide: &mut Slide) {
     let has_content = para.runs.iter().any(|r| !r.text.trim().is_empty());
     if has_content || para.prefix.is_some() {
-        slide.body.push(SlideContent::Para(std::mem::replace(para, BodyParagraph {
-            runs: Vec::new(),
-            indent: 0,
-            prefix: None,
-            is_heading: false,
-            heading_sz: 0,
-        })));
+        slide.body.push(SlideContent::Para(std::mem::replace(
+            para,
+            BodyParagraph {
+                runs: Vec::new(),
+                indent: 0,
+                prefix: None,
+                is_heading: false,
+                heading_sz: 0,
+            },
+        )));
     } else {
         *para = BodyParagraph {
             runs: Vec::new(),
@@ -476,7 +535,10 @@ fn render_slide_xml(slide: &Slide) -> String {
     let mut paras_xml = String::new();
     for item in &slide.body {
         match item {
-            SlideContent::Para(p) => { body_paras.push(p); paras_xml.push_str(&render_paragraph(p)); }
+            SlideContent::Para(p) => {
+                body_paras.push(p);
+                paras_xml.push_str(&render_paragraph(p));
+            }
             SlideContent::Math(m) => {
                 // Display math: monospace centered paragraph with notation.
                 let escaped = xml_escape(&format!("\u{1D6E2} {}", m));
@@ -555,11 +617,17 @@ fn render_slide_xml(slide: &Slide) -> String {
 
 fn render_title_shape(title: &str, layout: &SlideLayout) -> String {
     let escaped = xml_escape(title);
-    
+
     let (tx, ty, tcx, tcy, ppr) = match layout {
         SlideLayout::Title => {
             // Centered huge title
-            (457_200, 1_600_200, 8_229_600, 2_000_000, r#"<a:pPr algn="ctr"/>"#)
+            (
+                457_200,
+                1_600_200,
+                8_229_600,
+                2_000_000,
+                r#"<a:pPr algn="ctr"/>"#,
+            )
         }
         SlideLayout::Content => {
             // Standard top title
@@ -676,7 +744,11 @@ fn render_table_shape(table: &SlideTable, shape_id: u32) -> String {
 fn render_paragraph(para: &BodyParagraph) -> String {
     // Build pPr: indent in EMU (1 level = 457200 EMU ≈ 0.5in)
     let margin_l = 342900u32 + para.indent * 457200;
-    let indent_val = if para.prefix.is_some() { -(342900i32) } else { 0 };
+    let indent_val = if para.prefix.is_some() {
+        -(342900i32)
+    } else {
+        0
+    };
     let lvl = para.indent;
 
     let heading_sz_attr = if para.heading_sz > 0 {
@@ -699,7 +771,11 @@ fn render_paragraph(para: &BodyParagraph) -> String {
         let escaped = xml_escape(&run.text);
         let b = if run.bold { r#" b="1""# } else { "" };
         let i = if run.italic { r#" i="1""# } else { "" };
-        let typeface = if run.code { r#"<a:latin typeface="Courier New"/>"# } else { "" };
+        let typeface = if run.code {
+            r#"<a:latin typeface="Courier New"/>"#
+        } else {
+            ""
+        };
         runs_xml.push_str(&format!(
             r#"          <a:r><a:rPr lang="en-US"{b}{i}{heading_sz_attr} dirty="0">{typeface}</a:rPr><a:t>{escaped}</a:t></a:r>"#
         ));

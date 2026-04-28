@@ -35,22 +35,15 @@ mod tests {
     #[test]
     fn parses_inline_math() {
         let events = parse("Inline $x^2$ math");
-        let has_inline_math = events
-            .iter()
-            .any(|e| matches!(e, Event::InlineMath(_)));
+        let has_inline_math = events.iter().any(|e| matches!(e, Event::InlineMath(_)));
         assert!(has_inline_math, "Expected InlineMath event for $x^2$");
     }
 
     #[test]
     fn parses_display_math() {
         let events = parse("$$\\int_0^1 x\\,dx$$");
-        let has_display_math = events
-            .iter()
-            .any(|e| matches!(e, Event::DisplayMath(_)));
-        assert!(
-            has_display_math,
-            "Expected DisplayMath event for $$...$$"
-        );
+        let has_display_math = events.iter().any(|e| matches!(e, Event::DisplayMath(_)));
+        assert!(has_display_math, "Expected DisplayMath event for $$...$$");
     }
 
     #[test]
@@ -59,7 +52,10 @@ mod tests {
         let has_heading = events.iter().any(|e| {
             matches!(
                 e,
-                Event::Start(Tag::Heading { level: pulldown_cmark::HeadingLevel::H1, .. })
+                Event::Start(Tag::Heading {
+                    level: pulldown_cmark::HeadingLevel::H1,
+                    ..
+                })
             )
         });
         assert!(has_heading, "Expected H1 heading event");

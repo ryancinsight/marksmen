@@ -12,6 +12,9 @@ use lopdf::{Document, Object, ObjectId};
 pub struct TextRun {
     pub text: String,
     pub rect: super::Rect,
+    pub font_size: f32,
+    pub font_name: String,
+    pub is_bold: bool,
 }
 
 /// Extract all text runs with page-coordinate bounding boxes from a PDF page.
@@ -25,119 +28,347 @@ pub fn extract_text_runs(document: &Document, page_id: ObjectId) -> Result<Vec<T
     let page_dict = document.get_dictionary(page_id)?;
 
     // Resolve content stream(s).
-    let contents = match page_dict.get(b"Contents") {
-        Ok(Object::Reference(id)) => {
-            vec![*id]
+    // Contents can be a direct stream reference, a direct array, or a reference resolving to an array.
+    let contents: Vec<ObjectId> = {
+        let raw = match page_dict.get(b"Contents") {
+            Ok(o) => o.clone(),
+            Err(_) => return Ok(Vec::new()),
+        };
+        match raw {
+            Object::Array(arr) => arr.iter().filter_map(|o| o.as_reference().ok()).collect(),
+            Object::Reference(id) => {
+                match document.get_object(id)? {
+                    // ref → array: collect the inner refs
+                    Object::Array(arr) => {
+                        arr.iter().filter_map(|o| o.as_reference().ok()).collect()
+                    }
+                    // ref → stream: use the ref itself
+                    _ => vec![id],
+                }
+            }
+            _ => return Ok(Vec::new()),
         }
-        Ok(Object::Array(arr)) => {
-            arr.iter().filter_map(|o| o.as_reference().ok()).collect()
-        }
-        Ok(_) => return Ok(Vec::new()),
-        Err(_) => return Ok(Vec::new()),
     };
+    tracing::debug!("Resolved {} content stream IDs for page", contents.len());
+
+    let mut font_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    if let Ok(resources_obj) = page_dict.get(b"Resources") {
+        let resources_dict = match resources_obj {
+            Object::Dictionary(d) => Some(d),
+            Object::Reference(id) => document.get_dictionary(*id).ok(),
+            _ => None,
+        };
+        if let Some(res) = resources_dict {
+            if let Ok(fonts_obj) = res.get(b"Font") {
+                let fonts_dict = match fonts_obj {
+                    Object::Dictionary(d) => Some(d),
+                    Object::Reference(id) => document.get_dictionary(*id).ok(),
+                    _ => None,
+                };
+                if let Some(fd) = fonts_dict {
+                    for (k, v) in fd.iter() {
+                        let font_obj_res = match v {
+                            Object::Dictionary(d) => Ok(d),
+                            Object::Reference(id) => document.get_dictionary(*id),
+                            _ => Err(lopdf::Error::DictKey),
+                        };
+                        if let Ok(font_obj) = font_obj_res {
+                            if let Ok(base_font) =
+                                font_obj.get(b"BaseFont").and_then(|o| o.as_name())
+                            {
+                                font_map.insert(
+                                    String::from_utf8_lossy(k).into_owned(),
+                                    String::from_utf8_lossy(base_font).into_owned(),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     let mut runs: Vec<TextRun> = Vec::new();
     let mut state = GraphicsState::default();
+
+    let res_dict = page_dict
+        .get(b"Resources")
+        .and_then(|o| match o {
+            Object::Dictionary(d) => Ok(d.clone()),
+            Object::Reference(id) => document.get_dictionary(*id).cloned(),
+            _ => Err(lopdf::Error::DictKey),
+        })
+        .unwrap_or_else(|_| lopdf::Dictionary::new());
 
     for content_id in contents {
         let stream = match document.get_object(content_id)? {
             Object::Stream(s) => s,
             _ => continue,
         };
-        let content = stream.decode_content().unwrap_or_else(|_| lopdf::content::Content { operations: vec![] });
-
-        for operation in &content.operations {
-            match operation.operator.as_ref() {
-                "q" => state.push_gs(),
-                "Q" => state.pop_gs(),
-                "cm" => {
-                    // Concatenate matrix to CTM.
-                    if let Some(m) = parse_matrix(&operation.operands) {
-                        state.ctm = matrix_concat(state.ctm, m);
+        let content = match stream.decompressed_content() {
+            Ok(raw_bytes) => {
+                tracing::debug!(
+                    "Stream raw bytes (first {}): {:?}",
+                    raw_bytes.len().min(80),
+                    &raw_bytes[..raw_bytes.len().min(80)]
+                );
+                match lopdf::content::Content::decode(&raw_bytes) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        tracing::debug!("Content decode after decompression failed: {}", e);
+                        lopdf::content::Content { operations: vec![] }
                     }
                 }
-                "Tm" => {
-                    // Set text matrix (and text line matrix).
-                    if let Some(m) = parse_matrix(&operation.operands) {
-                        state.tm = m;
-                        state.tlm = m;
-                    }
-                }
-                "Td" => {
-                    // Move text position.
-                    if let (Some(tx), Some(ty)) = (
-                        operand_f32(&operation.operands, 0),
-                        operand_f32(&operation.operands, 1),
-                    ) {
-                        state.tlm[4] += tx;
-                        state.tlm[5] += ty;
-                        state.tm = state.tlm;
-                    }
-                }
-                "TD" => {
-                    // Move text position and set leading.
-                    if let (Some(tx), Some(ty)) = (
-                        operand_f32(&operation.operands, 0),
-                        operand_f32(&operation.operands, 1),
-                    ) {
-                        state.tlm[4] += tx;
-                        state.tlm[5] += ty;
-                        state.tm = state.tlm;
-                        state.leading = -ty;
-                    }
-                }
-                "T*" => {
-                    // Move to start of next line.
-                    state.tlm[5] -= state.leading;
-                    state.tm = state.tlm;
-                }
-                "Tf" => {
-                    // Set font and size.
-                    if let Some(size) = operand_f32(&operation.operands, 1) {
-                        state.font_size = size;
-                    }
-                }
-                "TJ" => {
-                    // Show text with individual glyph positioning.
-                    if let Some(arr) = operation.operands.first().and_then(|o| o.as_array().ok()) {
-                        let mut text = String::new();
-                        for item in arr {
-                            match item {
-                                Object::String(s, _) => {
-                                    if let Ok(s) = std::str::from_utf8(s) {
-                                        text.push_str(&String::from_utf8_lossy(s.as_bytes()));
-                                    }
-                                }
-                                _ => {}
-                            }
-                        }
-                        if !text.is_empty() {
-                            if let Some(rect) = state.text_rect(&text) {
-                                runs.push(TextRun { text: text.clone(), rect });
-                            }
-                            state.advance_tm(&text);
-                        }
-                    }
-                }
-                "Tj" | "'" | "\"" => {
-                    // Show text (simple string or with line spacing).
-                    if let Some(text) = operation.operands.first().and_then(|o| {
-                        o.as_string().ok().map(|s| s.into_owned())
-                    }) {
-                        if !text.is_empty() {
-                            if let Some(rect) = state.text_rect(&text) {
-                                runs.push(TextRun { text: text.clone(), rect });
-                            }
-                            state.advance_tm(&text);
-                        }
-                    }
-                }
-                _ => {}
             }
-        }
+            Err(e) => {
+                tracing::debug!("Decompression failed: {}", e);
+                lopdf::content::Content { operations: vec![] }
+            }
+        };
+
+        tracing::debug!(
+            "Page content stream has {} operations. First op: '{}'",
+            content.operations.len(),
+            content
+                .operations
+                .first()
+                .map(|o| o.operator.as_ref())
+                .unwrap_or("None")
+        );
+
+        let mut layout_bounds = Vec::new();
+        process_operations(
+            document,
+            &res_dict,
+            &content.operations,
+            &mut state,
+            &font_map,
+            &mut runs,
+            &mut layout_bounds,
+        );
     }
 
     Ok(runs)
+}
+
+fn process_operations(
+    document: &Document,
+    resources: &lopdf::Dictionary,
+    operations: &[lopdf::content::Operation],
+    state: &mut GraphicsState,
+    font_map: &std::collections::HashMap<String, String>,
+    runs: &mut Vec<TextRun>,
+    layout_bounds: &mut Vec<super::Rect>,
+) {
+    for operation in operations {
+        match operation.operator.as_ref() {
+            "q" => state.push_gs(),
+            "Q" => state.pop_gs(),
+            "cm" => {
+                if let Some(m) = parse_matrix(&operation.operands) {
+                    state.ctm = matrix_concat(state.ctm, m);
+                }
+            }
+            "re" => {
+                if let (Some(x), Some(y), Some(w), Some(h)) = (
+                    operand_f32(&operation.operands, 0),
+                    operand_f32(&operation.operands, 1),
+                    operand_f32(&operation.operands, 2),
+                    operand_f32(&operation.operands, 3),
+                ) {
+                    let corners = [(x, y), (x + w, y), (x + w, y + h), (x, y + h)];
+                    let mut xs = Vec::with_capacity(4);
+                    let mut ys = Vec::with_capacity(4);
+                    for (cx, cy) in &corners {
+                        let (px, py) = matrix_point(state.ctm, *cx, *cy);
+                        xs.push(px);
+                        ys.push(py);
+                    }
+                    layout_bounds.push(super::Rect {
+                        llx: xs.iter().cloned().fold(f32::INFINITY, f32::min),
+                        lly: ys.iter().cloned().fold(f32::INFINITY, f32::min),
+                        urx: xs.iter().cloned().fold(f32::NEG_INFINITY, f32::max),
+                        ury: ys.iter().cloned().fold(f32::NEG_INFINITY, f32::max),
+                    });
+                }
+            }
+            "Do" => {
+                // XObject Traversal
+                if let Some(name_obj) = operation.operands.first() {
+                    if let Ok(name) = name_obj.as_name() {
+                        println!(
+                            "DEBUG: Found Do operator for XObject: {}",
+                            String::from_utf8_lossy(name)
+                        );
+                        if let Ok(xobjs) = resources.get(b"XObject") {
+                            let xdict = match xobjs {
+                                Object::Dictionary(d) => Some(d),
+                                Object::Reference(id) => document.get_dictionary(*id).ok(),
+                                _ => None,
+                            };
+                            if let Some(xd) = xdict {
+                                if let Ok(xobj_ref) = xd.get(name) {
+                                    if let Ok(Object::Stream(xstream)) = match xobj_ref {
+                                        Object::Reference(id) => document.get_object(*id),
+                                        obj => Ok(obj),
+                                    } {
+                                        if let Ok(xcontent) = xstream.decode_content() {
+                                            tracing::debug!(
+                                                "Extracted {} operations from XObject",
+                                                xcontent.operations.len()
+                                            );
+                                            // Extract potential local resources for this XObject
+                                            let local_res = xstream
+                                                .dict
+                                                .get(b"Resources")
+                                                .and_then(|o| match o {
+                                                    Object::Dictionary(d) => Ok(d.clone()),
+                                                    Object::Reference(id) => {
+                                                        document.get_dictionary(*id).cloned()
+                                                    }
+                                                    _ => Err(lopdf::Error::DictKey),
+                                                })
+                                                .unwrap_or_else(|_| resources.clone());
+
+                                            state.push_gs(); // Isolate XObject state
+                                            process_operations(
+                                                document,
+                                                &local_res,
+                                                &xcontent.operations,
+                                                state,
+                                                font_map,
+                                                runs,
+                                                layout_bounds,
+                                            );
+                                            state.pop_gs();
+                                        } else {
+                                            tracing::debug!("Failed to decode XObject stream");
+                                        }
+                                    } else {
+                                        tracing::debug!("XObject is not a stream");
+                                    }
+                                } else {
+                                    tracing::debug!("XObject name not found in XObject dict");
+                                }
+                            }
+                        } else {
+                            tracing::debug!("No XObject dictionary found in resources");
+                        }
+                    }
+                }
+            }
+            "Tm" => {
+                // Set text matrix (and text line matrix).
+                if let Some(m) = parse_matrix(&operation.operands) {
+                    state.tm = m;
+                    state.tlm = m;
+                }
+            }
+            "Td" => {
+                // Move text position.
+                if let (Some(tx), Some(ty)) = (
+                    operand_f32(&operation.operands, 0),
+                    operand_f32(&operation.operands, 1),
+                ) {
+                    state.tlm[4] += tx;
+                    state.tlm[5] += ty;
+                    state.tm = state.tlm;
+                }
+            }
+            "TD" => {
+                // Move text position and set leading.
+                if let (Some(tx), Some(ty)) = (
+                    operand_f32(&operation.operands, 0),
+                    operand_f32(&operation.operands, 1),
+                ) {
+                    state.tlm[4] += tx;
+                    state.tlm[5] += ty;
+                    state.tm = state.tlm;
+                    state.leading = -ty;
+                }
+            }
+            "T*" => {
+                // Move to start of next line.
+                state.tlm[5] -= state.leading;
+                state.tm = state.tlm;
+            }
+            "Tf" => {
+                // Set font and size.
+                if let Some(font_name_obj) = operation.operands.first() {
+                    if let Ok(name) = font_name_obj.as_name() {
+                        let key = String::from_utf8_lossy(name).into_owned();
+                        if let Some(base_font) = font_map.get(&key) {
+                            state.font_name = base_font.clone();
+                        } else {
+                            state.font_name = key;
+                        }
+                    }
+                }
+                if let Some(size) = operand_f32(&operation.operands, 1) {
+                    state.font_size = size;
+                }
+            }
+            "TJ" => {
+                // Show text with individual glyph positioning.
+                if let Some(arr) = operation.operands.first().and_then(|o| o.as_array().ok()) {
+                    for item in arr {
+                        match item {
+                            Object::String(s, _) => {
+                                let text = String::from_utf8_lossy(s).into_owned();
+                                if !text.is_empty() {
+                                    if let Some(rect) = state.text_rect(&text, layout_bounds) {
+                                        let is_bold =
+                                            state.font_name.to_lowercase().contains("bold");
+                                        runs.push(TextRun {
+                                            text: text.clone(),
+                                            rect,
+                                            font_size: state.font_size,
+                                            font_name: state.font_name.clone(),
+                                            is_bold,
+                                        });
+                                    }
+                                    state.advance_tm(&text, layout_bounds);
+                                }
+                            }
+                            Object::Integer(offset) => {
+                                // Negative offset means move right (glyph spacing in 1/1000 text units).
+                                let tx = -(*offset as f32) * state.font_size / 1000.0;
+                                state.tm[4] += tx;
+                            }
+                            Object::Real(offset) => {
+                                let tx = -(*offset as f32) * state.font_size / 1000.0;
+                                state.tm[4] += tx;
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            "Tj" | "'" | "\"" => {
+                // Show text (simple string or with line spacing).
+                if let Some(text) = operation
+                    .operands
+                    .first()
+                    .and_then(|o| o.as_string().ok().map(|s| s.into_owned()))
+                {
+                    if !text.is_empty() {
+                        if let Some(rect) = state.text_rect(&text, layout_bounds) {
+                            let is_bold = state.font_name.to_lowercase().contains("bold");
+                            runs.push(TextRun {
+                                text: text.clone(),
+                                rect,
+                                font_size: state.font_size,
+                                font_name: state.font_name.clone(),
+                                is_bold,
+                            });
+                        }
+                        state.advance_tm(&text, layout_bounds);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 /// 3×3 PDF graphics state matrix in row-major order:
@@ -193,11 +424,12 @@ fn operand_f32(ops: &[Object], idx: usize) -> Option<f32> {
 /// Current graphics state relevant to text positioning.
 #[derive(Debug, Clone)]
 struct GraphicsState {
-    ctm: Matrix,      // Current transformation matrix
-    tm: Matrix,       // Text matrix
-    tlm: Matrix,      // Text line matrix
+    ctm: Matrix, // Current transformation matrix
+    tm: Matrix,  // Text matrix
+    tlm: Matrix, // Text line matrix
     leading: f32,
     font_size: f32,
+    font_name: String,
     gs_stack: Vec<GsSnapshot>,
 }
 
@@ -208,6 +440,7 @@ struct GsSnapshot {
     tlm: Matrix,
     leading: f32,
     font_size: f32,
+    font_name: String,
 }
 
 impl Default for GraphicsState {
@@ -218,6 +451,7 @@ impl Default for GraphicsState {
             tlm: identity(),
             leading: 0.0,
             font_size: 12.0,
+            font_name: "Unknown".to_string(),
             gs_stack: Vec::new(),
         }
     }
@@ -231,6 +465,7 @@ impl GraphicsState {
             tlm: self.tlm,
             leading: self.leading,
             font_size: self.font_size,
+            font_name: self.font_name.clone(),
         });
     }
 
@@ -241,25 +476,40 @@ impl GraphicsState {
             self.tlm = snap.tlm;
             self.leading = snap.leading;
             self.font_size = snap.font_size;
+            self.font_name = snap.font_name;
         }
     }
 
     /// Compute the page-coordinate bounding rectangle for `text` at the current TM.
-    ///
-    /// Approximation: uses font_size as height and `text.len() * font_size * 0.5` as width.
-    /// This is crude but sufficient for intersection tests with annotation rectangles.
-    fn text_rect(&self, text: &str) -> Option<super::Rect> {
-        let width = text.len() as f32 * self.font_size * 0.5;
+    /// Uses bounding box intersection mapping to replace the default length heuristics.
+    fn text_rect(&self, text: &str, layout_bounds: &[super::Rect]) -> Option<super::Rect> {
+        let mut width = text.len() as f32 * self.font_size * 0.5;
         let height = self.font_size;
-        // Compute the four corners of the text box in text space.
-        let corners = [
-            (0.0, 0.0),
-            (width, 0.0),
-            (width, height),
-            (0.0, height),
-        ];
-        // Transform to user space (TM), then to page space (CTM).
+
         let m = matrix_concat(self.ctm, self.tm);
+        let (start_px, start_py) = matrix_point(m, 0.0, 0.0);
+
+        // Exact Layout Bounds Intersection Overrides heuristic
+        for bound in layout_bounds {
+            // Check if text starts inside the exact cell layout bounding box (structural container)
+            if start_px >= bound.llx
+                && start_px <= bound.urx
+                && start_py >= bound.lly
+                && start_py <= bound.ury
+            {
+                let bound_width = bound.urx - bound.llx;
+                // Verify bounds are plausible (e.g. not the full page boundary box itself)
+                if bound_width > 0.0 && bound_width < 1000.0 {
+                    let internal_x_scale = m[0].abs().max(0.001);
+                    width = bound_width / internal_x_scale;
+                }
+                break;
+            }
+        }
+
+        // Compute the four corners of the text box in text space.
+        let corners = [(0.0, 0.0), (width, 0.0), (width, height), (0.0, height)];
+
         let mut xs = Vec::with_capacity(4);
         let mut ys = Vec::with_capacity(4);
         for (x, y) in &corners {
@@ -276,8 +526,26 @@ impl GraphicsState {
     }
 
     /// Advance the text matrix by the width of `text`.
-    fn advance_tm(&mut self, text: &str) {
-        let width = text.len() as f32 * self.font_size * 0.5;
+    fn advance_tm(&mut self, text: &str, layout_bounds: &[super::Rect]) {
+        let mut width = text.len() as f32 * self.font_size * 0.5;
+
+        let m = matrix_concat(self.ctm, self.tm);
+        let (start_px, start_py) = matrix_point(m, 0.0, 0.0);
+        for bound in layout_bounds {
+            if start_px >= bound.llx
+                && start_px <= bound.urx
+                && start_py >= bound.lly
+                && start_py <= bound.ury
+            {
+                let bound_width = bound.urx - bound.llx;
+                if bound_width > 0.0 && bound_width < 1000.0 {
+                    let internal_x_scale = m[0].abs().max(0.001);
+                    width = bound_width / internal_x_scale;
+                }
+                break;
+            }
+        }
+
         self.tm[4] += width;
     }
 }
@@ -312,7 +580,7 @@ mod tests {
     fn graphics_state_text_rect_basic() {
         let mut gs = GraphicsState::default();
         gs.font_size = 10.0;
-        let rect = gs.text_rect("hello").unwrap();
+        let rect = gs.text_rect("hello", &[]).unwrap();
         // width ≈ 5 * 10 * 0.5 = 25
         assert!(rect.urx - rect.llx > 20.0 && rect.urx - rect.llx < 30.0);
         assert!(rect.ury - rect.lly > 5.0 && rect.ury - rect.lly < 15.0);
@@ -320,8 +588,18 @@ mod tests {
 
     #[test]
     fn rect_intersects_basic() {
-        let a = super::super::Rect { llx: 0.0, lly: 0.0, urx: 10.0, ury: 10.0 };
-        let b = super::super::Rect { llx: 5.0, lly: 5.0, urx: 15.0, ury: 15.0 };
+        let a = super::super::Rect {
+            llx: 0.0,
+            lly: 0.0,
+            urx: 10.0,
+            ury: 10.0,
+        };
+        let b = super::super::Rect {
+            llx: 5.0,
+            lly: 5.0,
+            urx: 15.0,
+            ury: 15.0,
+        };
         assert!(a.intersects(&b));
     }
 }

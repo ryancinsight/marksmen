@@ -20,7 +20,11 @@ pub fn render_to_typst(graph: &SpacedGraph) -> String {
     ));
 
     let mut ordered_subgraphs = graph.subgraphs.clone();
-    ordered_subgraphs.sort_by(|left, right| left.depth.cmp(&right.depth).then_with(|| left.title.cmp(&right.title)));
+    ordered_subgraphs.sort_by(|left, right| {
+        left.depth
+            .cmp(&right.depth)
+            .then_with(|| left.title.cmp(&right.title))
+    });
     for subgraph in &ordered_subgraphs {
         let shade = (248.0 - (subgraph.depth as f64 * 8.0)).max(228.0) as i32;
         let fill = format!("#{:02x}{:02x}{:02x}", shade, shade, shade);
@@ -44,7 +48,8 @@ pub fn render_to_typst(graph: &SpacedGraph) -> String {
             } else {
                 edge.path.clone()
             };
-            let path_points = stroke_path.iter()
+            let path_points = stroke_path
+                .iter()
                 .map(|(x, y)| format!("({}pt, {}pt)", x + 20.0, y + 20.0))
                 .collect::<Vec<_>>()
                 .join(", ");
@@ -95,14 +100,15 @@ pub fn render_to_typst(graph: &SpacedGraph) -> String {
             Some(crate::parsing::lexer::NodeShape::Round) => "radius: 10pt",
             Some(crate::parsing::lexer::NodeShape::Circle) => "radius: 50%",
             Some(crate::parsing::lexer::NodeShape::Rhombus) => "radius: 0pt", // TODO: Polygon path for pure rhombus
-            _ => "radius: 0pt", // Default square
+            _ => "radius: 0pt",                                               // Default square
         };
         let fill = typst_color(geom.style.fill.as_deref()).unwrap_or_else(|| "white".to_string());
         let stroke = typst_stroke(
             geom.style.stroke.as_deref().unwrap_or("#333333"),
             geom.style.stroke_width.as_deref().unwrap_or("1.5"),
         );
-        let text_fill = typst_color(geom.style.color.as_deref()).unwrap_or_else(|| "rgb(\"#222222\")".to_string());
+        let text_fill = typst_color(geom.style.color.as_deref())
+            .unwrap_or_else(|| "rgb(\"#222222\")".to_string());
 
         out.push_str(&format!(
             "  #place(dx: {}pt, dy: {}pt)[#rect(width: {}pt, height: {}pt, {}, fill: {}, stroke: {})[#align(center + horizon)[#text(fill: {})[{}]]]]\n",
@@ -153,14 +159,14 @@ pub fn mermaid_to_typst(input: &str) -> anyhow::Result<String> {
 
     let ast = crate::parsing::parser::parse(input)
         .map_err(|e| anyhow::anyhow!("Mermaid Parse Error: {:?}", e))?;
-    
+
     let mut graph = crate::graph::directed_graph::ast_to_graph(ast);
     crate::graph::cycle_removal::remove_cycles(&mut graph);
-    
+
     let mut ranked = crate::layout::rank_assignment::assign_ranks(&graph);
     crate::layout::crossing_reduction::minimize_crossings(&mut ranked);
     let spaced = crate::layout::coordinate_assign::assign_coordinates(&ranked);
-    
+
     Ok(render_to_typst(&spaced))
 }
 
@@ -180,12 +186,22 @@ fn render_mindmap_to_typst(input: &str) -> anyhow::Result<String> {
     ));
 
     let left_children: Vec<&MindmapNode> = mindmap.root.children.iter().step_by(2).collect();
-    let right_children: Vec<&MindmapNode> = mindmap.root.children.iter().skip(1).step_by(2).collect();
+    let right_children: Vec<&MindmapNode> =
+        mindmap.root.children.iter().skip(1).step_by(2).collect();
 
-    render_mindmap_node(&mut out, &mindmap.root.label, center_x - 70.0, center_y - 18.0, 140.0, true);
+    render_mindmap_node(
+        &mut out,
+        &mindmap.root.label,
+        center_x - 70.0,
+        center_y - 18.0,
+        140.0,
+        true,
+    );
 
     for (idx, child) in left_children.iter().enumerate() {
-        let child_y = center_y + ((idx as f64) - ((left_children.len().saturating_sub(1)) as f64 / 2.0)) * (vertical_step * 1.4);
+        let child_y = center_y
+            + ((idx as f64) - ((left_children.len().saturating_sub(1)) as f64 / 2.0))
+                * (vertical_step * 1.4);
         render_mindmap_branch(
             &mut out,
             &mindmap.root.label,
@@ -202,7 +218,9 @@ fn render_mindmap_to_typst(input: &str) -> anyhow::Result<String> {
     }
 
     for (idx, child) in right_children.iter().enumerate() {
-        let child_y = center_y + ((idx as f64) - ((right_children.len().saturating_sub(1)) as f64 / 2.0)) * (vertical_step * 1.4);
+        let child_y = center_y
+            + ((idx as f64) - ((right_children.len().saturating_sub(1)) as f64 / 2.0))
+                * (vertical_step * 1.4);
         render_mindmap_branch(
             &mut out,
             &mindmap.root.label,
@@ -399,8 +417,12 @@ fn render_er_diagram_to_typst(input: &str) -> anyhow::Result<String> {
     }
 
     for rel in &diagram.relationships {
-        let Some((fx, fy, fw, fh)) = positions.get(&rel.left).copied() else { continue };
-        let Some((tx, ty, tw, _th)) = positions.get(&rel.right).copied() else { continue };
+        let Some((fx, fy, fw, fh)) = positions.get(&rel.left).copied() else {
+            continue;
+        };
+        let Some((tx, ty, tw, _th)) = positions.get(&rel.right).copied() else {
+            continue;
+        };
         let start_x = fx + fw / 2.0;
         let start_y = fy + fh;
         let end_x = tx + tw / 2.0;
@@ -437,7 +459,9 @@ fn render_pie_to_typst(input: &str) -> anyhow::Result<String> {
     let center_y = 170.0;
     let width = 520.0;
     let height = 360.0;
-    let colors = ["#4f81bd", "#c0504d", "#9bbb59", "#8064a2", "#4bacc6", "#f79646"];
+    let colors = [
+        "#4f81bd", "#c0504d", "#9bbb59", "#8064a2", "#4bacc6", "#f79646",
+    ];
     let total: f64 = pie.slices.iter().map(|s| s.value).sum::<f64>().max(1.0);
     let mut angle = -90.0f64;
 
@@ -541,8 +565,12 @@ fn render_class_diagram_to_typst(input: &str) -> anyhow::Result<String> {
     }
 
     for rel in &diagram.relationships {
-        let Some((fx, fy, fw, fh)) = positions.get(&rel.from).copied() else { continue };
-        let Some((tx, ty, tw, _th)) = positions.get(&rel.to).copied() else { continue };
+        let Some((fx, fy, fw, fh)) = positions.get(&rel.from).copied() else {
+            continue;
+        };
+        let Some((tx, ty, tw, _th)) = positions.get(&rel.to).copied() else {
+            continue;
+        };
         let start_x = fx + fw / 2.0;
         let start_y = fy + fh;
         let end_x = tx + tw / 2.0;
@@ -582,8 +610,17 @@ fn render_gantt_to_typst(input: &str) -> anyhow::Result<String> {
     let total_rows = gantt.rows.len() as f64;
     let width = label_w + chart_w + 60.0;
     let height = top + 60.0 + total_rows * row_h + gantt.section_count as f64 * section_gap + 30.0;
-    let max_end = gantt.rows.iter().map(|r| r.start + r.duration).max().unwrap_or(1) as f64;
-    let scale = if max_end > 0.0 { chart_w / max_end } else { chart_w };
+    let max_end = gantt
+        .rows
+        .iter()
+        .map(|r| r.start + r.duration)
+        .max()
+        .unwrap_or(1) as f64;
+    let scale = if max_end > 0.0 {
+        chart_w / max_end
+    } else {
+        chart_w
+    };
 
     let mut out = String::new();
     out.push_str(&format!(
@@ -664,8 +701,12 @@ fn render_state_diagram_to_typst(input: &str) -> anyhow::Result<String> {
     }
 
     for transition in &state.transitions {
-        let Some(from_idx) = state.index_of(&transition.from) else { continue };
-        let Some(to_idx) = state.index_of(&transition.to) else { continue };
+        let Some(from_idx) = state.index_of(&transition.from) else {
+            continue;
+        };
+        let Some(to_idx) = state.index_of(&transition.to) else {
+            continue;
+        };
         let y1 = 40.0 + from_idx as f64 * 90.0 + state_h;
         let y2 = 40.0 + to_idx as f64 * 90.0;
         let mid_x = x + state_w / 2.0;
@@ -675,7 +716,8 @@ fn render_state_diagram_to_typst(input: &str) -> anyhow::Result<String> {
         ));
         out.push_str(&format!(
             "  #place(dx: {}pt, dy: {}pt)[#text(size: 12pt, fill: rgb(\"#555555\"))[▼]]\n",
-            mid_x - 5.0, y2 - 8.0
+            mid_x - 5.0,
+            y2 - 8.0
         ));
         if let Some(label) = &transition.label {
             out.push_str(&format!(
@@ -720,10 +762,13 @@ fn render_sequence_to_typst(input: &str) -> anyhow::Result<String> {
     }
 
     for activation in &activations {
-        let Some(idx) = seq.index_of(&activation.participant) else { continue };
+        let Some(idx) = seq.index_of(&activation.participant) else {
+            continue;
+        };
         let x = 60.0 + (idx as f64 * lane_spacing) - 7.0 + (activation.depth as f64 * 6.0);
         let y = top + header_h + (activation.start_row as f64 * row_h) - 10.0;
-        let activation_height = ((activation.end_row - activation.start_row) as f64 * row_h).max(24.0);
+        let activation_height =
+            ((activation.end_row - activation.start_row) as f64 * row_h).max(24.0);
         out.push_str(&format!(
             "  #place(dx: {}pt, dy: {}pt)[#rect(width: 14pt, height: {}pt, radius: 3pt, fill: rgb(\"#fff4d6\"), stroke: 1pt + rgb(\"#b26b00\"))[]]\n",
             x,
@@ -736,8 +781,12 @@ fn render_sequence_to_typst(input: &str) -> anyhow::Result<String> {
         let y = top + header_h + (row_idx as f64 * row_h);
         match row {
             SequenceRow::Message { from, to, label } => {
-                let Some(from_idx) = seq.index_of(from) else { continue };
-                let Some(to_idx) = seq.index_of(to) else { continue };
+                let Some(from_idx) = seq.index_of(from) else {
+                    continue;
+                };
+                let Some(to_idx) = seq.index_of(to) else {
+                    continue;
+                };
                 let x1 = 60.0 + (from_idx as f64 * lane_spacing);
                 let x2 = 60.0 + (to_idx as f64 * lane_spacing);
                 out.push_str(&format!(
@@ -898,7 +947,10 @@ fn arrowhead_points(path: &[(f64, f64)], length: f64, width: f64) -> Option<[(f6
 }
 
 fn escape_typst_text(input: &str) -> String {
-    input.replace('\\', "\\\\").replace('[', "\\[").replace(']', "\\]")
+    input
+        .replace('\\', "\\\\")
+        .replace('[', "\\[")
+        .replace(']', "\\]")
 }
 
 #[derive(Debug)]
@@ -921,8 +973,15 @@ struct SequenceParticipant {
 
 #[derive(Debug)]
 enum SequenceRow {
-    Message { from: String, to: String, label: String },
-    Note { over: Vec<String>, label: String },
+    Message {
+        from: String,
+        to: String,
+        label: String,
+    },
+    Note {
+        over: Vec<String>,
+        label: String,
+    },
     Activate(String),
     Deactivate(String),
     Control(String),
@@ -1077,7 +1136,10 @@ fn parse_sequence_diagram(input: &str) -> anyhow::Result<SequenceDiagram> {
                 });
             } else {
                 let id = rest.trim().to_string();
-                participants.push(SequenceParticipant { label: id.clone(), id });
+                participants.push(SequenceParticipant {
+                    label: id.clone(),
+                    id,
+                });
             }
             continue;
         }
@@ -1210,7 +1272,11 @@ fn parse_gantt_diagram(input: &str) -> anyhow::Result<GanttDiagram> {
 
     for raw_line in input.lines() {
         let line = raw_line.trim();
-        if line.is_empty() || line == "gantt" || line.starts_with("dateFormat") || line.starts_with("axisFormat") {
+        if line.is_empty()
+            || line == "gantt"
+            || line.starts_with("dateFormat")
+            || line.starts_with("axisFormat")
+        {
             continue;
         }
         if let Some(rest) = line.strip_prefix("title ") {
@@ -1224,14 +1290,21 @@ fn parse_gantt_diagram(input: &str) -> anyhow::Result<GanttDiagram> {
         }
 
         if let Some((label, rhs)) = line.split_once(':') {
-            let parts: Vec<&str> = rhs.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+            let parts: Vec<&str> = rhs
+                .split(',')
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .collect();
             let numeric: Vec<i32> = parts.iter().filter_map(|p| p.parse::<i32>().ok()).collect();
             let (start, duration) = match numeric.as_slice() {
                 [start, duration, ..] => (*start, *duration),
                 [single] => (0, *single),
                 [] => (0, 1),
             };
-            let section_starts_here = rows.last().map(|r: &GanttRow| r.section != current_section).unwrap_or(true);
+            let section_starts_here = rows
+                .last()
+                .map(|r: &GanttRow| r.section != current_section)
+                .unwrap_or(true);
             rows.push(GanttRow {
                 section: current_section.clone(),
                 section_starts_here,
@@ -1246,7 +1319,11 @@ fn parse_gantt_diagram(input: &str) -> anyhow::Result<GanttDiagram> {
         return Err(anyhow::anyhow!("Gantt diagram has no rows"));
     }
 
-    Ok(GanttDiagram { title, rows, section_count })
+    Ok(GanttDiagram {
+        title,
+        rows,
+        section_count,
+    })
 }
 
 fn parse_state_diagram(input: &str) -> anyhow::Result<StateDiagram> {
@@ -1282,11 +1359,15 @@ fn parse_state_diagram(input: &str) -> anyhow::Result<StateDiagram> {
         return Err(anyhow::anyhow!("State diagram has no states"));
     }
 
-    Ok(StateDiagram { states, transitions })
+    Ok(StateDiagram {
+        states,
+        transitions,
+    })
 }
 
 fn parse_class_diagram(input: &str) -> anyhow::Result<ClassDiagram> {
-    let mut classes: std::collections::BTreeMap<String, ClassNode> = std::collections::BTreeMap::new();
+    let mut classes: std::collections::BTreeMap<String, ClassNode> =
+        std::collections::BTreeMap::new();
     let mut relationships = Vec::new();
     let mut current_class: Option<String> = None;
 
@@ -1314,19 +1395,23 @@ fn parse_class_diagram(input: &str) -> anyhow::Result<ClassDiagram> {
         if let Some(rest) = line.strip_prefix("class ") {
             if let Some(name) = rest.strip_suffix('{') {
                 let class_name = name.trim().to_string();
-                classes.entry(class_name.clone()).or_insert_with(|| ClassNode {
-                    name: class_name.clone(),
-                    members: Vec::new(),
-                });
+                classes
+                    .entry(class_name.clone())
+                    .or_insert_with(|| ClassNode {
+                        name: class_name.clone(),
+                        members: Vec::new(),
+                    });
                 current_class = Some(class_name);
                 continue;
             }
 
             let class_name = rest.trim().to_string();
-            classes.entry(class_name.clone()).or_insert_with(|| ClassNode {
-                name: class_name,
-                members: Vec::new(),
-            });
+            classes
+                .entry(class_name.clone())
+                .or_insert_with(|| ClassNode {
+                    name: class_name,
+                    members: Vec::new(),
+                });
             continue;
         }
 
@@ -1344,10 +1429,16 @@ fn parse_class_diagram(input: &str) -> anyhow::Result<ClassDiagram> {
             };
 
             if !left.is_empty() {
-                classes.entry(left.clone()).or_insert_with(|| ClassNode { name: left.clone(), members: Vec::new() });
+                classes.entry(left.clone()).or_insert_with(|| ClassNode {
+                    name: left.clone(),
+                    members: Vec::new(),
+                });
             }
             if !right.is_empty() {
-                classes.entry(right.clone()).or_insert_with(|| ClassNode { name: right.clone(), members: Vec::new() });
+                classes.entry(right.clone()).or_insert_with(|| ClassNode {
+                    name: right.clone(),
+                    members: Vec::new(),
+                });
             }
 
             relationships.push(ClassRelationship {
@@ -1370,7 +1461,8 @@ fn parse_class_diagram(input: &str) -> anyhow::Result<ClassDiagram> {
 }
 
 fn parse_er_diagram(input: &str) -> anyhow::Result<ErDiagram> {
-    let mut entities: std::collections::BTreeMap<String, ErEntity> = std::collections::BTreeMap::new();
+    let mut entities: std::collections::BTreeMap<String, ErEntity> =
+        std::collections::BTreeMap::new();
     let mut relationships = Vec::new();
     let mut current_entity: Option<String> = None;
 
@@ -1393,28 +1485,41 @@ fn parse_er_diagram(input: &str) -> anyhow::Result<ErDiagram> {
 
         if let Some(name) = line.strip_suffix('{') {
             let entity_name = name.trim().to_string();
-            entities.entry(entity_name.clone()).or_insert_with(|| ErEntity {
-                name: entity_name.clone(),
-                attributes: Vec::new(),
-            });
+            entities
+                .entry(entity_name.clone())
+                .or_insert_with(|| ErEntity {
+                    name: entity_name.clone(),
+                    attributes: Vec::new(),
+                });
             current_entity = Some(entity_name);
             continue;
         }
 
         let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() >= 4 && parts[1].contains("||") || parts.len() >= 4 && parts[1].contains('}') || parts[1].contains('|') || parts[1].contains('o') {
+        if parts.len() >= 4 && parts[1].contains("||")
+            || parts.len() >= 4 && parts[1].contains('}')
+            || parts[1].contains('|')
+            || parts[1].contains('o')
+        {
             if parts.len() >= 4 {
                 let left = parts[0].to_string();
                 let cardinality = parts[1];
                 let right = parts[2].to_string();
                 let label = parts[3..].join(" ").trim_matches(':').trim().to_string();
-                let (left_cardinality, right_cardinality) = if let Some((l, r)) = cardinality.split_once("--") {
-                    (l.to_string(), r.to_string())
-                } else {
-                    (cardinality.to_string(), String::new())
-                };
-                entities.entry(left.clone()).or_insert_with(|| ErEntity { name: left.clone(), attributes: Vec::new() });
-                entities.entry(right.clone()).or_insert_with(|| ErEntity { name: right.clone(), attributes: Vec::new() });
+                let (left_cardinality, right_cardinality) =
+                    if let Some((l, r)) = cardinality.split_once("--") {
+                        (l.to_string(), r.to_string())
+                    } else {
+                        (cardinality.to_string(), String::new())
+                    };
+                entities.entry(left.clone()).or_insert_with(|| ErEntity {
+                    name: left.clone(),
+                    attributes: Vec::new(),
+                });
+                entities.entry(right.clone()).or_insert_with(|| ErEntity {
+                    name: right.clone(),
+                    attributes: Vec::new(),
+                });
                 relationships.push(ErRelationship {
                     left,
                     left_cardinality,
@@ -1430,7 +1535,10 @@ fn parse_er_diagram(input: &str) -> anyhow::Result<ErDiagram> {
         return Err(anyhow::anyhow!("ER diagram has no entities"));
     }
 
-    Ok(ErDiagram { entities: entities.into_values().collect(), relationships })
+    Ok(ErDiagram {
+        entities: entities.into_values().collect(),
+        relationships,
+    })
 }
 
 fn parse_pie_diagram(input: &str) -> anyhow::Result<PieDiagram> {
@@ -1515,10 +1623,18 @@ fn parse_journey_diagram(input: &str) -> anyhow::Result<JourneyDiagram> {
         }
         if let Some((label, rhs)) = line.split_once(':') {
             let mut parts = rhs.split(':').map(|s| s.trim());
-            let score = parts.next().and_then(|s| s.parse::<f64>().ok()).unwrap_or(3.0);
+            let score = parts
+                .next()
+                .and_then(|s| s.parse::<f64>().ok())
+                .unwrap_or(3.0);
             let actors = parts
                 .next()
-                .map(|s| s.split(',').map(|a| a.trim().to_string()).filter(|a| !a.is_empty()).collect())
+                .map(|s| {
+                    s.split(',')
+                        .map(|a| a.trim().to_string())
+                        .filter(|a| !a.is_empty())
+                        .collect()
+                })
                 .unwrap_or_else(Vec::new);
             steps.push(JourneyStep {
                 label: label.trim().to_string(),
@@ -1556,7 +1672,10 @@ fn parse_mindmap_diagram(input: &str) -> anyhow::Result<MindmapDiagram> {
 
     fn build(entries: &[(usize, String)], idx: &mut usize, level: usize) -> MindmapNode {
         let (_, label) = &entries[*idx];
-        let mut node = MindmapNode { label: label.clone(), children: Vec::new() };
+        let mut node = MindmapNode {
+            label: label.clone(),
+            children: Vec::new(),
+        };
         *idx += 1;
         while *idx < entries.len() {
             let (next_level, _) = &entries[*idx];
@@ -1770,7 +1889,9 @@ mod tests {
     A[Alpha] --- B[Beta]
     B --> C[Gamma]"#;
         let rendered = mermaid_to_typst(src).unwrap();
-        assert!(rendered.contains("#path(fill: rgb(\"#555555\"), stroke: 0.6pt + rgb(\"#555555\"), closed: true"));
+        assert!(rendered.contains(
+            "#path(fill: rgb(\"#555555\"), stroke: 0.6pt + rgb(\"#555555\"), closed: true"
+        ));
         assert!(!rendered.contains("[#text(size: 14pt)[▼]]"));
     }
 

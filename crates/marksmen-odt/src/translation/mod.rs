@@ -1,6 +1,6 @@
-use pulldown_cmark::Event;
-use marksmen_core::config::Config;
 use anyhow::Result;
+use marksmen_core::config::Config;
+use pulldown_cmark::Event;
 use std::path::Path;
 
 /// Represents the mathematically abstracted XML documents required by the OpenDocument format.
@@ -10,6 +10,7 @@ pub struct OdtDom {
     pub styles_xml: String,
     pub meta_xml: String,
     pub math_objects: Vec<String>,
+    pub images: Vec<(String, Vec<u8>)>,
 }
 
 pub mod translator;
@@ -17,8 +18,9 @@ pub mod translator;
 /// Iterates structurally over the parsed `Event` stream and sequentially constructs
 /// the XML nodes for the OpenDocument DOM representation.
 pub fn translate<'a>(events: &[Event<'a>], config: &Config, input_dir: &Path) -> Result<OdtDom> {
-    let (body_nodes, math_objects) = translator::translate_events(events, config, input_dir);
-    
+    let (body_nodes, math_objects, images, tracked_changes) =
+        translator::translate_events(events, config, input_dir);
+
     // Generate the full OpenXML representation
     let content_xml = format!(
         r##"<?xml version="1.0" encoding="UTF-8"?>
@@ -124,10 +126,11 @@ pub fn translate<'a>(events: &[Event<'a>], config: &Config, input_dir: &Path) ->
   <office:body>
     <office:text>
       {}
+      {}
     </office:text>
   </office:body>
 </office:document-content>"##,
-        body_nodes
+        tracked_changes, body_nodes
     );
 
     let styles_xml = r##"<?xml version="1.0" encoding="UTF-8"?>
@@ -151,16 +154,19 @@ pub fn translate<'a>(events: &[Event<'a>], config: &Config, input_dir: &Path) ->
   <office:master-styles>
     <style:master-page style:name="Standard" style:page-layout-name="PL_Default"/>
   </office:master-styles>
-</office:document-styles>"##.to_string();
+</office:document-styles>"##
+        .to_string();
 
     let meta_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
 <office:document-meta xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0">
-</office:document-meta>"#.to_string();
+</office:document-meta>"#
+        .to_string();
 
     Ok(OdtDom {
         content_xml,
         styles_xml,
         meta_xml,
         math_objects,
+        images,
     })
 }

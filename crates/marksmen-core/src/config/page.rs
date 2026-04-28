@@ -46,6 +46,15 @@ pub struct PageConfig {
     /// Enable automatic page numbering if footer is not explicitly set.
     #[serde(default)]
     pub page_numbers: bool,
+
+    /// Default font size for the document.
+    pub font_size: Option<String>,
+
+    /// Default font family for the document.
+    pub font_family: Option<String>,
+
+    /// Default line/paragraph spacing modifier.
+    pub line_spacing: Option<String>,
 }
 
 fn default_width() -> String {
@@ -76,6 +85,9 @@ impl Default for PageConfig {
             header: None,
             footer: None,
             page_numbers: false,
+            font_size: None,
+            font_family: None,
+            line_spacing: None,
         }
     }
 }

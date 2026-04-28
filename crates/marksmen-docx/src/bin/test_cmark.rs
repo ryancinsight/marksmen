@@ -1,4 +1,4 @@
-use pulldown_cmark::{Parser, Event};
+use pulldown_cmark::{Event, Parser};
 
 fn main() {
     let md = "<header>\n\n# Confidential\n\n</header>";

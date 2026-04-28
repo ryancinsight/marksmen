@@ -71,15 +71,18 @@ impl DirectedGraph {
             // Base empirical geometry calculation placeholder (will be rigid in layout phase)
             let width = (label_str.len() as f64 * 8.0) + 20.0;
             let height = 30.0;
-            
-            self.nodes.insert(id.clone(), NodeDetails {
-                id,
-                label: label_str,
-                shape,
-                style: style.unwrap_or_default(),
-                width,
-                height,
-            });
+
+            self.nodes.insert(
+                id.clone(),
+                NodeDetails {
+                    id,
+                    label: label_str,
+                    shape,
+                    style: style.unwrap_or_default(),
+                    width,
+                    height,
+                },
+            );
         } else if let Some(l) = label {
             // Update label if it wasn't defined earlier
             if let Some(node) = self.nodes.get_mut(&id) {
@@ -98,7 +101,13 @@ impl DirectedGraph {
         }
     }
 
-    pub fn add_edge(&mut self, from: String, to: String, style: crate::parsing::lexer::EdgeStyle, label: Option<String>) {
+    pub fn add_edge(
+        &mut self,
+        from: String,
+        to: String,
+        style: crate::parsing::lexer::EdgeStyle,
+        label: Option<String>,
+    ) {
         let edge_idx = self.edges.len();
         self.edges.push(Edge {
             from: from.clone(),
@@ -107,13 +116,19 @@ impl DirectedGraph {
             label,
         });
 
-        self.adjacency.entry(from).or_insert_with(Vec::new).push(edge_idx);
+        self.adjacency
+            .entry(from)
+            .or_insert_with(Vec::new)
+            .push(edge_idx);
     }
 
     pub fn rebuild_adjacency(&mut self) {
         self.adjacency.clear();
         for (idx, edge) in self.edges.iter().enumerate() {
-            self.adjacency.entry(edge.from.clone()).or_insert_with(Vec::new).push(idx);
+            self.adjacency
+                .entry(edge.from.clone())
+                .or_insert_with(Vec::new)
+                .push(idx);
         }
     }
 
@@ -130,7 +145,8 @@ impl DirectedGraph {
     }
 
     pub fn out_edges(&self, node_id: &str) -> Vec<&Edge> {
-        self.adjacency.get(node_id)
+        self.adjacency
+            .get(node_id)
             .map(|indices| indices.iter().map(|&i| &self.edges[i]).collect())
             .unwrap_or_default()
     }
@@ -164,12 +180,16 @@ fn merge_style(target: &mut StyleSpec, incoming: &StyleSpec) {
 /// Converts an AST into a logical DirectedGraph.
 pub fn ast_to_graph(ast: crate::parsing::parser::Ast) -> DirectedGraph {
     let mut graph = DirectedGraph::new(ast.direction.clone());
-    graph.subgraphs = ast.subgraphs.iter().map(|s| Subgraph {
-        title: s.title.clone(),
-        nodes: s.nodes.clone(),
-        parent_title: s.parent_title.clone(),
-        depth: s.depth,
-    }).collect();
+    graph.subgraphs = ast
+        .subgraphs
+        .iter()
+        .map(|s| Subgraph {
+            title: s.title.clone(),
+            nodes: s.nodes.clone(),
+            parent_title: s.parent_title.clone(),
+            depth: s.depth,
+        })
+        .collect();
 
     for stmt in ast.statements {
         match stmt {
@@ -184,12 +204,22 @@ pub fn ast_to_graph(ast: crate::parsing::parser::Ast) -> DirectedGraph {
             crate::parsing::parser::Statement::Chain(nodes, links) => {
                 for i in 0..nodes.len() {
                     let n = &nodes[i];
-                    graph.add_node(n.id.clone(), n.label.clone(), n.shape.clone(), n.style.clone());
-                    
+                    graph.add_node(
+                        n.id.clone(),
+                        n.label.clone(),
+                        n.shape.clone(),
+                        n.style.clone(),
+                    );
+
                     if i > 0 {
                         let prev = &nodes[i - 1];
                         let link = &links[i - 1];
-                        graph.add_edge(prev.id.clone(), n.id.clone(), link.style.clone(), link.label.clone());
+                        graph.add_edge(
+                            prev.id.clone(),
+                            n.id.clone(),
+                            link.style.clone(),
+                            link.label.clone(),
+                        );
                     }
                 }
             }

@@ -2,11 +2,11 @@
 
 use anyhow::Result;
 use marksmen_core::Config;
-use pulldown_cmark::{Event, Tag, TagEnd, CodeBlockKind, Alignment};
+use pulldown_cmark::{Alignment, CodeBlockKind, Event, Tag, TagEnd};
 
 pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
     let mut out = String::with_capacity(events.len() * 100);
-    
+
     // Preamble
     out.push_str("\\documentclass{article}\n");
     out.push_str("\\usepackage[utf8]{inputenc}\n");
@@ -50,9 +50,9 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
         out.push_str(&escape_latex(&config.abstract_text));
         out.push_str("\n\\end{abstract}\n\n");
     }
-    
+
     let mut state = LatexState::default();
-    
+
     for event in events {
         match event {
             Event::Start(Tag::Paragraph) => {
@@ -121,44 +121,56 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
                         Alignment::None => align_str.push('l'),
                     }
                 }
-                out.push_str(&format!("\\begin{{longtable}}{{{}}}\n\\toprule\n", align_str));
+                out.push_str(&format!(
+                    "\\begin{{longtable}}{{{}}}\n\\toprule\n",
+                    align_str
+                ));
             }
             Event::End(TagEnd::Table) => {
                 out.push_str("\\bottomrule\n\\end{longtable}\n\n");
                 state.in_table = false;
             }
-            Event::Start(Tag::TableHead) => {},
+            Event::Start(Tag::TableHead) => {}
             Event::End(TagEnd::TableHead) => out.push_str("\\midrule\n"),
             Event::Start(Tag::TableRow) => {
                 state.cell_index = 0;
-            },
+            }
             Event::End(TagEnd::TableRow) => {
                 out.push_str(" \\\\\n");
-            },
+            }
             Event::Start(Tag::TableCell) => {
                 if state.cell_index > 0 {
                     out.push_str(" & ");
                 }
                 state.cell_index += 1;
-            },
-            Event::End(TagEnd::TableCell) => {},
+            }
+            Event::End(TagEnd::TableCell) => {}
             Event::Start(Tag::Emphasis) => out.push_str("\\textit{"),
             Event::End(TagEnd::Emphasis) => out.push_str("}"),
             Event::Start(Tag::Strong) => out.push_str("\\textbf{"),
             Event::End(TagEnd::Strong) => out.push_str("}"),
             Event::Start(Tag::Strikethrough) => out.push_str(r"\sout{"), // requires \usepackage[normalem]{ulem} but we'll cheat or they can add it
             Event::End(TagEnd::Strikethrough) => out.push_str("}"),
-            Event::Start(Tag::Link { dest_url, .. }) => out.push_str(&format!("\\href{{{}}}{{", dest_url)),
+            Event::Start(Tag::Link { dest_url, .. }) => {
+                out.push_str(&format!("\\href{{{}}}{{", dest_url))
+            }
             Event::End(TagEnd::Link) => out.push_str("}"),
-            Event::Start(Tag::Image { dest_url, title, .. }) => {
+            Event::Start(Tag::Image {
+                dest_url, title, ..
+            }) => {
                 out.push_str("\\begin{figure}[h]\n\\centering\n");
-                out.push_str(&format!("\\includegraphics[width=\\textwidth]{{{}}}\n", dest_url));
+                out.push_str(&format!(
+                    "\\includegraphics[width=\\textwidth]{{{}}}\n",
+                    dest_url
+                ));
                 if !title.is_empty() {
                     out.push_str(&format!("\\caption{{{}}}\n", escape_latex(title.as_ref())));
                 }
-            },
+            }
             Event::End(TagEnd::Image) => out.push_str("\\end{figure}\n"),
-            Event::Code(text) => out.push_str(&format!("\\texttt{{{}}}", escape_latex(text.as_ref()))),
+            Event::Code(text) => {
+                out.push_str(&format!("\\texttt{{{}}}", escape_latex(text.as_ref())))
+            }
             Event::Text(text) => out.push_str(&escape_latex(text.as_ref())),
             Event::SoftBreak | Event::HardBreak => {
                 if !state.in_table {
@@ -166,7 +178,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
                 } else {
                     out.push_str(" ");
                 }
-            },
+            }
             Event::InlineMath(math) => {
                 out.push_str(&format!("${}$", math));
             }
@@ -180,7 +192,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
             _ => {}
         }
     }
-    
+
     out.push_str("\\end{document}\n");
     Ok(out)
 }

@@ -1,9 +1,9 @@
-use pulldown_cmark::{Parser, Options};
+use pulldown_cmark::{Options, Parser};
 use std::fs;
 
 fn main() {
     let text = fs::read_to_string("report/ARPA-H_SonALAsense_Milestone 12 Report.md").unwrap();
-    
+
     // We only care about the region around Table 10.
     // Let's just parse the full thing and find the events.
     let mut options = Options::empty();
@@ -11,9 +11,9 @@ fn main() {
     options.insert(Options::ENABLE_STRIKETHROUGH);
     options.insert(Options::ENABLE_TASKLISTS);
     options.insert(Options::ENABLE_HEADING_ATTRIBUTES);
-    
+
     let parser = Parser::new_ext(&text, options);
-    
+
     let mut count = 0;
     let mut last_event = None;
     for (_idx, event) in parser.enumerate() {

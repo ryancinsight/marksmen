@@ -48,8 +48,8 @@ pub fn parse_frontmatter(markdown: &str) -> Result<(&str, FrontMatterConfig)> {
                 None => "",
             };
 
-            let config: FrontMatterConfig = serde_yaml::from_str(yaml_block)
-                .context("Failed to parse YAML front-matter")?;
+            let config: FrontMatterConfig =
+                serde_yaml::from_str(yaml_block).context("Failed to parse YAML front-matter")?;
 
             Ok((body, config))
         }

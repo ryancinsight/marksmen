@@ -48,12 +48,8 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
     out.push_str("  <style type=\"text/css\">\n");
     out.push_str("    body { font-family: 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; max-width: 900px; margin: 0 auto; padding: 2rem; color: #333; }\n");
     out.push_str("    img { max-width: 100%; height: auto; }\n");
-    out.push_str(
-        "    table { border-collapse: collapse; width: 100%; margin: 1rem 0; }\n",
-    );
-    out.push_str(
-        "    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }\n",
-    );
+    out.push_str("    table { border-collapse: collapse; width: 100%; margin: 1rem 0; }\n");
+    out.push_str("    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }\n");
     out.push_str("    th { background-color: #f5f5f5; }\n");
     out.push_str("    pre { background: #f4f4f4; padding: 1rem; overflow-x: auto; }\n");
     out.push_str(
@@ -104,8 +100,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
             Event::End(TagEnd::CodeBlock) => {
                 if in_mermaid_block {
                     in_mermaid_block = false;
-                    let ast =
-                        marksmen_mermaid::parsing::parser::parse(&current_mermaid_source);
+                    let ast = marksmen_mermaid::parsing::parser::parse(&current_mermaid_source);
                     match ast {
                         Ok(a) => {
                             let directed_graph =
@@ -163,9 +158,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
             Event::Start(Tag::Table(_)) => out.push_str("<table>\n"),
             Event::End(TagEnd::Table) => out.push_str("</table>\n"),
             Event::Start(Tag::TableHead) => out.push_str("  <thead>\n    <tr>\n"),
-            Event::End(TagEnd::TableHead) => {
-                out.push_str("    </tr>\n  </thead>\n  <tbody>\n")
-            }
+            Event::End(TagEnd::TableHead) => out.push_str("    </tr>\n  </thead>\n  <tbody>\n"),
             Event::Start(Tag::TableRow) => out.push_str("    <tr>\n"),
             Event::End(TagEnd::TableRow) => out.push_str("    </tr>\n"),
             Event::Start(Tag::TableCell) => out.push_str("      <td>"),
@@ -178,9 +171,10 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
             Event::Start(Tag::Strikethrough) => out.push_str("<del>"),
             Event::End(TagEnd::Strikethrough) => out.push_str("</del>"),
 
-            Event::Start(Tag::Link { dest_url, .. }) => {
-                out.push_str(&format!("<a href=\"{}\">", marksmen_xml::escape(dest_url.as_ref())))
-            }
+            Event::Start(Tag::Link { dest_url, .. }) => out.push_str(&format!(
+                "<a href=\"{}\">",
+                marksmen_xml::escape(dest_url.as_ref())
+            )),
             Event::End(TagEnd::Link) => out.push_str("</a>"),
 
             // img uses self-closing syntax — XHTML invariant.
@@ -251,8 +245,6 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-
-
 /// Ensures the top-level `<math>` element carries the W3C MathML namespace
 /// declaration when `latex2mathml` omits it.
 ///
@@ -274,9 +266,7 @@ fn qualify_mathml_ns(mathml: &str) -> String {
 /// Renders a `SpacedGraph` into an SVG string.
 ///
 /// The SVG is XML-compliant and can be embedded directly in XHTML.
-fn render_graph_to_svg(
-    graph: &marksmen_mermaid::layout::coordinate_assign::SpacedGraph,
-) -> String {
+fn render_graph_to_svg(graph: &marksmen_mermaid::layout::coordinate_assign::SpacedGraph) -> String {
     let padding = 20.0_f64;
     let svg_width = graph.width + padding * 2.0;
     let svg_height = graph.height + padding * 2.0;
@@ -324,9 +314,7 @@ fn render_graph_to_svg(
                 marksmen_mermaid::parsing::lexer::EdgeStyle::ThickArrow => 2.5,
                 _ => 2.0,
             };
-            let dash = if edge.style
-                == marksmen_mermaid::parsing::lexer::EdgeStyle::DottedArrow
-            {
+            let dash = if edge.style == marksmen_mermaid::parsing::lexer::EdgeStyle::DottedArrow {
                 r#" stroke-dasharray="4 4""#
             } else {
                 ""

@@ -406,10 +406,18 @@ mod tests {
         let events = crate::parsing::parser::parse(md);
         let annotated = intercept(events);
 
-        let attributed = annotated.iter().find(|e| matches!(e, AnnotatedEvent::Attributed { .. }));
-        assert!(attributed.is_some(), "expected at least one Attributed event");
+        let attributed = annotated
+            .iter()
+            .find(|e| matches!(e, AnnotatedEvent::Attributed { .. }));
+        assert!(
+            attributed.is_some(),
+            "expected at least one Attributed event"
+        );
         let classes = attributed.unwrap().classes();
-        assert!(classes.contains(&"WarningBox".to_string()), "class WarningBox must be present");
+        assert!(
+            classes.contains(&"WarningBox".to_string()),
+            "class WarningBox must be present"
+        );
     }
 
     /// Diagnostic: dumps the raw pulldown-cmark event stream for attribute block markdown.
@@ -431,7 +439,9 @@ mod tests {
         let annotated = intercept(events);
         // No attribute blocks → all events remain Standard
         assert_eq!(annotated.len(), n);
-        assert!(annotated.iter().all(|e| matches!(e, AnnotatedEvent::Standard(_))));
+        assert!(annotated
+            .iter()
+            .all(|e| matches!(e, AnnotatedEvent::Standard(_))));
     }
 
     #[test]

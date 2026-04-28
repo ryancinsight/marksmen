@@ -8,5 +8,11 @@ fn extract_attr(tag: &str, attr: &str) -> Option<String> {
     None
 }
 fn main() {
-    println!("{:?}", extract_attr("<mark class=\"comment\" data-author=\"Test\" data-content=\"Hello\">", "data-author"));
+    println!(
+        "{:?}",
+        extract_attr(
+            "<mark class=\"comment\" data-author=\"Test\" data-content=\"Hello\">",
+            "data-author"
+        )
+    );
 }

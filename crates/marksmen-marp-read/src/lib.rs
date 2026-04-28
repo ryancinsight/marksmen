@@ -131,7 +131,11 @@ fn is_marp_directive(body: &str) -> bool {
         // Check for `_?identifier: ...`
         let key_part = line.split(':').next().unwrap_or("");
         let key = key_part.trim().trim_start_matches('_');
-        if key.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') && !key.is_empty() {
+        if key
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+            && !key.is_empty()
+        {
             return true;
         }
         return false;
@@ -167,17 +171,29 @@ More content.
     #[test]
     fn test_strips_front_matter() {
         let md = parse_marp(FULL_DOC).unwrap();
-        assert!(!md.contains("marp: true"), "front matter not stripped: {md}");
+        assert!(
+            !md.contains("marp: true"),
+            "front matter not stripped: {md}"
+        );
         assert!(!md.contains("headingDivider"), "front matter not stripped");
-        assert!(md.contains("# Slide One"), "heading missing after strip: {md}");
+        assert!(
+            md.contains("# Slide One"),
+            "heading missing after strip: {md}"
+        );
     }
 
     #[test]
     fn test_preserves_slide_content() {
         let md = parse_marp(FULL_DOC).unwrap();
         assert!(md.contains("Body paragraph."), "body text missing: {md}");
-        assert!(md.contains("# Slide Two"), "second slide heading missing: {md}");
-        assert!(md.contains("More content."), "second slide body missing: {md}");
+        assert!(
+            md.contains("# Slide Two"),
+            "second slide heading missing: {md}"
+        );
+        assert!(
+            md.contains("More content."),
+            "second slide body missing: {md}"
+        );
     }
 
     #[test]
@@ -193,7 +209,10 @@ More content.
         let doc = "---\nmarp: true\n---\n\n<!-- This is a regular comment -->\n# Hello\n";
         let md = parse_marp(doc).unwrap();
         // "This is a regular comment" is not a key:value directive.
-        assert!(md.contains("This is a regular comment"), "non-directive comment was stripped: {md}");
+        assert!(
+            md.contains("This is a regular comment"),
+            "non-directive comment was stripped: {md}"
+        );
     }
 
     #[test]

@@ -4,11 +4,11 @@
 //! over `word/document.xml` nodes and interpreting `w:p`, `w:r`, and OMML mathematical runs.
 
 use anyhow::{Context, Result};
-use std::io::{Cursor, Read};
 use marksmen_xml_read::Event;
 use marksmen_xml_read::Reader;
-use std::path::Path;
 use std::collections::HashMap;
+use std::io::{Cursor, Read};
+use std::path::Path;
 
 /// Analytically extracts `.docx` binary payloads into a mathematically equivalent Markdown string.
 /// Traverses `<w:p>`, `<w:r>`, and `<w:t>` elements, evaluating nested styles for bold, italic,
@@ -19,8 +19,8 @@ use std::collections::HashMap;
 
 pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> {
     let cursor = Cursor::new(bytes);
-    let mut archive = zip::ZipArchive::new(cursor)
-        .context("Failed to parse bytes as a ZIP DOCX archive")?;
+    let mut archive =
+        zip::ZipArchive::new(cursor).context("Failed to parse bytes as a ZIP DOCX archive")?;
 
     let mut rels_map: HashMap<String, String> = HashMap::new();
     if let Ok(mut rels_file) = archive.by_name("word/_rels/document.xml.rels") {
@@ -74,7 +74,8 @@ pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> 
                                 if attr.key.as_ref() == b"w:id" {
                                     current_id = String::from_utf8_lossy(&attr.value).into_owned();
                                 } else if attr.key.as_ref() == b"w:author" {
-                                    current_author = String::from_utf8_lossy(&attr.value).into_owned();
+                                    current_author =
+                                        String::from_utf8_lossy(&attr.value).into_owned();
                                 }
                             }
                         }
@@ -88,7 +89,10 @@ pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> 
                         if e.name().as_ref() == b"w:comment" {
                             in_comment = false;
                             if !current_id.is_empty() {
-                                comments_map.insert(current_id.clone(), (current_author.clone(), comment_text.clone()));
+                                comments_map.insert(
+                                    current_id.clone(),
+                                    (current_author.clone(), comment_text.clone()),
+                                );
                             }
                         }
                     }
@@ -105,8 +109,40 @@ pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> 
         let _ = header_file.read_to_string(&mut header_xml);
     }
     if !header_xml.is_empty() {
-        if let Ok(parsed) = parse_xml_payload(&mut archive, &header_xml, &comments_map, &rels_map, media_out_dir) {
+        if let Ok(parsed) = parse_xml_payload(
+            &mut archive,
+            &header_xml,
+            &comments_map,
+            &rels_map,
+            media_out_dir,
+        ) {
             header_text = parsed;
+        }
+    }
+
+    let mut footnotes_xml = String::new();
+    if let Ok(mut footnotes_file) = archive.by_name("word/footnotes.xml") {
+        let _ = footnotes_file.read_to_string(&mut footnotes_xml);
+    }
+    let mut footnotes_map: HashMap<String, String> = HashMap::new();
+    if !footnotes_xml.is_empty() {
+        let mut iter = footnotes_xml.split("<w:footnote ");
+        iter.next();
+        for block in iter {
+            if let Some(id_start) = block.find("w:id=\"") {
+                let id_rest = &block[id_start + 6..];
+                if let Some(id_end) = id_rest.find('"') {
+                    let id = &id_rest[..id_end];
+                    if id != "-1" && id != "0" {
+                        if let Some(end_idx) = block.find("</w:footnote>") {
+                            let footnote_xml = format!("<w:footnote>{}</w:footnote>", &block[..end_idx]);
+                            if let Ok(parsed) = parse_xml_payload(&mut archive, &footnote_xml, &comments_map, &rels_map, media_out_dir) {
+                                footnotes_map.insert(id.to_string(), parsed.trim().to_string());
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -118,7 +154,13 @@ pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> 
         file.read_to_string(&mut doc_xml)
             .context("Failed to read word/document.xml")?;
     }
-    let doc_text = parse_xml_payload(&mut archive, &doc_xml, &comments_map, &rels_map, media_out_dir)?;
+    let doc_text = parse_xml_payload(
+        &mut archive,
+        &doc_xml,
+        &comments_map,
+        &rels_map,
+        media_out_dir,
+    )?;
 
     let mut footer_text = String::new();
     let mut footer_xml = String::new();
@@ -126,7 +168,13 @@ pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> 
         let _ = footer_file.read_to_string(&mut footer_xml);
     }
     if !footer_xml.is_empty() {
-        if let Ok(parsed) = parse_xml_payload(&mut archive, &footer_xml, &comments_map, &rels_map, media_out_dir) {
+        if let Ok(parsed) = parse_xml_payload(
+            &mut archive,
+            &footer_xml,
+            &comments_map,
+            &rels_map,
+            media_out_dir,
+        ) {
             footer_text = parsed;
         }
     }
@@ -150,11 +198,26 @@ pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> 
         final_out.push_str(&format!("{}\n\n", meta));
     }
     if !header_text.is_empty() {
-        final_out.push_str(&format!("<header>\n\n{}\n\n</header>\n\n", header_text.trim()));
+        final_out.push_str(&format!(
+            "<header>\n\n{}\n\n</header>\n\n",
+            header_text.trim()
+        ));
     }
     final_out.push_str(&doc_text_body);
     if !footer_text.is_empty() {
-        final_out.push_str(&format!("\n\n<footer>\n\n{}\n\n</footer>", footer_text.trim()));
+        final_out.push_str(&format!(
+            "\n\n<footer>\n\n{}\n\n</footer>",
+            footer_text.trim()
+        ));
+    }
+
+    let mut fn_keys: Vec<_> = footnotes_map.keys().collect();
+    fn_keys.sort_by_key(|k| k.parse::<i32>().unwrap_or(0));
+    for k in fn_keys {
+        let val = &footnotes_map[k];
+        if !val.is_empty() {
+            final_out.push_str(&format!("\n\n[^{}]: {}", k, val));
+        }
     }
 
     Ok(final_out.trim().to_string())
@@ -165,16 +228,16 @@ fn parse_xml_payload(
     xml_content: &str,
     comments_map: &HashMap<String, (String, String)>,
     rels_map: &HashMap<String, String>,
-    media_out_dir: Option<&Path>
+    media_out_dir: Option<&Path>,
 ) -> Result<String> {
     let mut reader = Reader::from_str(xml_content);
     reader.config_mut().trim_text(false);
-    
+
     let mut output = String::new();
     let mut in_p = false;
     let mut in_r = false;
     let mut in_t = false;
-    
+
     // Formatting context for the current run
     let mut is_bold = false;
     let mut is_italic = false;
@@ -195,13 +258,12 @@ fn parse_xml_payload(
     let mut hyperlink_start_idx: Option<usize> = None;
 
     // Field code (w:fldChar / w:instrText) tracking
-    // We emit sentinels `<!-- PAGE_NUM -->` and `<!-- TOTAL_PAGES -->` into Markdown
-    // so the DOCX writer can reconstruct proper w:fldChar sequences in the footer.
-    let mut _in_fld = false;       // true between fldChar begin..end
+    let mut in_fld = false; // true between fldChar begin..end
     let mut in_fld_instr = false; // true while reading w:instrText
     let mut fld_instr_buf = String::new(); // accumulates instrText content
     let mut in_fld_cached = false; // true inside fldChar separate..end (skip display text)
-    
+    let mut fld_eval_buf = String::new(); // accumulates evaluated result
+
     // Node stack to track nested blocks (like Table vs Paragraph)
     let mut in_tbl = 0;
     // Per-table-level row counter. Pushed when entering a table, popped on exit.
@@ -221,8 +283,8 @@ fn parse_xml_payload(
 
     // List state: detect w:numId and w:ilvl from w:numPr within each w:p.
     // numId=1 => bullet, numId=2 => decimal. Track counters per ilvl.
-    let mut p_num_id: u32 = 0;   // 0 = not a list paragraph
-    let mut p_ilvl: usize = 0;   // indent level (0-indexed)
+    let mut p_num_id: u32 = 0; // 0 = not a list paragraph
+    let mut p_ilvl: usize = 0; // indent level (0-indexed)
     let mut p_list_marker_emitted = false;
     // Counters per ilvl, indexed by ilvl value (grows on demand).
     let mut list_counters: Vec<u32> = Vec::new();
@@ -237,7 +299,7 @@ fn parse_xml_payload(
     let mut pg_margin_r: i32 = -1;
     let mut pg_margin_b: i32 = -1;
     let mut pg_margin_l: i32 = -1;
-    
+
     loop {
         let event = reader.read_event();
         match &event {
@@ -248,8 +310,14 @@ fn parse_xml_payload(
                     b"w:pgSz" => {
                         for attr in e.attributes().flatten() {
                             match attr.key.as_ref() {
-                                b"w:w" => { pg_w = String::from_utf8_lossy(&attr.value).parse().unwrap_or(0); }
-                                b"w:h" => { pg_h = String::from_utf8_lossy(&attr.value).parse().unwrap_or(0); }
+                                b"w:w" => {
+                                    pg_w =
+                                        String::from_utf8_lossy(&attr.value).parse().unwrap_or(0);
+                                }
+                                b"w:h" => {
+                                    pg_h =
+                                        String::from_utf8_lossy(&attr.value).parse().unwrap_or(0);
+                                }
                                 _ => {}
                             }
                         }
@@ -258,10 +326,18 @@ fn parse_xml_payload(
                         for attr in e.attributes().flatten() {
                             let v: i32 = String::from_utf8_lossy(&attr.value).parse().unwrap_or(-1);
                             match attr.key.as_ref() {
-                                b"w:top"    => { pg_margin_t = v; }
-                                b"w:right"  => { pg_margin_r = v; }
-                                b"w:bottom" => { pg_margin_b = v; }
-                                b"w:left"   => { pg_margin_l = v; }
+                                b"w:top" => {
+                                    pg_margin_t = v;
+                                }
+                                b"w:right" => {
+                                    pg_margin_r = v;
+                                }
+                                b"w:bottom" => {
+                                    pg_margin_b = v;
+                                }
+                                b"w:left" => {
+                                    pg_margin_l = v;
+                                }
                                 _ => {}
                             }
                         }
@@ -270,8 +346,11 @@ fn parse_xml_payload(
                         // Handle inline field like NUMPAGES
                         for attr in e.attributes().flatten() {
                             if attr.key.as_ref() == b"w:instr" {
-                                let instr = String::from_utf8_lossy(&attr.value).trim().to_uppercase();
-                                if instr.starts_with("NUMPAGES") || instr.starts_with("SECTIONPAGES") {
+                                let instr =
+                                    String::from_utf8_lossy(&attr.value).trim().to_uppercase();
+                                if instr.starts_with("NUMPAGES")
+                                    || instr.starts_with("SECTIONPAGES")
+                                {
                                     output.push_str("<!-- TOTAL_PAGES -->");
                                 } else if instr.starts_with("PAGE") {
                                     output.push_str("<!-- PAGE_NUM -->");
@@ -292,7 +371,9 @@ fn parse_xml_payload(
                                         marksmen_xml_read::escape(content)
                                     );
                                     if in_tbl > 1 {
-                                        if let Some(buf) = nested_html_buf.as_mut() { buf.push_str(&tag_str); }
+                                        if let Some(buf) = nested_html_buf.as_mut() {
+                                            buf.push_str(&tag_str);
+                                        }
                                     } else {
                                         output.push_str(&tag_str);
                                     }
@@ -302,7 +383,9 @@ fn parse_xml_payload(
                     }
                     b"w:commentRangeEnd" => {
                         if in_tbl > 1 {
-                            if let Some(buf) = nested_html_buf.as_mut() { buf.push_str("</mark>"); }
+                            if let Some(buf) = nested_html_buf.as_mut() {
+                                buf.push_str("</mark>");
+                            }
                         } else {
                             output.push_str("</mark>");
                         }
@@ -311,18 +394,33 @@ fn parse_xml_payload(
                         let mut author = String::new();
                         let mut date = String::new();
                         for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"w:author" { author = String::from_utf8_lossy(&attr.value).into_owned(); }
-                            if attr.key.as_ref() == b"w:date" { date = String::from_utf8_lossy(&attr.value).into_owned(); }
+                            if attr.key.as_ref() == b"w:author" {
+                                author = String::from_utf8_lossy(&attr.value).into_owned();
+                            }
+                            if attr.key.as_ref() == b"w:date" {
+                                date = String::from_utf8_lossy(&attr.value).into_owned();
+                            }
                         }
-                        let tag = if name.as_ref() == b"w:ins" { "ins" } else { "del" };
+                        let tag = if name.as_ref() == b"w:ins" {
+                            "ins"
+                        } else {
+                            "del"
+                        };
                         if !is_empty {
                             let tag_str = if author.is_empty() && date.is_empty() {
                                 format!("<{}>", tag)
                             } else {
-                                format!("<{} data-author=\"{}\" data-date=\"{}\">", tag, marksmen_xml_read::escape(&author), marksmen_xml_read::escape(&date))
+                                format!(
+                                    "<{} data-author=\"{}\" data-date=\"{}\">",
+                                    tag,
+                                    marksmen_xml_read::escape(&author),
+                                    marksmen_xml_read::escape(&date)
+                                )
                             };
                             if in_tbl > 1 {
-                                if let Some(buf) = nested_html_buf.as_mut() { buf.push_str(&tag_str); }
+                                if let Some(buf) = nested_html_buf.as_mut() {
+                                    buf.push_str(&tag_str);
+                                }
                             } else {
                                 output.push_str(&tag_str);
                             }
@@ -349,24 +447,28 @@ fn parse_xml_payload(
                                 }
                             }
                         }
-                        // No <br/> at paragraph START inside table cells — emitted at END instead.
                     }
                     b"w:tbl" => {
                         in_tbl += 1;
                         tr_count_stack.push(0); // push a fresh row counter for this table
                         if in_tbl > 1 {
-                            // Start buffering the nested table atomically.
-                            // Push onto an existing buffer (supports 3+ deep nesting) or create one.
                             if nested_html_buf.is_none() {
                                 nested_html_buf = Some(String::new());
                             }
-                            nested_html_buf.as_mut().unwrap().push_str("<table class=\"nested\">");
+                            nested_html_buf
+                                .as_mut()
+                                .unwrap()
+                                .push_str("<table class=\"nested\">");
                         } else if output.len() > 0 && !output.ends_with("\n\n") {
                             output.push_str("\n\n");
                         }
                     }
                     b"w:tr" => {
-                        let buf = if in_tbl > 1 { nested_html_buf.as_mut().map(|b| b as &mut String) } else { None };
+                        let buf = if in_tbl > 1 {
+                            nested_html_buf.as_mut().map(|b| b as &mut String)
+                        } else {
+                            None
+                        };
                         if let Some(b) = buf {
                             b.push_str("<tr>");
                         } else {
@@ -395,12 +497,11 @@ fn parse_xml_payload(
                         }
                     }
                     b"w:gridSpan" => {
-                        // Detect how many columns this cell spans so we can emit padding
-                        // empty cells to keep Markdown table column counts uniform.
                         for attr in e.attributes().flatten() {
                             if attr.key.as_ref() == b"w:val" {
                                 if let Some(state) = tc_state_stack.last_mut() {
-                                    state.0 = String::from_utf8_lossy(&attr.value).parse().unwrap_or(1);
+                                    state.0 =
+                                        String::from_utf8_lossy(&attr.value).parse().unwrap_or(1);
                                 }
                             }
                         }
@@ -424,9 +525,7 @@ fn parse_xml_payload(
                                             p_heading_level = level;
                                         }
                                     } else {
-                                        // Non-structural style: record for {.StyleName} emission.
                                         let style_name = String::from_utf8_lossy(&val).into_owned();
-                                        // Exclude Word-internal names that have no Markdown representation.
                                         let is_internal = style_name == "Normal"
                                             || style_name == "DefaultParagraphFont"
                                             || style_name == "Header"
@@ -445,8 +544,8 @@ fn parse_xml_payload(
                         for attr in e.attributes() {
                             if let Ok(a) = attr {
                                 if a.key.as_ref() == b"w:val" {
-                                    p_num_id = String::from_utf8_lossy(&a.value)
-                                        .parse().unwrap_or(0);
+                                    p_num_id =
+                                        String::from_utf8_lossy(&a.value).parse().unwrap_or(0);
                                 }
                             }
                         }
@@ -455,8 +554,7 @@ fn parse_xml_payload(
                         for attr in e.attributes() {
                             if let Ok(a) = attr {
                                 if a.key.as_ref() == b"w:val" {
-                                    p_ilvl = String::from_utf8_lossy(&a.value)
-                                        .parse().unwrap_or(0);
+                                    p_ilvl = String::from_utf8_lossy(&a.value).parse().unwrap_or(0);
                                 }
                             }
                         }
@@ -487,21 +585,15 @@ fn parse_xml_payload(
                         is_code = false;
                         is_highlight = false;
 
-                        // List marker injection: emit before the first run of a list paragraph.
                         if p_num_id > 0 && !p_list_marker_emitted && in_p {
                             p_list_marker_emitted = true;
                             let indent = "    ".repeat(p_ilvl);
                             if p_num_id == 2 {
-                                // Ordered: decimal. Use/increment counter at p_ilvl.
                                 if p_ilvl > prev_ilvl {
-                                    // Entering deeper level: reset counter.
                                     while list_counters.len() <= p_ilvl {
                                         list_counters.push(0);
                                     }
                                     list_counters[p_ilvl] = 0;
-                                } else if p_ilvl < prev_ilvl {
-                                    // Returning to shallower level: counters at deeper levels are stale.
-                                    // Do not reset current level — it continues from where it left off.
                                 }
                                 while list_counters.len() <= p_ilvl {
                                     list_counters.push(0);
@@ -509,46 +601,63 @@ fn parse_xml_payload(
                                 list_counters[p_ilvl] += 1;
                                 output.push_str(&format!("{}{}. ", indent, list_counters[p_ilvl]));
                             } else {
-                                // Bullet
                                 output.push_str(&format!("{}- ", indent));
                             }
                             prev_ilvl = p_ilvl;
                         }
 
-                        // If this paragraph is a heading and we haven't emitted the `#`s yet
-                        // we inject them right before the first text run
                         if p_heading_level > 0 && in_p {
                             let marks = "#".repeat(p_heading_level as usize);
                             output.push_str(&format!("{} ", marks));
-                            p_heading_level = 0; // Prevents re-emitting on subsequent runs
+                            p_heading_level = 0;
                         } else if in_quote && in_p {
                             output.push_str("> ");
-                            in_quote = false; // Prevents re-emitting
+                            in_quote = false;
                         }
-                        
-                        // Inject center alignment annotation
+
                         if p_aligned_center && in_p && !p_span_center_emitted {
                             let tag_str = "<mark class=\"align-center\">";
                             if in_tbl > 1 {
-                                if let Some(buf) = nested_html_buf.as_mut() { buf.push_str(tag_str); }
+                                if let Some(buf) = nested_html_buf.as_mut() {
+                                    buf.push_str(tag_str);
+                                }
                             } else {
                                 output.push_str(tag_str);
                             }
                             p_span_center_emitted = true;
                         }
                     }
-                    b"w:instrText" => { in_fld_instr = true; fld_instr_buf.clear(); }
                     b"w:fldChar" => {
                         for attr in e.attributes().flatten() {
                             if attr.key.as_ref() == b"w:fldCharType" {
-                                match attr.value.as_ref() {
-                                    b"begin" => { _in_fld = true; in_fld_cached = false; fld_instr_buf.clear(); }
-                                    b"separate" => { in_fld_cached = true; }
-                                    b"end" => { _in_fld = false; in_fld_cached = false; }
-                                    _ => {}
+                                let fld_type = attr.value.as_ref();
+                                if fld_type == b"begin" {
+                                    in_fld = true;
+                                    in_fld_cached = false;
+                                    fld_instr_buf.clear();
+                                    fld_eval_buf.clear();
+                                } else if fld_type == b"separate" {
+                                    in_fld_cached = true;
+                                    in_fld_instr = false;
+                                } else if fld_type == b"end" {
+                                    if in_fld {
+                                        if !fld_instr_buf.is_empty() || !fld_eval_buf.is_empty() {
+                                            output.push_str(&format!(
+                                                "<span data-field=\"{}\">{}</span>",
+                                                marksmen_xml_read::escape(fld_instr_buf.trim()),
+                                                marksmen_xml_read::escape(fld_eval_buf.trim())
+                                            ));
+                                        }
+                                        in_fld = false;
+                                        in_fld_cached = false;
+                                        in_fld_instr = false;
+                                    }
                                 }
                             }
                         }
+                    }
+                    b"w:instrText" => {
+                        in_fld_instr = true;
                     }
                     b"w:t" | b"w:delText" => in_t = true,
                     b"w:b" => is_bold = true,
@@ -578,14 +687,16 @@ fn parse_xml_payload(
                         for attr in e.attributes() {
                             if let Ok(a) = attr {
                                 if a.key.as_ref() == b"w:val" {
-                                    if a.value.as_ref() == b"subscript" { is_subscript = true; }
-                                    else if a.value.as_ref() == b"superscript" { is_superscript = true; }
+                                    if a.value.as_ref() == b"subscript" {
+                                        is_subscript = true;
+                                    } else if a.value.as_ref() == b"superscript" {
+                                        is_superscript = true;
+                                    }
                                 }
                             }
                         }
                     }
                     b"w:rFonts" => {
-                        // Check if ascii attr equals "Cambria Math" or "Consolas"
                         for attr in e.attributes() {
                             if let Ok(a) = attr {
                                 if a.key.as_ref() == b"w:ascii" {
@@ -601,7 +712,8 @@ fn parse_xml_payload(
                     b"w:hyperlink" => {
                         for attr in e.attributes().flatten() {
                             if attr.key.as_ref() == b"r:id" {
-                                in_hyperlink_r_id = Some(String::from_utf8_lossy(&attr.value).to_string());
+                                in_hyperlink_r_id =
+                                    Some(String::from_utf8_lossy(&attr.value).to_string());
                                 hyperlink_start_idx = Some(output.len());
                             }
                         }
@@ -628,8 +740,9 @@ fn parse_xml_payload(
                         } else if in_quote {
                             output.push_str("\n> ");
                         } else if in_tbl > 1 {
-                            // Route line-break into nested HTML buffer.
-                            if let Some(buf) = nested_html_buf.as_mut() { buf.push_str("<br/>"); }
+                            if let Some(buf) = nested_html_buf.as_mut() {
+                                buf.push_str("<br/>");
+                            }
                         } else if in_tbl > 0 {
                             output.push_str("<br/>");
                         } else {
@@ -649,8 +762,6 @@ fn parse_xml_payload(
                                     if let Some(out_dir) = media_out_dir {
                                         if let Some(file_name) = Path::new(target).file_name() {
                                             let dest_path = out_dir.join(file_name);
-                                            // OOXML relationship targets may be absolute (leading '/')
-                                            // or relative (resolved from word/). Try both forms.
                                             let clean_target = target.replace("\\", "/");
                                             let stripped = clean_target.trim_start_matches('/');
                                             let candidates = [
@@ -659,15 +770,22 @@ fn parse_xml_payload(
                                             ];
                                             for cand in &candidates {
                                                 if let Ok(mut img_file) = archive.by_name(cand) {
-                                                    if let Ok(mut out_file) = std::fs::File::create(&dest_path) {
-                                                        let _ = std::io::copy(&mut img_file, &mut out_file);
+                                                    if let Ok(mut out_file) =
+                                                        std::fs::File::create(&dest_path)
+                                                    {
+                                                        let _ = std::io::copy(
+                                                            &mut img_file,
+                                                            &mut out_file,
+                                                        );
                                                     }
                                                     break;
                                                 }
                                             }
                                             if let Some(out_dir_name) = out_dir.file_name() {
-                                                // Convert the path completely to forward slashes for cross-platform markdown.
-                                                let relative_path = Path::new(out_dir_name).join(file_name).to_string_lossy().replace("\\", "/");
+                                                let relative_path = Path::new(out_dir_name)
+                                                    .join(file_name)
+                                                    .to_string_lossy()
+                                                    .replace("\\", "/");
                                                 drawing_target_file = relative_path;
                                             }
                                         }
@@ -692,14 +810,18 @@ fn parse_xml_payload(
             Ok(Event::End(e)) => match e.name().as_ref() {
                 b"w:ins" => {
                     if in_tbl > 1 {
-                        if let Some(buf) = nested_html_buf.as_mut() { buf.push_str("</ins>"); }
+                        if let Some(buf) = nested_html_buf.as_mut() {
+                            buf.push_str("</ins>");
+                        }
                     } else {
                         output.push_str("</ins>");
                     }
                 }
                 b"w:del" => {
                     if in_tbl > 1 {
-                        if let Some(buf) = nested_html_buf.as_mut() { buf.push_str("</del>"); }
+                        if let Some(buf) = nested_html_buf.as_mut() {
+                            buf.push_str("</del>");
+                        }
                     } else {
                         output.push_str("</del>");
                     }
@@ -708,7 +830,9 @@ fn parse_xml_payload(
                     in_p = false;
                     if p_span_center_emitted {
                         if in_tbl > 1 {
-                            if let Some(buf) = nested_html_buf.as_mut() { buf.push_str("</mark>"); }
+                            if let Some(buf) = nested_html_buf.as_mut() {
+                                buf.push_str("</mark>");
+                            }
                         } else {
                             output.push_str("</mark>");
                         }
@@ -720,8 +844,6 @@ fn parse_xml_payload(
                         output.push_str("```\n");
                         in_code_block = false;
                     }
-                    // Emit {.StyleName} attribute block for non-structural Word styles.
-                    // Only emitted for top-level (non-table) paragraphs.
                     if in_tbl == 0 {
                         if let Some(style) = p_custom_style.take() {
                             if !output.ends_with("\n\n") {
@@ -736,10 +858,7 @@ fn parse_xml_payload(
                     } else {
                         p_custom_style = None;
                     }
-                    // Emit paragraph boundary marker at END of cell paragraph so the
-                    // writer can split content back into distinct w:p elements per cell.
                     if in_tbl > 0 && !output.ends_with("| ") {
-                        // For nested cells, append <br/> to buffer; for outer cells append to output
                         if in_tbl > 1 {
                             if let Some(buf) = nested_html_buf.as_mut() {
                                 buf.push_str("<br/>");
@@ -751,18 +870,10 @@ fn parse_xml_payload(
                         }
                     }
                 }
-                b"w:instrText" => {
-                    in_fld_instr = false;
-                    // Emit the appropriate sentinel based on field instruction
-                    let instr = fld_instr_buf.trim().to_uppercase();
-                    if instr.starts_with("PAGE") && !instr.starts_with("PAGERE") {
-                        output.push_str("<!-- PAGE_NUM -->");
-                    } else if instr.starts_with("NUMPAGES") || instr.starts_with("SECTIONPAGES") {
-                        output.push_str("<!-- TOTAL_PAGES -->");
-                    }
-                }
                 b"w:hyperlink" => {
-                    if let (Some(r_id), Some(start_idx)) = (in_hyperlink_r_id.take(), hyperlink_start_idx.take()) {
+                    if let (Some(r_id), Some(start_idx)) =
+                        (in_hyperlink_r_id.take(), hyperlink_start_idx.take())
+                    {
                         let url = rels_map.get(&r_id).cloned().unwrap_or(r_id);
                         if start_idx < output.len() {
                             let text_content = output[start_idx..].to_string();
@@ -788,7 +899,7 @@ fn parse_xml_payload(
                         tc_align = state.1;
                         tc_bg = state.2;
                     }
-                    
+
                     if in_tbl > 1 {
                         if let Some(buf) = nested_html_buf.as_mut() {
                             while buf.ends_with("<br/>") {
@@ -843,11 +954,9 @@ fn parse_xml_payload(
                     in_tbl -= 1;
                     let _ = tr_count_stack.pop();
                     if in_tbl >= 1 {
-                        // Close the nested table tag in the buffer and emit the complete block atomically
                         if let Some(buf) = nested_html_buf.as_mut() {
                             buf.push_str("</table>");
                         }
-                        // When depth drops back to 1 (outermost table), flush buffer to output
                         if in_tbl == 1 {
                             if let Some(full_html) = nested_html_buf.take() {
                                 output.push_str(&full_html);
@@ -858,12 +967,23 @@ fn parse_xml_payload(
                     }
                 }
                 b"w:drawing" => {
-                    let alt = if !drawing_name.is_empty() { &drawing_name } else { "Image" };
-                    let path = if !drawing_target_file.is_empty() { &drawing_target_file } else { &drawing_descr };
+                    let alt = if !drawing_name.is_empty() {
+                        &drawing_name
+                    } else {
+                        "Image"
+                    };
+                    let path = if !drawing_target_file.is_empty() {
+                        &drawing_target_file
+                    } else {
+                        &drawing_descr
+                    };
                     let valid_path = path.replace(" ", "%20");
                     if in_tbl > 1 {
                         if let Some(buf) = nested_html_buf.as_mut() {
-                            buf.push_str(&format!("<img src=\"{}\" alt=\"{}\" />", valid_path, alt));
+                            buf.push_str(&format!(
+                                "<img src=\"{}\" alt=\"{}\" />",
+                                valid_path, alt
+                            ));
                         }
                     } else if in_tbl == 1 {
                         output.push_str(&format!("![{}]({})", alt, valid_path));
@@ -878,20 +998,26 @@ fn parse_xml_payload(
             },
             Ok(Event::Text(e)) => {
                 let raw_text = e.unescape().unwrap_or_default().into_owned();
-                // Accumulate instrText content for field detection
                 if in_fld_instr {
                     fld_instr_buf.push_str(&raw_text);
+                    continue;
                 }
-                // Suppress display text inside w:fldChar separate..end blocks
-                // (they are stale cached values like "2"; we reconstruct via sentinels)
-                if in_fld_cached {
-                    // skip
-                } else if in_t && in_r && in_p {
+                if in_t {
+                    if in_fld_cached {
+                        fld_eval_buf.push_str(&raw_text);
+                        continue;
+                    }
+                }
+                if in_t && in_r && in_p {
                     let mut text = raw_text;
                     if !text.is_empty() {
                         // Detect synthetic bullet points injected by marksmen-docx mapping
                         if text.starts_with("•     ") {
-                            let pad = if !output.ends_with("\n") && !output.ends_with("\n\n") { "\n- " } else { "- " };
+                            let pad = if !output.ends_with("\n") && !output.ends_with("\n\n") {
+                                "\n- "
+                            } else {
+                                "- "
+                            };
                             text = text.replacen("•     ", pad, 1);
                         }
 
@@ -905,20 +1031,44 @@ fn parse_xml_payload(
                             // Math always goes to main output even in nested cells
                             output.push_str(&formatted);
                         } else {
-                            let lead_chars = formatted.len() - formatted.trim_start_matches(' ').len();
-                            let trail_chars = formatted.len() - formatted.trim_end_matches(' ').len();
+                            let lead_chars =
+                                formatted.len() - formatted.trim_start_matches(' ').len();
+                            let trail_chars =
+                                formatted.len() - formatted.trim_end_matches(' ').len();
                             let mut core_text = formatted.trim().to_string();
                             if !core_text.is_empty() {
-                                if is_code && !in_code_block { core_text = format!("`{}`", core_text); }
-                                if is_bold { core_text = format!("**{}**", core_text); }
-                                if is_italic { core_text = format!("*{}*", core_text); }
-                                if is_underline { core_text = format!("<u>{}</u>", core_text); }
-                                if is_strike { core_text = format!("~~{}~~", core_text); }
-                                if is_subscript { core_text = format!("<sub>{}</sub>", core_text); }
-                                if is_superscript { core_text = format!("<sup>{}</sup>", core_text); }
-                                if is_highlight { core_text = format!("<mark class=\"highlight\">{}</mark>", core_text); }
+                                if is_code && !in_code_block {
+                                    core_text = format!("`{}`", core_text);
+                                }
+                                if is_bold {
+                                    core_text = format!("**{}**", core_text);
+                                }
+                                if is_italic {
+                                    core_text = format!("*{}*", core_text);
+                                }
+                                if is_underline {
+                                    core_text = format!("<u>{}</u>", core_text);
+                                }
+                                if is_strike {
+                                    core_text = format!("~~{}~~", core_text);
+                                }
+                                if is_subscript {
+                                    core_text = format!("<sub>{}</sub>", core_text);
+                                }
+                                if is_superscript {
+                                    core_text = format!("<sup>{}</sup>", core_text);
+                                }
+                                if is_highlight {
+                                    core_text =
+                                        format!("<mark class=\"highlight\">{}</mark>", core_text);
+                                }
                             }
-                            formatted = format!("{}{}{}", " ".repeat(lead_chars), core_text, " ".repeat(trail_chars));
+                            formatted = format!(
+                                "{}{}{}",
+                                " ".repeat(lead_chars),
+                                core_text,
+                                " ".repeat(trail_chars)
+                            );
                             // Route text to nested buffer when inside nested table cell.
                             // Use HTML tags instead of Markdown markers so pulldown-cmark
                             // does not re-parse ** or * as emphasis inside the HTML blob.
@@ -928,16 +1078,41 @@ fn parse_xml_payload(
                                     // as HTML tags (not Markdown markers) so pulldown-cmark does not
                                     // re-parse ** / * / _ as emphasis inside the raw HTML blob.
                                     let raw_trim = text.trim().to_string();
-                                    let mut html_text = marksmen_xml_read::escape(&raw_trim).into_owned();
-                                    if is_code { html_text = format!("<code>{}</code>", html_text); }
-                                    if is_bold { html_text = format!("<strong>{}</strong>", html_text); }
-                                    if is_italic { html_text = format!("<em>{}</em>", html_text); }
-                                    if is_underline { html_text = format!("<u>{}</u>", html_text); }
-                                    if is_strike { html_text = format!("~~{}~~", html_text); }
-                                    if is_subscript { html_text = format!("<sub>{}</sub>", html_text); }
-                                    if is_superscript { html_text = format!("<sup>{}</sup>", html_text); }
-                                    if is_highlight { html_text = format!("<mark class=\"highlight\">{}</mark>", html_text); }
-                                    let html_fmt = format!("{}{}{}", " ".repeat(lead_chars), html_text, " ".repeat(trail_chars));
+                                    let mut html_text =
+                                        marksmen_xml_read::escape(&raw_trim).into_owned();
+                                    if is_code {
+                                        html_text = format!("<code>{}</code>", html_text);
+                                    }
+                                    if is_bold {
+                                        html_text = format!("<strong>{}</strong>", html_text);
+                                    }
+                                    if is_italic {
+                                        html_text = format!("<em>{}</em>", html_text);
+                                    }
+                                    if is_underline {
+                                        html_text = format!("<u>{}</u>", html_text);
+                                    }
+                                    if is_strike {
+                                        html_text = format!("~~{}~~", html_text);
+                                    }
+                                    if is_subscript {
+                                        html_text = format!("<sub>{}</sub>", html_text);
+                                    }
+                                    if is_superscript {
+                                        html_text = format!("<sup>{}</sup>", html_text);
+                                    }
+                                    if is_highlight {
+                                        html_text = format!(
+                                            "<mark class=\"highlight\">{}</mark>",
+                                            html_text
+                                        );
+                                    }
+                                    let html_fmt = format!(
+                                        "{}{}{}",
+                                        " ".repeat(lead_chars),
+                                        html_text,
+                                        " ".repeat(trail_chars)
+                                    );
                                     buf.push_str(&html_fmt);
                                 }
                             } else {
@@ -954,8 +1129,8 @@ fn parse_xml_payload(
     }
 
     let mut cleaned = output.trim().to_string();
-    
-    // Mathematically sew fragmented typography spans back together 
+
+    // Mathematically sew fragmented typography spans back together
     // caused by OOXML <w:r> boundary iterations
     let mut last = String::new();
     while last != cleaned {
@@ -970,13 +1145,18 @@ fn parse_xml_payload(
     // Only emitted for document.xml parsing (pg_w > 0), not for header/footer payloads.
     if pg_w > 0 && pg_h > 0 {
         let margin_str = if pg_margin_t >= 0 {
-            format!(" margin:{},{},{},{}", pg_margin_t, pg_margin_r, pg_margin_b, pg_margin_l)
+            format!(
+                " margin:{},{},{},{}",
+                pg_margin_t, pg_margin_r, pg_margin_b, pg_margin_l
+            )
         } else {
             String::new()
         };
-        cleaned = format!("<!-- page:{}x{}{} -->\n\n{}", pg_w, pg_h, margin_str, cleaned);
+        cleaned = format!(
+            "<!-- page:{}x{}{} -->\n\n{}",
+            pg_w, pg_h, margin_str, cleaned
+        );
     }
-    
+
     Ok(cleaned)
 }
-

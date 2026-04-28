@@ -1,20 +1,20 @@
 //! Demonstrates native cross-compilation from Markdown to binary document targets.
 
 use anyhow::Result;
-use marksmen_core::Config;
 use marksmen_core::config::frontmatter::parse_frontmatter;
 use marksmen_core::parsing::parser::parse;
+use marksmen_core::Config;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
 
 fn main() -> Result<()> {
     let root = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    
+
     let markdown_source = "## 1. Document Export Demo\nGenerating **DOCX**, **ODT**, **PDF**, and **HTML** structures natively.";
     let (body, _) = parse_frontmatter(markdown_source)?;
     let config = Config::default();
-    
+
     // 1. HTML5 Extraction
     let events_html = parse(body);
     let html_out = marksmen_html::convert(events_html, &config)?;
@@ -23,9 +23,13 @@ fn main() -> Result<()> {
 
     // 2. OpenXML DOCX Compilation
     let events_docx = parse(body);
-    let docx_bytes = marksmen_docx::translation::document::convert(events_docx, &config, &root, None)?;
+    let docx_bytes =
+        marksmen_docx::translation::document::convert(events_docx, &config, &root, None)?;
     fs::write(root.join("demo_export.docx"), &docx_bytes)?;
-    println!("[+] Generated demo_export.docx ({} bytes).", docx_bytes.len());
+    println!(
+        "[+] Generated demo_export.docx ({} bytes).",
+        docx_bytes.len()
+    );
 
     // 3. OpenDocument ODT Compilation
     let events_odt = parse(body);

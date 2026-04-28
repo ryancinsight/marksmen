@@ -10,7 +10,7 @@
 //! always produces byte-identical compilation output (modulo Typst's own
 //! determinism guarantees, which hold for fixed source + fixed fonts).
 
-use anyhow::{Result, bail};
+use anyhow::{bail, Result};
 use typst::diag::FileResult;
 use typst::foundations::{Bytes, Datetime};
 use typst::syntax::{FileId, Source, VirtualPath};
@@ -46,8 +46,7 @@ impl MarksmenWorld {
             book: LazyHash::new(book),
             fonts,
             library: LazyHash::new(Library::default()),
-            base_path: base_path
-                .unwrap_or_else(|| std::env::current_dir().unwrap_or_default()),
+            base_path: base_path.unwrap_or_else(|| std::env::current_dir().unwrap_or_default()),
         })
     }
 }
@@ -77,12 +76,10 @@ impl World for MarksmenWorld {
 
     fn file(&self, id: FileId) -> FileResult<Bytes> {
         let path = self.base_path.join(id.vpath().as_rootless_path());
-        std::fs::read(&path)
-            .map(Bytes::new)
-            .map_err(|e| {
-                tracing::warn!(path = %path.display(), error = %e, "Failed to read asset");
-                typst::diag::FileError::NotFound(id.vpath().as_rootless_path().into())
-            })
+        std::fs::read(&path).map(Bytes::new).map_err(|e| {
+            tracing::warn!(path = %path.display(), error = %e, "Failed to read asset");
+            typst::diag::FileError::NotFound(id.vpath().as_rootless_path().into())
+        })
     }
 
     fn font(&self, index: usize) -> Option<Font> {
@@ -106,7 +103,8 @@ fn discover_fonts() -> Result<(FontBook, Vec<Font>)> {
         }
         tracing::debug!(dir = %dir.display(), "Scanning font directory");
         for path in walkdir(&dir) {
-            let ext = path.extension()
+            let ext = path
+                .extension()
                 .and_then(|e| e.to_str())
                 .unwrap_or("")
                 .to_lowercase();
@@ -142,10 +140,12 @@ fn system_font_dirs() -> Vec<std::path::PathBuf> {
             dirs.push(std::path::PathBuf::from(windir).join("Fonts"));
         }
         if let Some(local) = std::env::var_os("LOCALAPPDATA") {
-            dirs.push(std::path::PathBuf::from(local)
-                .join("Microsoft")
-                .join("Windows")
-                .join("Fonts"));
+            dirs.push(
+                std::path::PathBuf::from(local)
+                    .join("Microsoft")
+                    .join("Windows")
+                    .join("Fonts"),
+            );
         }
     }
     #[cfg(target_os = "macos")]

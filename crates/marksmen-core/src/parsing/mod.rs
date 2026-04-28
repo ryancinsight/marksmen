@@ -8,4 +8,4 @@
 pub mod attribute_pass;
 pub mod parser;
 
-pub use attribute_pass::{AnnotatedEvent, intercept};
+pub use attribute_pass::{intercept, AnnotatedEvent};

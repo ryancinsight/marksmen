@@ -6,7 +6,7 @@
 //!    and traceable through the intermediate markdown representation.
 
 use marksmen_core::config::Config;
-use marksmen_pdf_read::{extract_annotations, AnnotationSubtype};
+use marksmen_pdf_read::{AnnotationSubtype, extract_annotations};
 
 const SAMPLE_MARKDOWN: &str = r#"# Phase 12 Architecture
 
@@ -32,8 +32,8 @@ See diagram below.
 #[test]
 fn pdf_generation_produces_valid_bytes() {
     let config = Config::default();
-    let pdf_bytes = marksmen_pdf::convert(SAMPLE_MARKDOWN, &config, None)
-        .expect("PDF generation must succeed");
+    let pdf_bytes =
+        marksmen_pdf::convert(SAMPLE_MARKDOWN, &config, None).expect("PDF generation must succeed");
     // PDF magic number.
     assert_eq!(&pdf_bytes[0..4], b"%PDF");
 }
@@ -41,10 +41,9 @@ fn pdf_generation_produces_valid_bytes() {
 #[test]
 fn embedded_roundtrip_markdown_is_extractable() {
     let config = Config::default();
-    let pdf_bytes = marksmen_pdf::convert(SAMPLE_MARKDOWN, &config, None)
-        .expect("PDF generation must succeed");
-    let extracted = marksmen_pdf_read::parse_pdf(&pdf_bytes)
-        .expect("PDF extraction must succeed");
+    let pdf_bytes =
+        marksmen_pdf::convert(SAMPLE_MARKDOWN, &config, None).expect("PDF generation must succeed");
+    let extracted = marksmen_pdf_read::parse_pdf(&pdf_bytes).expect("PDF extraction must succeed");
     // The extracted markdown should exactly match the embedded original.
     assert_eq!(extracted.trim(), SAMPLE_MARKDOWN.trim());
 }
@@ -55,10 +54,13 @@ fn marksmen_origin_annotations_are_filtered() {
     // extract_annotations must filter them out, yielding an empty vec.
     let markdown = "# Hello\n\nWorld.";
     let config = Config::default();
-    let pdf_bytes = marksmen_pdf::convert(markdown, &config, None)
-        .expect("PDF generation must succeed");
+    let pdf_bytes =
+        marksmen_pdf::convert(markdown, &config, None).expect("PDF generation must succeed");
     let anns = extract_annotations(&pdf_bytes).expect("Annotation extraction must succeed");
-    assert!(anns.is_empty(), "marksmen-origin annotations must be filtered");
+    assert!(
+        anns.is_empty(),
+        "marksmen-origin annotations must be filtered"
+    );
 }
 
 #[test]
@@ -67,8 +69,8 @@ fn annotation_localization_api_compiles_and_returns_empty_for_clean_pdf() {
     // foreign annotations.
     let markdown = "Clean document without annotations.";
     let config = Config::default();
-    let pdf_bytes = marksmen_pdf::convert(markdown, &config, None)
-        .expect("PDF generation must succeed");
+    let pdf_bytes =
+        marksmen_pdf::convert(markdown, &config, None).expect("PDF generation must succeed");
     let anns = extract_annotations(&pdf_bytes).expect("Annotation extraction must succeed");
     assert!(anns.is_empty());
 }
@@ -84,10 +86,10 @@ fn comment_subtype_roundtrip_through_markdown() {
 
 Some <mark class="comment" data-author="Alice" data-content="Check this">important</mark> text."#;
     let config = Config::default();
-    let pdf_bytes = marksmen_pdf::convert(markdown, &config, None)
-        .expect("PDF generation must succeed");
-    let extracted_md = marksmen_pdf_read::parse_pdf(&pdf_bytes)
-        .expect("PDF extraction must succeed");
+    let pdf_bytes =
+        marksmen_pdf::convert(markdown, &config, None).expect("PDF generation must succeed");
+    let extracted_md =
+        marksmen_pdf_read::parse_pdf(&pdf_bytes).expect("PDF extraction must succeed");
     // Because the <mark> tag is embedded in the roundtrip metadata verbatim,
     // the extracted markdown should match the original.
     assert_eq!(extracted_md.trim(), markdown.trim());

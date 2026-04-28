@@ -3,8 +3,8 @@
 //! Mathematically partitions a DirectedGraph into discrete horizontal "ranks" or "layers"
 //! via longest-path topological sorting.
 
-use rustc_hash::FxHashMap;
 use crate::graph::directed_graph::DirectedGraph;
+use rustc_hash::FxHashMap;
 
 /// Represents the graph subdivided into Y-levels.
 #[derive(Debug, Clone)]
@@ -21,7 +21,8 @@ pub struct RankedGraph {
 
 /// Assigns ranks to nodes using the longest-path algorithm prioritizing source nodes at Rank 0.
 pub fn assign_ranks(graph: &DirectedGraph) -> RankedGraph {
-    let mut in_degrees: FxHashMap<String, usize> = graph.nodes().keys().map(|k| (k.clone(), 0)).collect();
+    let mut in_degrees: FxHashMap<String, usize> =
+        graph.nodes().keys().map(|k| (k.clone(), 0)).collect();
     let mut rank_map: FxHashMap<String, usize> = FxHashMap::default();
 
     // Calculate in-degrees
@@ -30,7 +31,8 @@ pub fn assign_ranks(graph: &DirectedGraph) -> RankedGraph {
     }
 
     // Identify sources (in-degree 0)
-    let mut queue: Vec<String> = in_degrees.iter()
+    let mut queue: Vec<String> = in_degrees
+        .iter()
         .filter(|(_, &deg)| deg == 0)
         .map(|(k, _)| k.clone())
         .collect();
@@ -43,11 +45,11 @@ pub fn assign_ranks(graph: &DirectedGraph) -> RankedGraph {
     // Topological sort & longest path
     while let Some(u) = queue.pop() {
         let current_rank = *rank_map.get(&u).unwrap();
-        
+
         for edge in graph.out_edges(&u) {
             let v = &edge.to;
             let v_rank = rank_map.entry(v.clone()).or_insert(0);
-            
+
             // Mathematically push the target node down to accommodate the longest path
             if current_rank + 1 > *v_rank {
                 *v_rank = current_rank + 1;
@@ -77,7 +79,7 @@ pub fn assign_ranks(graph: &DirectedGraph) -> RankedGraph {
     // Ensure edges span exactly ONE rank via dummy node insertion if necessary
     // (A complete Sugiyama implementation creates virtual geometry blocks here.
     // For scaffolding, we accept the ranking as is to proceed with logic.)
-    
+
     RankedGraph {
         direction: graph.direction.clone(),
         ranks,

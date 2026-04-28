@@ -189,7 +189,9 @@ fn extract_structure(md: &str) -> StructureMetrics {
         match event {
             Event::Start(Tag::Heading { .. }) => m.headings += 1,
             Event::Start(Tag::List(start_num)) => list_ordered_stack.push(start_num.is_some()),
-            Event::End(pulldown_cmark::TagEnd::List(_)) => { list_ordered_stack.pop(); },
+            Event::End(pulldown_cmark::TagEnd::List(_)) => {
+                list_ordered_stack.pop();
+            }
             Event::Start(Tag::Item) => {
                 if *list_ordered_stack.last().unwrap_or(&false) {
                     m.ordered_items += 1;
@@ -274,7 +276,10 @@ mod tests {
         let a = "# System Architecture\n\nThe system uses a three-tier model.";
         let b = "# System Architecture\n\nThe system uses a 3-tier model.";
         let sim = text_similarity(a, b);
-        assert!(sim > 0.85, "near-identical text sim should be > 0.85, got {sim}");
+        assert!(
+            sim > 0.85,
+            "near-identical text sim should be > 0.85, got {sim}"
+        );
     }
 
     #[test]
@@ -282,7 +287,10 @@ mod tests {
         let a = "# Alpha\n\nAlpha content.";
         let b = "# Zeta\n\nZeta material differs in every token completely.";
         let sim = text_similarity(a, b);
-        assert!(sim < 0.8, "completely different docs should have low sim, got {sim}");
+        assert!(
+            sim < 0.8,
+            "completely different docs should have low sim, got {sim}"
+        );
     }
 
     // ── structural_similarity ────────────────────────────────────────────────
@@ -384,7 +392,7 @@ mod tests {
 
     #[test]
     fn attribute_block_preserved_after_parse_intercept() {
-        use marksmen_core::parsing::attribute_pass::{intercept, AnnotatedEvent};
+        use marksmen_core::parsing::attribute_pass::{AnnotatedEvent, intercept};
         // The attribute block must be separated by a blank line so pulldown-cmark
         // emits it as a standalone paragraph triggering the intercept pass.
         let md = "Normal paragraph.\n\nWarning content.\n\n{.WarningBox}\n";
@@ -393,7 +401,10 @@ mod tests {
         let has_attributed = annotated
             .iter()
             .any(|e| matches!(e, AnnotatedEvent::Attributed { classes, .. } if classes.contains(&"WarningBox".to_string())));
-        assert!(has_attributed, "WarningBox attribute block must survive the intercept pass");
+        assert!(
+            has_attributed,
+            "WarningBox attribute block must survive the intercept pass"
+        );
     }
 
     #[test]

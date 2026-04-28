@@ -34,7 +34,10 @@ fn render_node(handle: ego_tree::NodeRef<'_, Node>, out: &mut String, in_pre: bo
                 let mut in_space = false;
                 for c in normalized.chars() {
                     if c.is_whitespace() {
-                        if !in_space { compressed.push(' '); in_space = true; }
+                        if !in_space {
+                            compressed.push(' ');
+                            in_space = true;
+                        }
                     } else {
                         compressed.push(c);
                         in_space = false;
@@ -46,7 +49,9 @@ fn render_node(handle: ego_tree::NodeRef<'_, Node>, out: &mut String, in_pre: bo
             }
         }
         Node::Element(element) => {
-            let Some(el) = ElementRef::wrap(handle) else { return };
+            let Some(el) = ElementRef::wrap(handle) else {
+                return;
+            };
             let name = element.name();
             match name {
                 "h1" | "h2" | "h3" | "h4" | "h5" | "h6" => {
@@ -73,12 +78,12 @@ fn render_node(handle: ego_tree::NodeRef<'_, Node>, out: &mut String, in_pre: bo
                     }
                     out.push('\n');
                 }
-                "strong" => {
+                "strong" | "b" => {
                     out.push_str("**");
                     render_children(&el, out, false);
                     out.push_str("**");
                 }
-                "em" => {
+                "em" | "i" => {
                     out.push('*');
                     render_children(&el, out, false);
                     out.push('*');
@@ -116,6 +121,18 @@ fn render_node(handle: ego_tree::NodeRef<'_, Node>, out: &mut String, in_pre: bo
                         render_children(&el, out, false);
                     }
                 }
+                "sup" => {
+                    let class = element.attr("class").unwrap_or_default();
+                    if class.contains("footnote-ref") {
+                        if let Some(label) = element.attr("data-label") {
+                            out.push_str(&format!("[^{}]", label));
+                        }
+                    } else {
+                        out.push_str("<sup>");
+                        render_children(&el, out, false);
+                        out.push_str("</sup>");
+                    }
+                }
                 "div" => {
                     let class = element.attr("class").unwrap_or_default();
                     if class.contains("math-display") {
@@ -125,8 +142,42 @@ fn render_node(handle: ego_tree::NodeRef<'_, Node>, out: &mut String, in_pre: bo
                         out.push_str("\n$$\n\n");
                     } else if class.contains("mermaid-graph") {
                         // Visible rendered graph is skipped; hidden metadata block carries source.
+                    } else if class.contains("footnote-def") {
+                        if let Some(label) = element.attr("data-label") {
+                            ensure_block_break(out);
+                            out.push_str(&format!("[^{}]: ", label));
+
+                            // Definition bodies might start with an unwanted <b>[label]</b>:
+                            // Render children into a buffer, strip the prefix, and append.
+                            let mut inner = String::new();
+                            render_children(&el, &mut inner, false);
+
+                            let mut body = inner.as_str();
+                            let prefix = format!("[{}]:", label);
+                            if body.starts_with(&prefix) {
+                                body = &body[prefix.len()..];
+                            } else if body.starts_with(&format!("[{}]", label)) {
+                                body = &body[label.len() + 2..];
+                                if body.starts_with(':') {
+                                    body = &body[1..];
+                                }
+                            }
+
+                            out.push_str(body.trim_start());
+                            out.push_str("\n\n");
+                        }
                     } else {
+                        // contenteditable generic block separation
+                        ensure_block_break(out);
                         render_children(&el, out, false);
+                        out.push_str("\n\n");
+                    }
+                }
+                "script" => {
+                    let t = element.attr("type").unwrap_or_default();
+                    if t == "application/vnd.marksmen.comments" {
+                        ensure_block_break(out);
+                        out.push_str(&format!("<script type=\"application/vnd.marksmen.comments\">\n{}\n</script>\n\n", el.inner_html()));
                     }
                 }
                 "a" => {
@@ -151,7 +202,11 @@ fn render_node(handle: ego_tree::NodeRef<'_, Node>, out: &mut String, in_pre: bo
                 }
                 "ul" => {
                     ensure_block_break(out);
-                    for li in el.children().filter_map(ElementRef::wrap).filter(|child| child.value().name() == "li") {
+                    for li in el
+                        .children()
+                        .filter_map(ElementRef::wrap)
+                        .filter(|child| child.value().name() == "li")
+                    {
                         out.push_str("- ");
                         let mut item = String::new();
                         render_children(&li, &mut item, false);
@@ -162,7 +217,12 @@ fn render_node(handle: ego_tree::NodeRef<'_, Node>, out: &mut String, in_pre: bo
                 }
                 "ol" => {
                     ensure_block_break(out);
-                    for (idx, li) in el.children().filter_map(ElementRef::wrap).filter(|child| child.value().name() == "li").enumerate() {
+                    for (idx, li) in el
+                        .children()
+                        .filter_map(ElementRef::wrap)
+                        .filter(|child| child.value().name() == "li")
+                        .enumerate()
+                    {
                         out.push_str(&(idx + 1).to_string());
                         out.push_str(". ");
                         let mut item = String::new();

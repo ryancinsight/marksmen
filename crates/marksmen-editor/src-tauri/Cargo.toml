@@ -1,0 +1,39 @@
+[package]
+name = "marksmen-editor"
+version = "0.1.0"
+description = "A Tauri App for Marksmen"
+authors = ["Ryan @ryancinsight"]
+edition = "2021"
+
+[lib]
+name = "marksmen_editor_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+serde = { workspace = true }
+serde_json = "1.0"
+base64 = { workspace = true }
+anyhow = { workspace = true }
+
+marksmen-core = { path = "../../marksmen-core" }
+marksmen-docx = { path = "../../marksmen-docx" }
+marksmen-docx-read = { path = "../../marksmen-docx-read" }
+marksmen-html = { path = "../../marksmen-html" }
+marksmen-latex = { path = "../../marksmen-latex" }
+marksmen-odt = { path = "../../marksmen-odt" }
+marksmen-odt-read = { path = "../../marksmen-odt-read" }
+marksmen-typst = { path = "../../marksmen-typst" }
+marksmen-ppt = { path = "../../marksmen-ppt" }
+marksmen-pdf = { path = "../../marksmen-pdf" }
+marksmen-pdf-read = { path = "../../marksmen-pdf-read" }
+marksmen-marp = { path = "../../marksmen-marp" }
+marksmen-diff = { path = "../../marksmen-diff" }
+
+marksmen-html-read = { path = "../../marksmen-html-read" }
+marksmen-typst-read = { path = "../../marksmen-typst-read" }
