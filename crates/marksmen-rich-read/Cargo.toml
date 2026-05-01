@@ -1,0 +1,12 @@
+[package]
+name = "marksmen-rich-read"
+version = "0.1.0"
+edition = "2021"
+description = "RTF to Markdown parser for the Marksmen workspace."
+
+[dependencies]
+anyhow = { workspace = true }
+
+[dev-dependencies]
+marksmen-core = { path = "../marksmen-core" }
+marksmen-rich = { path = "../marksmen-rich" }

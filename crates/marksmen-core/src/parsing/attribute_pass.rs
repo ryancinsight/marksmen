@@ -338,11 +338,7 @@ fn is_valid_ident(s: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
-
-    fn parse(md: &str) -> Vec<Event<'_>> {
-        Parser::new_ext(md, Options::empty()).collect()
-    }
+    use pulldown_cmark::{Event, Tag, TagEnd};
 
     // ---- parse_attr_block -------------------------------------------------
 

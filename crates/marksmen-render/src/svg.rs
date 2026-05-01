@@ -5,8 +5,8 @@
 //! `render_graph_to_svg` because that function emits only:
 //! - `<rect>`, `<polyline>`, `<polygon>`, `<text>`, `<svg>` elements
 //! - Standard SVG attributes with no `<foreignObject>` or CSS animations
-//! All elements are within `usvg`'s supported subset, so no information is lost
-//! during parsing.
+//!   All elements are within `usvg`'s supported subset, so no information is lost
+//!   during parsing.
 
 /// Rasterize a raw SVG byte slice to a PNG byte buffer.
 ///

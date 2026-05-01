@@ -27,7 +27,7 @@ fn main() -> Result<()> {
     // 2. ODT Roundtrip
     let events_odt = parse(body);
     let odt_bytes = marksmen_odt::translate_and_render(&events_odt, &config, &root)?;
-    let extracted_odt_md = marksmen_odt_read::parse_odt(&odt_bytes)?;
+    let extracted_odt_md = marksmen_odt_read::parse_odt(&odt_bytes, None)?;
 
     println!("=== Extracted from ODT Bytes ===");
     println!("{}\n", extracted_odt_md);

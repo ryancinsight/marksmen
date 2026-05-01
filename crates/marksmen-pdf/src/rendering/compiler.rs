@@ -41,8 +41,23 @@ pub fn compile_to_pdf(
         anyhow::anyhow!("Typst compilation failed:\n{}", messages.join("\n"))
     })?;
 
+    let mut options = typst_pdf::PdfOptions::default();
+    if let Some(std_str) = &_config.pdf_standard {
+        let standard = match std_str.to_lowercase().as_str() {
+            "pdf-a" | "a-1b" | "pdf/a-1b" => Some(typst_pdf::PdfStandard::A_1b),
+            "a-2b" | "pdf/a-2b" => Some(typst_pdf::PdfStandard::A_2b),
+            "a-3b" | "pdf/a-3b" => Some(typst_pdf::PdfStandard::A_3b),
+            _ => None,
+        };
+        if let Some(s) = standard {
+            if let Ok(standards) = typst_pdf::PdfStandards::new(&[s]) {
+                options.standards = standards;
+            }
+        }
+    }
+
     let pdf_bytes =
-        typst_pdf::pdf(&document, &typst_pdf::PdfOptions::default()).map_err(|errs| {
+        typst_pdf::pdf(&document, &options).map_err(|errs| {
             let msgs: Vec<String> = errs.iter().map(|e| format!("{:?}", e)).collect();
             anyhow::anyhow!("PDF export failed:\n{}", msgs.join("\n"))
         })?;

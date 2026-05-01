@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow.workspace = true
+base64.workspace = true
 docx-rs = "0.4.19"
 marksmen-xml-read = { path = "../marksmen-xml-read" }
 zip.workspace = true

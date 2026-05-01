@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Marksmen Cite — Reference Manager</title>
+    <meta name="description" content="Professional citation manager with DOI, PubMed, arXiv, and ISBN lookup.">
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="app-container">
+
+    <!-- ── Sidebar ─────────────────────────────────────────── -->
+    <aside class="sidebar glass-panel">
+        <div class="sidebar-header">
+            <h1 class="app-logo">Marksmen <span class="gradient-text">Cite</span></h1>
+        </div>
+
+        <div class="import-group">
+            <button id="btn-import-pdf" class="btn-primary glow-effect">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                Import PDF
+            </button>
+            <button id="btn-fetch-doi" class="btn-secondary mt-8">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                Fetch DOI
+            </button>
+            <button id="btn-fetch-pmid" class="btn-secondary mt-8">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                Fetch PubMed ID
+            </button>
+            <button id="btn-fetch-arxiv" class="btn-secondary mt-8">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                Fetch arXiv
+            </button>
+            <button id="btn-fetch-isbn" class="btn-secondary mt-8">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                Fetch ISBN
+            </button>
+            <button id="btn-import-lib" class="btn-secondary mt-8">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Import RIS/BibTeX
+            </button>
+            <button id="btn-add-manual" class="btn-secondary mt-8">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add Manual Entry
+            </button>
+        </div>
+
+        <nav class="sidebar-nav">
+            <div class="nav-section">
+                <div class="nav-title">Library</div>
+                <ul class="nav-list" id="library-nav">
+                    <li class="nav-item active" data-filter="all">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+                        All References <span class="nav-count" id="count-all">0</span>
+                    </li>
+                    <li class="nav-item" data-filter="starred">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                        Starred <span class="nav-count" id="count-starred">0</span>
+                    </li>
+                    <li class="nav-item" data-filter="unread">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                        Unread <span class="nav-count" id="count-unread">0</span>
+                    </li>
+                    <li class="nav-item" data-filter="recent">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        Recently Added
+                    </li>
+                </ul>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-title">
+                    By Type
+                </div>
+                <ul class="nav-list" id="type-nav">
+                    <li class="nav-item" data-filter="type-Journal Article"><span class="type-badge journal">J</span> Journal Articles</li>
+                    <li class="nav-item" data-filter="type-Book"><span class="type-badge book">B</span> Books</li>
+                    <li class="nav-item" data-filter="type-Conference Paper"><span class="type-badge conf">C</span> Conference Papers</li>
+                    <li class="nav-item" data-filter="type-Thesis"><span class="type-badge thesis">T</span> Theses</li>
+                    <li class="nav-item" data-filter="type-Preprint"><span class="type-badge preprint">P</span> Preprints</li>
+                </ul>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-title">
+                    Collections
+                    <button id="btn-new-collection" class="btn-icon" title="New Collection">+</button>
+                </div>
+                <ul class="nav-list" id="collections-nav">
+                    <!-- rendered by JS -->
+                </ul>
+            </div>
+        </nav>
+    </aside>
+
+    <!-- ── Main Content ────────────────────────────────────── -->
+    <main class="main-content">
+        <header class="top-bar glass-panel">
+            <div class="search-container">
+                <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="search-input" placeholder="Search title, author, keyword, DOI…">
+            </div>
+            <div class="top-actions">
+                <button id="btn-find-duplicates" class="btn-ghost" title="Find &amp; merge duplicate DOIs">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    Duplicates
+                </button>
+                <button id="btn-batch-export" class="btn-ghost" title="Export selected references">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    Export
+                </button>
+                <span id="sync-indicator" class="sync-text">All changes saved</span>
+            </div>
+        </header>
+
+        <div class="list-container">
+            <div class="list-header">
+                <div class="col col-check"><input type="checkbox" id="select-all" title="Select all"></div>
+                <div class="col col-type">Type</div>
+                <div class="col col-title sortable" data-sort="title">Title <span class="sort-icon">↕</span></div>
+                <div class="col col-authors sortable" data-sort="authors">Authors <span class="sort-icon">↕</span></div>
+                <div class="col col-year sortable" data-sort="year">Year <span class="sort-icon">↕</span></div>
+                <div class="col col-journal sortable" data-sort="journal">Journal <span class="sort-icon">↕</span></div>
+            </div>
+            <div id="reference-list" class="reference-list">
+                <div class="empty-list-state">
+                    <div class="empty-list-icon">📚</div>
+                    <p>Your library is empty.</p>
+                    <p class="muted">Import a PDF, fetch a DOI, or add a manual entry to get started.</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- ── Detail Pane ────────────────────────────────────── -->
+    <aside id="detail-pane" class="detail-pane glass-panel empty">
+        <div class="empty-state">
+            <div class="empty-icon">📖</div>
+            <p>Select a reference to view details</p>
+        </div>
+        <div class="detail-content">
+            <div class="detail-scroll">
+                <!-- Type + star row -->
+                <div class="detail-type-row">
+                    <select id="detail-ref-type" class="select-field">
+                        <option>Journal Article</option>
+                        <option>Book</option>
+                        <option>Book Chapter</option>
+                        <option>Conference Paper</option>
+                        <option>Thesis</option>
+                        <option>Report</option>
+                        <option>Website</option>
+                        <option>Patent</option>
+                        <option>Preprint</option>
+                        <option>Other</option>
+                    </select>
+                    <button id="btn-star" class="btn-icon star-btn" title="Toggle starred">☆</button>
+                    <button id="btn-mark-read" class="btn-icon read-btn" title="Toggle read">👁</button>
+                </div>
+
+                <!-- Title + Authors -->
+                <div class="detail-header">
+                    <div id="detail-title" contenteditable="true" class="editable-field detail-title-field" role="textbox" aria-label="Title"></div>
+                    <div id="detail-authors" contenteditable="true" class="editable-field detail-authors-field" role="textbox" aria-label="Authors (semicolon-separated)"></div>
+                </div>
+
+                <!-- Abstract -->
+                <div class="detail-section">
+                    <label>Abstract</label>
+                    <div id="detail-abstract" contenteditable="true" class="editable-field textarea-field"></div>
+                </div>
+
+                <!-- Publication grid -->
+                <div class="detail-section">
+                    <label class="section-label">Publication Details</label>
+                    <div class="detail-grid-3">
+                        <div class="grid-item"><label>Year</label><input type="text" id="detail-year" class="input-field"></div>
+                        <div class="grid-item"><label>Volume</label><input type="text" id="detail-volume" class="input-field"></div>
+                        <div class="grid-item"><label>Issue</label><input type="text" id="detail-issue" class="input-field"></div>
+                    </div>
+                    <div class="detail-grid-2">
+                        <div class="grid-item"><label>Journal / Source</label><input type="text" id="detail-journal" class="input-field"></div>
+                        <div class="grid-item"><label>Pages</label><input type="text" id="detail-pages" class="input-field"></div>
+                    </div>
+                    <div class="detail-grid-2">
+                        <div class="grid-item"><label>Publisher</label><input type="text" id="detail-publisher" class="input-field"></div>
+                        <div class="grid-item"><label>Edition</label><input type="text" id="detail-edition" class="input-field"></div>
+                    </div>
+                </div>
+
+                <!-- Identifiers -->
+                <div class="detail-section">
+                    <label class="section-label">Identifiers</label>
+                    <div class="detail-grid-2">
+                        <div class="grid-item"><label>DOI</label><input type="text" id="detail-doi" class="input-field"></div>
+                        <div class="grid-item"><label>PMID</label><input type="text" id="detail-pmid" class="input-field"></div>
+                        <div class="grid-item"><label>ISBN</label><input type="text" id="detail-isbn" class="input-field"></div>
+                        <div class="grid-item"><label>ISSN</label><input type="text" id="detail-issn" class="input-field"></div>
+                    </div>
+                    <div class="grid-item"><label>URL</label><input type="text" id="detail-url" class="input-field full-width"></div>
+                    <div class="detail-grid-2" style="margin-top:8px;">
+                        <div class="grid-item"><label>Language</label><input type="text" id="detail-language" class="input-field"></div>
+                        <div class="grid-item"><label>Access Date</label><input type="text" id="detail-access-date" class="input-field"></div>
+                    </div>
+                </div>
+
+                <!-- Tags -->
+                <div class="detail-section">
+                    <label>Tags / Keywords</label>
+                    <div id="tags-container" class="tags-container">
+                        <input type="text" id="tags-input" class="tags-input" placeholder="Add tag and press Enter…">
+                    </div>
+                </div>
+
+                <!-- Notes -->
+                <div class="detail-section">
+                    <label>Research Notes</label>
+                    <div id="detail-notes" contenteditable="true" class="editable-field textarea-field notes-field"></div>
+                </div>
+
+                <!-- Citation Format -->
+                <div class="detail-section citation-section">
+                    <div class="citation-header">
+                        <label>Formatted Citation</label>
+                        <select id="citation-style" class="select-field-sm">
+                            <option value="apa">APA 7</option>
+                            <option value="mla">MLA 9</option>
+                            <option value="chicago">Chicago 17</option>
+                            <option value="vancouver">Vancouver</option>
+                            <option value="ieee">IEEE</option>
+                        </select>
+                    </div>
+                    <div id="citation-output" class="citation-output"></div>
+                    <button id="btn-copy-citation" class="btn-secondary" style="margin-top:8px; width:100%;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        Copy Citation
+                    </button>
+                </div>
+
+                <!-- Actions -->
+                <div class="detail-actions">
+                    <button id="btn-update-web" class="btn-secondary" title="Re-fetch metadata from web using DOI/PMID">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.5l5.8 5.8"/></svg>
+                        Update from Web
+                    </button>
+                    <button id="btn-open-pdf" class="btn-secondary" style="display:none;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                        Open PDF
+                    </button>
+                    <button id="btn-copy-md" class="btn-secondary">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+                        Copy MD
+                    </button>
+                    <button id="btn-delete-ref" class="btn-danger">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    </button>
+                </div>
+                <div class="detail-meta">
+                    <span id="detail-date-added"></span>
+                </div>
+            </div>
+        </div>
+    </aside>
+</div>
+
+<!-- ── Batch Export Modal ──────────────────────────────────── -->
+<div id="export-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-content glass-panel">
+        <div class="modal-header">
+            <h3>Export References</h3>
+            <button id="btn-close-export-modal" class="btn-ghost">✕</button>
+        </div>
+        <div class="modal-body">
+            <p class="muted" id="export-count-label">0 references selected</p>
+            <div class="export-btn-group">
+                <button id="btn-export-ris" class="btn-primary" style="flex:1;">Export as RIS</button>
+                <button id="btn-export-bib" class="btn-primary" style="flex:1;background:linear-gradient(135deg,#10b981,#059669);">Export as BibTeX</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Markdown Preview Modal ─────────────────────────────── -->
+<div id="preview-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-content glass-panel">
+        <div class="modal-header">
+            <h3>Markdown Preview</h3>
+            <button id="btn-close-modal" class="btn-ghost">✕</button>
+        </div>
+        <div class="modal-body">
+            <pre id="preview-content"></pre>
+        </div>
+    </div>
+</div>
+
+<!-- ── Collection Name Modal ──────────────────────────────── -->
+<div id="collection-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-content glass-panel" style="max-width:360px;">
+        <div class="modal-header">
+            <h3 id="collection-modal-title">New Collection</h3>
+            <button id="btn-close-collection-modal" class="btn-ghost">✕</button>
+        </div>
+        <div class="modal-body">
+            <input type="text" id="collection-name-input" class="input-field full-width" placeholder="Collection name…">
+            <div class="export-btn-group" style="margin-top:16px;">
+                <button id="btn-save-collection" class="btn-primary" style="flex:1;">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="main.js"></script>
+</body>
+</html>

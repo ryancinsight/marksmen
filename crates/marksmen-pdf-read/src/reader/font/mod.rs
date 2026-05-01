@@ -96,11 +96,6 @@ impl Font {
             pos: 0,
         }
     }
-
-    /// Decode bytes into a plain UTF-8 string (no width info).
-    pub fn decode_string(&self, bytes: &[u8]) -> String {
-        self.decode(bytes).map(|(c, _)| c).collect()
-    }
 }
 
 struct FontDecoder<'a> {

@@ -12,6 +12,42 @@ pub use text_mapper::TextRun;
 
 const ROUNDTRIP_MARKDOWN_KEY: &[u8] = b"MarksmenRoundtripMarkdown";
 
+/// Extracted document metadata.
+#[derive(Debug, Clone)]
+pub struct PdfMetadata {
+    pub title: Option<String>,
+    pub author: Option<String>,
+    pub subject: Option<String>,
+    pub creator: Option<String>,
+}
+
+/// Extract basic document metadata from the PDF Info dictionary.
+pub fn extract_pdf_metadata(bytes: &[u8]) -> Result<PdfMetadata> {
+    let document = Document::load_mem(bytes).context("Failed to parse PDF bytes for metadata extraction")?;
+    let mut metadata = PdfMetadata {
+        title: None,
+        author: None,
+        subject: None,
+        creator: None,
+    };
+
+    if let Ok(info_id) = document.trailer.get(b"Info").and_then(Object::as_reference) {
+        if let Ok(info) = document.get_dictionary(info_id) {
+            let decode_pdf_string = |key: &[u8]| -> Option<String> {
+                info.get(key)
+                    .ok()
+                    .and_then(|obj| obj.as_string().ok())
+                    .map(|c| c.into_owned())
+            };
+            metadata.title = decode_pdf_string(b"Title");
+            metadata.author = decode_pdf_string(b"Author");
+            metadata.subject = decode_pdf_string(b"Subject");
+            metadata.creator = decode_pdf_string(b"Creator");
+        }
+    }
+    Ok(metadata)
+}
+
 /// PDF annotation subtype.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AnnotationSubtype {
@@ -428,7 +464,7 @@ fn extract_embedded_roundtrip_markdown(bytes: &[u8]) -> Result<Option<String>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{AnnotationSubtype, extract_annotations, parse_pdf};
+    use super::{extract_annotations, parse_pdf};
     use anyhow::Result;
     use marksmen_core::Config;
 

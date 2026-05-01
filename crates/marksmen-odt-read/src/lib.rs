@@ -59,7 +59,8 @@ pub fn parse_odt(bytes: &[u8], media_out_dir: Option<&std::path::Path>) -> Resul
     let mut list_ordered_stack: Vec<bool> = Vec::new();
     let mut list_counter_stack: Vec<u32> = Vec::new();
 
-    let mut tracked_changes_map: std::collections::HashMap<String, (String, String, String)> = std::collections::HashMap::new();
+    let mut tracked_changes_map: std::collections::HashMap<String, (String, String, String)> =
+        std::collections::HashMap::new();
     let mut current_change_id = String::new();
     let mut current_change_type = String::new(); // "ins" or "del"
     let mut in_creator = false;
@@ -220,20 +221,36 @@ pub fn parse_odt(bytes: &[u8], media_out_dir: Option<&std::path::Path>) -> Resul
                     b"text:changed-region" => {
                         for attr in e.attributes().flatten() {
                             if attr.key.as_ref() == b"text:id" {
-                                current_change_id = String::from_utf8_lossy(&attr.value).into_owned();
+                                current_change_id =
+                                    String::from_utf8_lossy(&attr.value).into_owned();
                             }
                         }
                     }
-                    b"text:insertion" => { current_change_type = "ins".to_string(); }
-                    b"text:deletion" => { current_change_type = "del".to_string(); }
-                    b"dc:creator" => { in_creator = true; current_creator.clear(); }
-                    b"dc:date" => { in_date = true; current_date.clear(); }
+                    b"text:insertion" => {
+                        current_change_type = "ins".to_string();
+                    }
+                    b"text:deletion" => {
+                        current_change_type = "del".to_string();
+                    }
+                    b"dc:creator" => {
+                        in_creator = true;
+                        current_creator.clear();
+                    }
+                    b"dc:date" => {
+                        in_date = true;
+                        current_date.clear();
+                    }
                     b"text:change-start" => {
                         for attr in e.attributes().flatten() {
                             if attr.key.as_ref() == b"text:change-id" {
                                 let cid = String::from_utf8_lossy(&attr.value).into_owned();
                                 if let Some((author, date, ctype)) = tracked_changes_map.get(&cid) {
-                                    output.push_str(&format!("<{} data-author=\"{}\" data-date=\"{}\">", ctype, marksmen_xml_read::escape(author), marksmen_xml_read::escape(date)));
+                                    output.push_str(&format!(
+                                        "<{} data-author=\"{}\" data-date=\"{}\">",
+                                        ctype,
+                                        marksmen_xml_read::escape(author),
+                                        marksmen_xml_read::escape(date)
+                                    ));
                                 }
                             }
                         }
@@ -255,18 +272,49 @@ pub fn parse_odt(bytes: &[u8], media_out_dir: Option<&std::path::Path>) -> Resul
                                 let mut emitted_path = href.clone();
                                 if let Some(out_dir) = media_out_dir {
                                     if let Ok(mut img_file) = archive.by_name(&href) {
-                                        let file_name = std::path::Path::new(&href).file_name().unwrap_or_default();
+                                        let file_name = std::path::Path::new(&href)
+                                            .file_name()
+                                            .unwrap_or_default();
                                         let dest_path = out_dir.join(file_name);
                                         let mut bytes = Vec::new();
                                         if img_file.read_to_end(&mut bytes).is_ok() {
                                             let _ = std::fs::write(&dest_path, bytes);
                                         }
                                         if let Some(out_dir_name) = out_dir.file_name() {
-                                            emitted_path = format!("{}/{}", out_dir_name.to_string_lossy(), file_name.to_string_lossy());
+                                            emitted_path = format!(
+                                                "{}/{}",
+                                                out_dir_name.to_string_lossy(),
+                                                file_name.to_string_lossy()
+                                            );
+                                        }
+                                    }
+                                } else {
+                                    if let Ok(mut img_file) = archive.by_name(&href) {
+                                        let mut bytes = Vec::new();
+                                        if img_file.read_to_end(&mut bytes).is_ok() {
+                                            use base64::Engine;
+                                            let b64 = base64::engine::general_purpose::STANDARD
+                                                .encode(&bytes);
+                                            let ext = std::path::Path::new(&href)
+                                                .extension()
+                                                .unwrap_or_default()
+                                                .to_string_lossy()
+                                                .to_lowercase();
+                                            let mime = match ext.as_str() {
+                                                "png" => "image/png",
+                                                "jpg" | "jpeg" => "image/jpeg",
+                                                "gif" => "image/gif",
+                                                "svg" => "image/svg+xml",
+                                                _ => "image/png",
+                                            };
+                                            emitted_path = format!("data:{};base64,{}", mime, b64);
                                         }
                                     }
                                 }
-                                output.push_str(&format!("![image]({})", marksmen_xml_read::escape(&emitted_path)));
+                                output.push_str(&format!(
+                                    "![image]({})",
+                                    marksmen_xml_read::escape(&emitted_path)
+                                ));
                             }
                         }
                     }
@@ -351,16 +399,31 @@ pub fn parse_odt(bytes: &[u8], media_out_dir: Option<&std::path::Path>) -> Resul
                     }
                 }
                 b"text:changed-region" => {
-                    tracked_changes_map.insert(current_change_id.clone(), (current_creator.clone(), current_date.clone(), current_change_type.clone()));
+                    tracked_changes_map.insert(
+                        current_change_id.clone(),
+                        (
+                            current_creator.clone(),
+                            current_date.clone(),
+                            current_change_type.clone(),
+                        ),
+                    );
                 }
-                b"dc:creator" => { in_creator = false; }
-                b"dc:date" => { in_date = false; }
+                b"dc:creator" => {
+                    in_creator = false;
+                }
+                b"dc:date" => {
+                    in_date = false;
+                }
                 _ => {}
             },
             Ok(Event::Text(e)) => {
                 let text = e.unescape().unwrap_or_default().into_owned();
-                if in_creator { current_creator.push_str(&text); }
-                if in_date { current_date.push_str(&text); }
+                if in_creator {
+                    current_creator.push_str(&text);
+                }
+                if in_date {
+                    current_date.push_str(&text);
+                }
                 if in_display_math_para {
                     display_math_text.push_str(&text);
                     continue;

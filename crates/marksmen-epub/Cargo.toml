@@ -1,0 +1,12 @@
+[package]
+name = "marksmen-epub"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+zip = { workspace = true }
+marksmen-core = { path = "../marksmen-core" }
+marksmen-xhtml = { path = "../marksmen-xhtml" }
+marksmen-xml = { path = "../marksmen-xml" }
+pulldown-cmark = { workspace = true }

@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+base64 = { workspace = true }
 docx-rs = "0.4"
 marksmen-core = { path = "../marksmen-core" }
 marksmen-mermaid = { path = "../marksmen-mermaid" }

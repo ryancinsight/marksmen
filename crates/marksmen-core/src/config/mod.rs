@@ -51,6 +51,14 @@ pub struct Config {
     #[serde(default = "default_highlight_theme")]
     pub highlight_theme: String,
 
+    /// Optional path to a `.dotx` or `.docx` template for DOCX export.
+    #[serde(default)]
+    pub template_path: Option<String>,
+
+    /// Optional PDF standard string (e.g. `pdf-a`) for Typst PDF export.
+    #[serde(default)]
+    pub pdf_standard: Option<String>,
+
     /// Global Word style mapping for DOCX output.
     ///
     /// When present, overrides the default structural style names emitted by
@@ -75,6 +83,8 @@ impl Default for Config {
             math: MathConfig::default(),
             dest: None,
             highlight_theme: default_highlight_theme(),
+            template_path: None,
+            pdf_standard: None,
             style_map: StyleMap::default(),
         }
     }
@@ -111,6 +121,12 @@ impl Config {
         if let Some(ref theme) = fm.highlight_theme {
             merged.highlight_theme = theme.clone();
         }
+        if let Some(ref tp) = fm.template_path {
+            merged.template_path = Some(tp.clone());
+        }
+        if let Some(ref ps) = fm.pdf_standard {
+            merged.pdf_standard = Some(ps.clone());
+        }
         if let Some(ref sm) = fm.style_map {
             merged.style_map = sm.clone();
         }
@@ -132,6 +148,8 @@ pub struct FrontMatterConfig {
     pub math: Option<MathConfig>,
     pub dest: Option<String>,
     pub highlight_theme: Option<String>,
+    pub template_path: Option<String>,
+    pub pdf_standard: Option<String>,
     /// Global Word style map from YAML `style_map:` block.
     pub style_map: Option<StyleMap>,
 }

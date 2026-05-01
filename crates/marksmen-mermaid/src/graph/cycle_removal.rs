@@ -77,7 +77,7 @@ mod tests {
     use crate::parsing::lexer::EdgeStyle;
 
     #[test]
-    fn DFS_reverses_mathematical_cycle() {
+    fn dfs_reverses_mathematical_cycle() {
         let mut graph = DirectedGraph::new("TD".to_string());
         graph.add_node("A".to_string(), None, None, None);
         graph.add_node("B".to_string(), None, None, None);

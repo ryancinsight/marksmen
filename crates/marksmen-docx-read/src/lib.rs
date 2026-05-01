@@ -135,8 +135,15 @@ pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> 
                     let id = &id_rest[..id_end];
                     if id != "-1" && id != "0" {
                         if let Some(end_idx) = block.find("</w:footnote>") {
-                            let footnote_xml = format!("<w:footnote>{}</w:footnote>", &block[..end_idx]);
-                            if let Ok(parsed) = parse_xml_payload(&mut archive, &footnote_xml, &comments_map, &rels_map, media_out_dir) {
+                            let footnote_xml =
+                                format!("<w:footnote>{}</w:footnote>", &block[..end_idx]);
+                            if let Ok(parsed) = parse_xml_payload(
+                                &mut archive,
+                                &footnote_xml,
+                                &comments_map,
+                                &rels_map,
+                                media_out_dir,
+                            ) {
                                 footnotes_map.insert(id.to_string(), parsed.trim().to_string());
                             }
                         }
@@ -787,6 +794,39 @@ fn parse_xml_payload(
                                                     .to_string_lossy()
                                                     .replace("\\", "/");
                                                 drawing_target_file = relative_path;
+                                            }
+                                        }
+                                    } else {
+                                        // Embed as Base64 data URI if no output directory is provided
+                                        let clean_target = target.replace("\\", "/");
+                                        let stripped = clean_target.trim_start_matches('/');
+                                        let candidates =
+                                            [stripped.to_string(), format!("word/{}", stripped)];
+                                        for cand in &candidates {
+                                            if let Ok(mut img_file) = archive.by_name(cand) {
+                                                use std::io::Read;
+                                                let mut buf = Vec::new();
+                                                if img_file.read_to_end(&mut buf).is_ok() {
+                                                    use base64::Engine;
+                                                    let b64 =
+                                                        base64::engine::general_purpose::STANDARD
+                                                            .encode(&buf);
+                                                    let ext = Path::new(cand)
+                                                        .extension()
+                                                        .unwrap_or_default()
+                                                        .to_string_lossy()
+                                                        .to_lowercase();
+                                                    let mime = match ext.as_str() {
+                                                        "png" => "image/png",
+                                                        "jpg" | "jpeg" => "image/jpeg",
+                                                        "gif" => "image/gif",
+                                                        "svg" => "image/svg+xml",
+                                                        _ => "image/png",
+                                                    };
+                                                    drawing_target_file =
+                                                        format!("data:{};base64,{}", mime, b64);
+                                                }
+                                                break;
                                             }
                                         }
                                     }

@@ -7,13 +7,13 @@ use std::path::PathBuf;
 
 /// marksmen — Convert between Markdown and supported document formats.
 ///
-/// Supports `md`, `docx`, `odt`, `html`, and `pdf` inputs. Output is inferred
+/// Supports `md`, `docx`, `odt`, `html`, `pdf`, `pptx`, and `epub` inputs. Output is inferred
 /// from `--output` or defaults to `.pdf` for Markdown input and `.md` for
 /// other source formats. `--as-typst` writes Typst source instead.
 #[derive(Parser, Debug)]
 #[command(name = "marksmen", version, about)]
 pub struct Args {
-    /// Input file path(s). Supported extensions: md, docx, odt, html, pdf.
+    /// Input file path(s). Supported extensions: md, docx, odt, html, pdf, pptx, epub.
     #[arg(required = true)]
     pub files: Vec<PathBuf>,
 

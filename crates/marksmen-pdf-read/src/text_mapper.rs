@@ -483,7 +483,12 @@ impl GraphicsState {
     /// Compute the page-coordinate bounding rectangle for `text` at the current TM.
     /// Uses bounding box intersection mapping to replace the default length heuristics.
     fn text_rect(&self, text: &str, layout_bounds: &[super::Rect]) -> Option<super::Rect> {
-        let mut width = text.len() as f32 * self.font_size * 0.5;
+        let narrow_chars = text
+            .chars()
+            .filter(|c| matches!(c, 'i' | 'l' | '1' | 't' | 'I' | '.' | ',' | ':' | ';' | ' '))
+            .count();
+        let normal_chars = text.len().saturating_sub(narrow_chars);
+        let mut width = (normal_chars as f32 * 0.55 + narrow_chars as f32 * 0.25) * self.font_size;
         let height = self.font_size;
 
         let m = matrix_concat(self.ctm, self.tm);
@@ -527,7 +532,12 @@ impl GraphicsState {
 
     /// Advance the text matrix by the width of `text`.
     fn advance_tm(&mut self, text: &str, layout_bounds: &[super::Rect]) {
-        let mut width = text.len() as f32 * self.font_size * 0.5;
+        let narrow_chars = text
+            .chars()
+            .filter(|c| matches!(c, 'i' | 'l' | '1' | 't' | 'I' | '.' | ',' | ':' | ';' | ' '))
+            .count();
+        let normal_chars = text.len().saturating_sub(narrow_chars);
+        let mut width = (normal_chars as f32 * 0.55 + narrow_chars as f32 * 0.25) * self.font_size;
 
         let m = matrix_concat(self.ctm, self.tm);
         let (start_px, start_py) = matrix_point(m, 0.0, 0.0);

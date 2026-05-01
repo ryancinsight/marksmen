@@ -1338,7 +1338,92 @@ pub fn convert(
     }
 
     zip_writer.finish()?;
-    Ok(out_buffer.into_inner())
+    let generated_bytes = out_buffer.into_inner();
+
+    // ─── Template swapping (M26) ──────────────────────────────────────────────
+    // When config.template_path is present, inject our generated word/document.xml
+    // into a copy of the template archive, preserving all template styling assets.
+    if let Some(ref tpl_path) = config.template_path {
+        let tpl_bytes = std::fs::read(tpl_path)
+            .map_err(|e| anyhow::anyhow!("Failed to read DOCX template '{}': {}", tpl_path, e))?;
+
+        // Extract our word/document.xml from the generated archive.
+        let generated_doc_xml: Vec<u8> = {
+            let mut gen_archive = zip::ZipArchive::new(Cursor::new(&generated_bytes))
+                .map_err(|e| anyhow::anyhow!("Failed to parse generated DOCX for template swap: {}", e))?;
+            let mut doc_xml_file = gen_archive.by_name("word/document.xml")
+                .map_err(|_| anyhow::anyhow!("word/document.xml missing from generated DOCX"))?;
+            let mut buf = Vec::new();
+            std::io::Read::read_to_end(&mut doc_xml_file, &mut buf)?;
+            buf
+        };
+
+        // Also extract word/comments.xml if present in generated output.
+        let generated_comments_xml: Option<Vec<u8>> = {
+            let mut gen_archive = zip::ZipArchive::new(Cursor::new(&generated_bytes)).ok();
+            gen_archive.as_mut().and_then(|a| {
+                if let Ok(mut f) = a.by_name("word/comments.xml") {
+                    let mut buf = Vec::new();
+                    let _ = std::io::Read::read_to_end(&mut f, &mut buf);
+                    if buf.is_empty() { None } else { Some(buf) }
+                } else { None }
+            })
+        };
+
+        // Repack: copy every template file, but replace word/document.xml with ours.
+        let mut tpl_archive = zip::ZipArchive::new(Cursor::new(&tpl_bytes))
+            .map_err(|e| anyhow::anyhow!("Failed to parse DOCX template as ZIP: {}", e))?;
+        let mut tpl_out = std::io::Cursor::new(Vec::new());
+        let mut tpl_zip = zip::ZipWriter::new(&mut tpl_out);
+        let deflate_opts_tpl = zip::write::FileOptions::<()>::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+        let mut tpl_written: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+        for i in 0..tpl_archive.len() {
+            let (fname, _cm, fbytes) = {
+                let mut f = match tpl_archive.by_index(i) {
+                    Ok(f) => f,
+                    Err(_) => continue,
+                };
+                let nm = f.name().to_string();
+                let cm = f.compression();
+                let mut buf = Vec::new();
+                let _ = std::io::Read::read_to_end(&mut f, &mut buf);
+                (nm, cm, buf)
+            };
+            if tpl_written.contains(&fname) { continue; }
+            let opts = zip::write::FileOptions::<()>::default().compression_method(zip::CompressionMethod::Deflated);
+            if fname.ends_with('/') {
+                let _ = tpl_zip.add_directory(&fname, opts);
+            } else {
+                tpl_zip.start_file(&fname, opts)?;
+                // Swap in our generated document.xml; forward all other template files.
+                if fname == "word/document.xml" {
+                    std::io::Write::write_all(&mut tpl_zip, &generated_doc_xml)?;
+                } else if fname == "word/comments.xml" {
+                    if let Some(ref cxml) = generated_comments_xml {
+                        std::io::Write::write_all(&mut tpl_zip, cxml)?;
+                    } else {
+                        std::io::Write::write_all(&mut tpl_zip, &fbytes)?;
+                    }
+                } else {
+                    std::io::Write::write_all(&mut tpl_zip, &fbytes)?;
+                }
+            }
+            tpl_written.insert(fname);
+        }
+
+        // Ensure word/document.xml exists even if the template lacked it.
+        if !tpl_written.contains("word/document.xml") {
+            tpl_zip.start_file("word/document.xml", deflate_opts_tpl)?;
+            std::io::Write::write_all(&mut tpl_zip, &generated_doc_xml)?;
+        }
+
+        tpl_zip.finish()?;
+        return Ok(tpl_out.into_inner());
+    }
+
+    Ok(generated_bytes)
 }
 
 // svg_to_png and render_graph_to_svg removed: canonical implementations
@@ -1431,13 +1516,45 @@ fn resolve_image_to_run(
     max_figure_width_px: u32,
     max_figure_height_px: u32,
 ) -> Run {
+    let is_mmd = img_path_str.ends_with(".mmd");
+    if is_mmd {
+        // ... handled below but we need to rearrange since we want data uri check first
+    }
+
+    if img_path_str.starts_with("data:image/") {
+        if let Some(comma_idx) = img_path_str.find(',') {
+            let base64_data = &img_path_str[comma_idx + 1..];
+            use base64::Engine as _;
+            if let Ok(raw_bytes) = base64::engine::general_purpose::STANDARD.decode(base64_data) {
+                let is_svg = img_path_str.starts_with("data:image/svg+xml");
+                let (png_bytes, width, height) = if is_svg {
+                    match marksmen_render::svg_bytes_to_png(&raw_bytes) {
+                        Some(result) => result,
+                        None => {
+                            return Run::new().add_text(format!(
+                                "![{}]({})",
+                                caption, "data:image/svg+xml;base64,..."
+                            ))
+                        }
+                    }
+                } else {
+                    let (w, h) = image_dimensions(&raw_bytes).unwrap_or((640, 480));
+                    (raw_bytes, w, h)
+                };
+
+                let (width, height) =
+                    fit_image_to_bounds(width, height, max_figure_width_px, max_figure_height_px);
+                return Run::new().add_image(Pic::new_with_dimensions(png_bytes, width, height));
+            }
+        }
+    }
+
     let resolved = if Path::new(img_path_str).is_absolute() {
         PathBuf::from(img_path_str)
     } else {
         input_dir.join(img_path_str)
     };
 
-    let is_mmd = img_path_str.ends_with(".mmd");
     if is_mmd {
         return match std::fs::read_to_string(&resolved)
             .ok()

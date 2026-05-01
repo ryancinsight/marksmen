@@ -126,38 +126,6 @@ fn parse_bfrange(iter: &mut impl Iterator<Item = String>, map: &mut CMap) {
 
 /// Tokenize the CMap text into PostScript-like tokens, skipping comments.
 fn tokens(text: &str) -> impl Iterator<Item = String> + '_ {
-    struct Tokenizer<'a> {
-        chars: std::str::CharIndices<'a>,
-        src: &'a str,
-    }
-
-    impl<'a> Iterator for Tokenizer<'a> {
-        type Item = String;
-
-        fn next(&mut self) -> Option<String> {
-            // Skip whitespace.
-            loop {
-                let &(i, c) = self
-                    .chars
-                    .as_str()
-                    .get(0..)
-                    .and_then(|_| {
-                        // peek
-                        None::<&(usize, char)>
-                    })
-                    .unwrap_or_else(|| {
-                        // use self.chars directly
-                        &(0, ' ')
-                    });
-                // We need a different approach since we can't peek cleanly.
-                // Restart as a simpler approach below.
-                let _ = (i, c);
-                break;
-            }
-            None
-        }
-    }
-
     // Simpler: collect all tokens via split_whitespace-like logic that respects
     // hex strings <...> and arrays [...].
     tokenize_cmap(text).into_iter()

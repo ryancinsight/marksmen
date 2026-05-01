@@ -1,0 +1,10 @@
+[package]
+name = "marksmen-epub-read"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+zip = { workspace = true }
+quick-xml = { workspace = true }
+marksmen-xhtml-read = { path = "../marksmen-xhtml-read" }

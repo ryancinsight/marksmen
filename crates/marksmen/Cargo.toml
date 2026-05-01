@@ -28,3 +28,7 @@ marksmen-pdf-read = { path = "../marksmen-pdf-read" }
 marksmen-render = { path = "../marksmen-render" }
 marksmen-typst = { path = "../marksmen-typst" }
 marksmen-typst-read = { path = "../marksmen-typst-read" }
+marksmen-ppt = { path = "../marksmen-ppt" }
+marksmen-ppt-read = { path = "../marksmen-ppt-read" }
+marksmen-epub = { path = "../marksmen-epub" }
+marksmen-epub-read = { path = "../marksmen-epub-read" }

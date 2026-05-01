@@ -239,6 +239,68 @@ fn test_html_roundtrip_similarity() -> Result<()> {
 }
 
 #[test]
+fn test_pptx_roundtrip_similarity() -> Result<()> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+
+    let demo_md = fs::read_to_string(root.join("../../demo.md"))?;
+    let source_md_stripped = strip_frontmatter(&demo_md);
+
+    let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
+    let config = marksmen_core::Config::default();
+    let events = marksmen_core::parsing::parser::parse(body);
+
+    let pptx_bytes = marksmen_ppt::convert(events, &config)?;
+    let extracted_md = marksmen_ppt_read::parse_pptx(&pptx_bytes)?;
+
+    let normalized_source = normalize_whitespace(&strip_vectors_and_html(&source_md_stripped));
+    let normalized_extracted = normalize_whitespace(&strip_vectors_and_html(&extracted_md));
+    std::fs::write("pptx_norm_src.txt", &normalized_source).unwrap();
+    std::fs::write("pptx_norm_ext.txt", &normalized_extracted).unwrap();
+
+    let jw_sim = strsim::jaro_winkler(&normalized_source, &normalized_extracted);
+    println!("PPTX Roundtrip Jaro-Winkler Similarity: {:.4}", jw_sim);
+
+    assert!(
+        jw_sim > 0.85,
+        "PPTX round-trip extraction degraded below 0.85 similarity threshold (Actual: {:.4})",
+        jw_sim
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_epub_roundtrip_similarity() -> Result<()> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+
+    let demo_md = fs::read_to_string(root.join("../../demo.md"))?;
+    let source_md_stripped = strip_frontmatter(&demo_md);
+
+    let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
+    let config = marksmen_core::Config::default();
+    let events = marksmen_core::parsing::parser::parse(body);
+
+    let epub_bytes = marksmen_epub::convert(events, &config)?;
+    let extracted_md = marksmen_epub_read::parse_epub(&epub_bytes)?;
+
+    let normalized_source = normalize_whitespace(&strip_vectors_and_html(&source_md_stripped));
+    let normalized_extracted = normalize_whitespace(&strip_vectors_and_html(&extracted_md));
+    std::fs::write("epub_norm_src.txt", &normalized_source).unwrap();
+    std::fs::write("epub_norm_ext.txt", &normalized_extracted).unwrap();
+
+    let jw_sim = strsim::jaro_winkler(&normalized_source, &normalized_extracted);
+    println!("EPUB Roundtrip Jaro-Winkler Similarity: {:.4}", jw_sim);
+
+    assert!(
+        jw_sim > 0.90,
+        "EPUB round-trip extraction degraded below 0.90 similarity threshold (Actual: {:.4})",
+        jw_sim
+    );
+
+    Ok(())
+}
+
+#[test]
 fn test_pdf_roundtrip_similarity() -> Result<()> {
     let source_md = r#"---
 title: PDF Roundtrip Sample
@@ -396,6 +458,30 @@ fn test_visual_snapshots() -> Result<()> {
     println!(
         "HTML → {} (open in browser for visual review)",
         viewer_path.display()
+    );
+
+    // ── EPUB ─────────────────────────────────────────────────────────────────
+    let (body3, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
+    let events3 = marksmen_core::parsing::parser::parse(body3);
+    let epub_bytes = marksmen_epub::convert(events3, &config)?;
+    let epub_path = snapshots_dir.join("demo_output.epub");
+    fs::write(&epub_path, &epub_bytes)?;
+    println!(
+        "EPUB → {} ({} bytes)",
+        epub_path.display(),
+        epub_bytes.len()
+    );
+
+    // ── PPTX ─────────────────────────────────────────────────────────────────
+    let (body4, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
+    let events4 = marksmen_core::parsing::parser::parse(body4);
+    let pptx_bytes = marksmen_ppt::convert(events4, &config)?;
+    let pptx_path = snapshots_dir.join("demo_output.pptx");
+    fs::write(&pptx_path, &pptx_bytes)?;
+    println!(
+        "PPTX → {} ({} bytes)",
+        pptx_path.display(),
+        pptx_bytes.len()
     );
 
     Ok(())
@@ -754,8 +840,6 @@ fn test_qsr_lossless_roundtrip() -> Result<()> {
 
 #[test]
 fn test_qsr_pdf_roundtrip() -> Result<()> {
-    use std::io::Read;
-
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../");
     let src_path = root.join("PRD/QSR Technical_SonALAsense_1AY2AX000034_2026_APR.docx");
 
@@ -890,7 +974,6 @@ fn test_xhtml_roundtrip_similarity() -> Result<()> {
 
 #[test]
 fn test_ppt_roundtrip_similarity() -> Result<()> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let demo_md = "# Slide One\n\nContent paragraph.\n\n---\n\n# Slide Two\n\n- item 1\n- item 2\n";
     let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
     let config = marksmen_core::Config::default();

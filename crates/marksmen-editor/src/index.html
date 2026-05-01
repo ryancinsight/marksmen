@@ -8,7 +8,432 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
+    <style>
+        /* Fix for hidden attribute being overridden by inline display: flex */
+        [hidden] {
+            display: none !important;
+        }
+
+        /* Phase 17: Show/Hide Formatting Marks */
+        .show-marks #editor p::after,
+        .show-marks #editor h1::after,
+        .show-marks #editor h2::after,
+        .show-marks #editor h3::after,
+        .show-marks #editor h4::after,
+        .show-marks #editor h5::after,
+        .show-marks #editor h6::after,
+        .show-marks #editor li::after {
+            content: "¶";
+            color: #10a37f;
+            opacity: 0.5;
+            font-weight: normal;
+            margin-left: 2px;
+            user-select: none;
+            pointer-events: none;
+        }
+        
+        .show-marks #editor span[style*="tab"]::before {
+            content: "→";
+            color: #10a37f;
+            opacity: 0.5;
+            position: absolute;
+            user-select: none;
+            pointer-events: none;
+        }
+
+        /* Phase 19: Styles Gallery */
+        .style-gallery {
+            display: flex;
+            gap: 4px;
+            overflow-x: auto;
+            overflow-y: hidden;
+            height: 56px;
+            max-width: 320px;
+            padding-bottom: 4px;
+        }
+        .style-gallery::-webkit-scrollbar {
+            height: 6px;
+        }
+        .style-gallery::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 3px;
+        }
+        .style-card {
+            display: flex;
+            flex-direction: column;
+            border: 1px solid transparent;
+            background: transparent;
+            border-radius: 4px;
+            padding: 2px 4px;
+            min-width: 60px;
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.1s;
+        }
+        .style-card:hover {
+            background: var(--hover-bg);
+            border-color: var(--border-color);
+        }
+        .style-card:active {
+            background: var(--active-bg);
+        }
+        .scard-preview {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+        .scard-label {
+            font-size: 10px;
+            color: var(--text-secondary);
+            text-align: center;
+            margin-top: 2px;
+        }
+
+        /* Phase 21: Advanced Layout CSS */
+        .show-line-numbers {
+            counter-reset: lineno;
+        }
+        .show-line-numbers p,
+        .show-line-numbers h1,
+        .show-line-numbers h2,
+        .show-line-numbers h3,
+        .show-line-numbers h4,
+        .show-line-numbers h5,
+        .show-line-numbers h6,
+        .show-line-numbers li {
+            position: relative;
+        }
+        .show-line-numbers p::before,
+        .show-line-numbers h1::before,
+        .show-line-numbers h2::before,
+        .show-line-numbers h3::before,
+        .show-line-numbers h4::before,
+        .show-line-numbers h5::before,
+        .show-line-numbers h6::before,
+        .show-line-numbers li::before {
+            counter-increment: lineno;
+            content: counter(lineno);
+            position: absolute;
+            left: -32px;
+            width: 24px;
+            text-align: right;
+            font-size: 10px;
+            color: var(--text-hint);
+            user-select: none;
+            pointer-events: none;
+        }
+
+        hr.page-break-sentinel {
+            border: 0;
+            border-top: 2px dashed #0f6cbd;
+            margin: 20px 0;
+            position: relative;
+            break-after: page;
+        }
+        hr.page-break-sentinel::after {
+            content: "Page Break";
+            position: absolute;
+            top: -9px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-primary);
+            padding: 0 8px;
+            font-size: 10px;
+            color: #0f6cbd;
+            font-weight: bold;
+        }
+
+        hr.column-break-sentinel {
+            border: 0;
+            border-top: 2px dotted #10a37f;
+            margin: 20px 0;
+            position: relative;
+            break-after: column;
+        }
+        hr.column-break-sentinel::after {
+            content: "Column Break";
+            position: absolute;
+            top: -9px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-primary);
+            padding: 0 8px;
+            font-size: 10px;
+            color: #10a37f;
+            font-weight: bold;
+        hr.column-break-sentinel::after {
+            content: "Column Break";
+            position: absolute;
+            top: -9px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-primary);
+            padding: 0 8px;
+            font-size: 10px;
+            color: #10a37f;
+            font-weight: bold;
+        }
+        /* Phase 22: Interactive Images */
+        .image-resizer {
+            position: absolute;
+            border: 2px solid var(--accent);
+            pointer-events: none;
+            z-index: 1000;
+        }
+        .image-resizer.active {
+            pointer-events: auto;
+        }
+        .resize-handle {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: #fff;
+            border: 1px solid var(--accent);
+            border-radius: 2px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        .resize-handle.nw { top: -6px; left: -6px; cursor: nwse-resize; }
+        .resize-handle.n  { top: -6px; left: calc(50% - 5px); cursor: ns-resize; }
+        .resize-handle.ne { top: -6px; right: -6px; cursor: nesw-resize; }
+        .resize-handle.w  { top: calc(50% - 5px); left: -6px; cursor: ew-resize; }
+        .resize-handle.e  { top: calc(50% - 5px); right: -6px; cursor: ew-resize; }
+        .resize-handle.sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
+        .resize-handle.s  { bottom: -6px; left: calc(50% - 5px); cursor: ns-resize; }
+        .resize-handle.se { bottom: -6px; right: -6px; cursor: nwse-resize; }
+
+        .image-wrap-toolbar {
+            position: absolute;
+            z-index: 1001;
+            display: flex;
+            background: var(--bg-overlay);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 4px;
+            box-shadow: 0 4px 12px var(--shadow);
+            gap: 2px;
+        }
+
+        /* Phase 23: Insert Tab Completion CSS */
+        .toc-container {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 16px;
+            margin: 1em 0;
+            user-select: none;
+        }
+        .toc-container .toc-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+        .toc-container ul {
+            list-style: none;
+            padding-left: 20px;
+            margin: 0;
+        }
+        .toc-container ul:first-of-type {
+            padding-left: 0;
+        }
+        .toc-container li {
+            margin: 4px 0;
+        }
+        .toc-container a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+        .toc-container a:hover {
+            text-decoration: underline;
+        }
+
+        .symbol-btn {
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-size: 14px;
+            padding: 4px;
+            cursor: pointer;
+            text-align: center;
+        }
+        .symbol-btn:hover {
+            background: var(--bg-hover);
+            border-color: var(--border);
+        }
+
+        figure.image-figure {
+            display: inline-block;
+            margin: 1em 0;
+            text-align: center;
+            max-width: 100%;
+        }
+        figcaption {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 8px;
+            font-style: italic;
+        }
+
+        /* Phase 24 CSS */
+        ol.list-outline {
+            counter-reset: outline-counter;
+            list-style-type: none;
+        }
+        ol.list-outline li {
+            counter-increment: outline-counter;
+            position: relative;
+        }
+        ol.list-outline li::before {
+            content: counters(outline-counter, ".") ". ";
+            position: absolute;
+            left: -2em;
+            font-weight: bold;
+        }
+
+        .effect-shadow { text-shadow: 2px 2px 4px rgba(0,0,0,0.4); }
+        .effect-glow { text-shadow: 0 0 8px var(--accent); }
+        .effect-outline { -webkit-text-stroke: 1px var(--text-primary); color: transparent; }
+
+        /* Phase 25: Header/Footer & Page Layout */
+        .doc-header, .doc-footer {
+            min-height: 40px;
+            padding: 8px 32px;
+            margin: 16px;
+            border: 1px dashed #ccc;
+            color: var(--text-secondary);
+            font-size: 11px;
+            position: relative;
+            background: rgba(0, 0, 0, 0.02);
+            transition: border-color 0.2s;
+        }
+        .doc-header:empty::before { content: "Header"; opacity: 0.4; }
+        .doc-footer:empty::before { content: "Footer"; opacity: 0.4; }
+        .doc-header:focus, .doc-footer:focus {
+            border-color: var(--accent);
+            outline: none;
+        }
+        .page-number-token {
+            display: inline-block;
+            padding: 0 4px;
+            background: var(--border-color);
+            border-radius: 2px;
+            font-weight: bold;
+            user-select: all;
+        }
+        .page-number-token::after {
+            /* Since it's a single continuous view, we just render 1 */
+            content: "1";
+        }
+        .watermark-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-45deg);
+            font-size: 120px;
+            font-weight: bold;
+            color: var(--text-primary);
+            opacity: 0.08;
+            pointer-events: none;
+            z-index: 0;
+            white-space: nowrap;
+            user-select: none;
+        }
+
+        /* Phase 26: Track Changes & Comment Resolution */
+        /* Inserted text in track-changes mode */
+        ins.tc-insert {
+            color: #2b8a3e;
+            text-decoration: underline;
+            background: rgba(43, 138, 62, 0.08);
+            cursor: pointer;
+            border-bottom: 2px solid #2b8a3e;
+        }
+        ins.tc-insert::before {
+            content: attr(data-author);
+            font-size: 9px;
+            font-weight: 600;
+            color: #2b8a3e;
+            vertical-align: super;
+            margin-right: 2px;
+            opacity: 0.7;
+        }
+        /* Deleted text in track-changes mode */
+        del.tc-delete {
+            color: #c92a2a;
+            text-decoration: line-through;
+            background: rgba(201, 42, 42, 0.08);
+            cursor: pointer;
+        }
+        del.tc-delete::before {
+            content: attr(data-author);
+            font-size: 9px;
+            font-weight: 600;
+            color: #c92a2a;
+            vertical-align: super;
+            margin-right: 2px;
+            opacity: 0.7;
+        }
+        /* Track changes mode indicator on body */
+        body.track-changes-active #editor {
+            border-left: 3px solid #f08c00;
+        }
+        /* Track changes mode status badge */
+        #track-changes-badge {
+            display: none;
+            background: #f08c00;
+            color: #fff;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 1px 8px;
+            border-radius: 10px;
+            margin-left: 8px;
+            letter-spacing: 0.5px;
+        }
+        body.track-changes-active #track-changes-badge {
+            display: inline-block;
+        }
+        /* Resolved comment card */
+        .comment-card.resolved {
+            opacity: 0.5;
+        }
+        .comment-card.resolved .comment-body {
+            text-decoration: line-through;
+            color: var(--text-hint);
+        }
+        mark.comment.resolved {
+            background: rgba(130, 130, 130, 0.15);
+            color: var(--text-hint);
+        }
+        /* Per-change accept/reject inline buttons */
+        .tc-accept-btn, .tc-reject-btn {
+            display: none;
+            position: absolute;
+            font-size: 9px;
+            padding: 1px 4px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            top: -14px;
+            z-index: 100;
+        }
+        .tc-accept-btn { background: #2b8a3e; color: white; left: 0; }
+        .tc-reject-btn { background: #c92a2a; color: white; left: 36px; }
+        ins.tc-insert:hover .tc-accept-btn,
+        ins.tc-insert:hover .tc-reject-btn,
+        del.tc-delete:hover .tc-accept-btn,
+        del.tc-delete:hover .tc-reject-btn {
+            display: inline-block;
+        }
+        ins.tc-insert, del.tc-delete {
+            position: relative;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
     <script type="module" src="main.js" defer></script>
+    <script type="module" src="references.js" defer></script>
 </head>
 <body>
 <div class="app-shell">
@@ -27,6 +452,7 @@
             <span class="word-count" id="word-count" style="margin-right: 16px; opacity: 0.7; font-size: 11px;">0 words</span>
             <span class="page-count" id="page-count" style="margin-right: 16px; opacity: 0.8;">Page 1</span>
             <span class="sync-status" id="sync-status">●&nbsp;Saved</span>
+            <span id="track-changes-badge" title="Track Changes is active">TRACKING</span>
             <button class="titlebar-btn" id="btn-settings" title="Settings (⚙)" style="margin-left:12px; background:none; border:none; cursor:pointer; color:var(--text-secondary); font-size:16px; padding:2px 6px; border-radius:4px; transition:color 0.15s;" aria-label="Open Settings">⚙️</button>
         </div>
     </div>
@@ -38,7 +464,9 @@
             <button class="rtab rtab--file" id="tab-file-btn">File</button>
             <button class="rtab rtab--active" data-panel="panel-home">Home</button>
             <button class="rtab" data-panel="panel-insert">Insert</button>
+            <button class="rtab" data-panel="panel-design">Design</button>
             <button class="rtab" data-panel="panel-layout">Layout</button>
+            <button class="rtab" data-panel="panel-references">References</button>
             <button class="rtab" data-panel="panel-review">Review</button>
             <button class="rtab" data-panel="panel-view">View</button>
         </div>
@@ -54,68 +482,277 @@
                     <button class="rbtn rbtn--small" title="Cut" onclick="document.execCommand('cut')">✂ Cut</button>
                     <button class="rbtn rbtn--small" title="Copy" onclick="document.execCommand('copy')">⎘ Copy</button>
                 </div>
+                <div class="rinline-controls">
+                    <button class="rbtn rbtn--icon" id="btn-undo" title="Undo (Ctrl+Z)">↩</button>
+                    <button class="rbtn rbtn--icon" id="btn-redo" title="Redo (Ctrl+Y)">↪</button>
+                    <button class="rbtn rbtn--icon" id="btn-format-painter" title="Format Painter">🖌️</button>
+                </div>
                 <span class="rgroup-label">Clipboard</span>
             </div>
             <div class="rsep"></div>
             <div class="rgroup">
                 <div class="rinline-controls">
-                    <select class="rselect" id="font-family-picker" title="Font Family">
-                        <option value="Inter">Inter</option>
-                        <option value="Georgia">Georgia</option>
-                        <option value="Times New Roman">Times New Roman</option>
-                        <option value="JetBrains Mono">JetBrains Mono</option>
-                        <option value="Arial">Arial</option>
-                    </select>
+                    <div class="font-combo-wrap" style="position:relative; display:inline-flex; align-items:center;">
+                        <input class="rselect" id="font-family-picker" list="font-family-list" placeholder="Font name"
+                               title="Font Family" autocomplete="off" spellcheck="false"
+                               style="width:110px; padding-right:4px;">
+                        <datalist id="font-family-list">
+                            <option value="Inter">
+                            <option value="Arial">
+                            <option value="Georgia">
+                            <option value="Times New Roman">
+                            <option value="Calibri">
+                            <option value="Cambria">
+                            <option value="Garamond">
+                            <option value="Palatino Linotype">
+                            <option value="Trebuchet MS">
+                            <option value="Verdana">
+                            <option value="Courier New">
+                            <option value="JetBrains Mono">
+                            <option value="Roboto">
+                            <option value="Open Sans">
+                            <option value="Lato">
+                            <option value="Playfair Display">
+                            <option value="Source Sans Pro">
+                        </datalist>
+                    </div>
                     <select class="rselect rselect--narrow" id="font-size-picker" title="Font Size">
                         <option>8</option><option>9</option><option>10</option>
                         <option selected>11</option><option>12</option><option>14</option>
                         <option>16</option><option>18</option><option>24</option><option>36</option>
                     </select>
+                    <button class="rbtn rbtn--icon" id="btn-font-grow" title="Increase Font Size">A+</button>
+                    <button class="rbtn rbtn--icon" id="btn-font-shrink" title="Decrease Font Size">A-</button>
+                    <button class="rbtn rbtn--icon" id="btn-change-case" title="Change Case">Aa</button>
+                    <button class="rbtn rbtn--icon" data-cmd="removeFormat" title="Clear All Formatting">🧹</button>
+                </div>
+                <!-- Change Case Popup -->
+                <div class="table-picker" id="case-picker" hidden style="width: 150px; padding: 4px; display: flex; flex-direction: column; gap: 2px;">
+                    <button class="fmenu-item" data-case="sentence">Sentence case.</button>
+                    <button class="fmenu-item" data-case="lower">lowercase</button>
+                    <button class="fmenu-item" data-case="upper">UPPERCASE</button>
+                    <button class="fmenu-item" data-case="title">Title Case</button>
+                    <button class="fmenu-item" data-case="toggle">tOGGLE cASE</button>
                 </div>
                 <div class="rinline-controls">
                     <button class="rbtn rbtn--icon" data-cmd="bold" title="Bold (Ctrl+B)"><b>B</b></button>
                     <button class="rbtn rbtn--icon rbtn--italic" data-cmd="italic" title="Italic (Ctrl+I)"><i>I</i></button>
-                    <button class="rbtn rbtn--icon rbtn--underline" data-cmd="underline" title="Underline (Ctrl+U)"><u>U</u></button>
+                    <button class="rbtn rbtn--icon rbtn--underline" id="btn-underline-menu" title="Underline (Ctrl+U)" aria-haspopup="true"><u>U</u><span style="font-size:8px;">&#9660;</span></button>
                     <button class="rbtn rbtn--icon" data-cmd="strikeThrough" title="Strikethrough"><s>S</s></button>
                     <button class="rbtn rbtn--icon" data-cmd="superscript" title="Superscript">x²</button>
                     <button class="rbtn rbtn--icon" data-cmd="subscript" title="Subscript">x₂</button>
+                    <button class="rbtn rbtn--icon" id="btn-text-effects" title="Text Effects" aria-haspopup="true">A✨<span style="font-size:8px;">&#9660;</span></button>
+                </div>
+                <!-- Underline Picker Popup -->
+                <div class="table-picker" id="underline-picker" hidden style="width: 120px; padding: 4px; display: flex; flex-direction: column; gap: 2px;">
+                    <button class="fmenu-item" data-underline="single" style="text-decoration: underline;">Single</button>
+                    <button class="fmenu-item" data-underline="double" style="text-decoration: underline; text-decoration-style: double;">Double</button>
+                    <button class="fmenu-item" data-underline="dotted" style="text-decoration: underline; text-decoration-style: dotted;">Dotted</button>
+                    <button class="fmenu-item" data-underline="dashed" style="text-decoration: underline; text-decoration-style: dashed;">Dashed</button>
+                    <button class="fmenu-item" data-underline="wavy" style="text-decoration: underline; text-decoration-style: wavy;">Wavy</button>
+                </div>
+                <!-- Text Effects Picker Popup -->
+                <div class="table-picker" id="effects-picker" hidden style="width: 120px; padding: 4px; display: flex; flex-direction: column; gap: 2px;">
+                    <button class="fmenu-item" data-effect="none">No Effect</button>
+                    <button class="fmenu-item" data-effect="shadow" style="text-shadow: 2px 2px 4px rgba(0,0,0,0.4);">Shadow</button>
+                    <button class="fmenu-item" data-effect="glow" style="text-shadow: 0 0 8px var(--accent);">Glow</button>
+                    <button class="fmenu-item" data-effect="outline" style="-webkit-text-stroke: 1px var(--text-primary); color: transparent;">Outline</button>
+                </div>
+                <div class="rinline-controls">
+                    <label class="rbtn rbtn--icon rbtn--color" title="Text Color">
+                        <span style="font-weight:700; font-size:13px; border-bottom: 3px solid var(--text-color-preview,#e03131)">A</span>
+                        <input type="color" id="text-color-picker" value="#e03131" style="position:absolute;opacity:0;width:0;height:0;">
+                    </label>
+                    <label class="rbtn rbtn--icon rbtn--color" title="Highlight Color">
+                        <span style="font-size:14px; background:var(--highlight-color-preview,#ffd43b); padding:0 2px; border-radius:2px;">ab</span>
+                        <input type="color" id="highlight-color-picker" value="#ffd43b" style="position:absolute;opacity:0;width:0;height:0;">
+                    </label>
                 </div>
                 <span class="rgroup-label">Font</span>
             </div>
             <div class="rsep"></div>
             <div class="rgroup">
                 <div class="rinline-controls">
-                    <button class="rbtn rbtn--icon" data-cmd="insertUnorderedList" title="Bullet List">•</button>
-                    <button class="rbtn rbtn--icon" data-cmd="insertOrderedList" title="Numbered List">1.</button>
+                    <button class="rbtn rbtn--icon" id="btn-bullet-menu" title="Bullet List" aria-haspopup="true">•<span style="font-size:8px;">&#9660;</span></button>
+                    <button class="rbtn rbtn--icon" id="btn-num-menu" title="Numbered List" aria-haspopup="true">1.<span style="font-size:8px;">&#9660;</span></button>
+                    <button class="rbtn rbtn--icon" id="btn-outline-list" title="Outline List">1.1</button>
                     <button class="rbtn rbtn--icon" data-cmd="outdent" title="Decrease Indent">⇤</button>
                     <button class="rbtn rbtn--icon" data-cmd="indent" title="Increase Indent">⇥</button>
                     <button class="rbtn rbtn--icon" data-cmd="justifyLeft" title="Align Left">⫷</button>
                     <button class="rbtn rbtn--icon" data-cmd="justifyCenter" title="Center">≡</button>
                     <button class="rbtn rbtn--icon" data-cmd="justifyRight" title="Align Right">⫸</button>
+                    <button class="rbtn rbtn--icon" data-cmd="justifyFull" title="Justify">⫹</button>
+                    <div style="width:1px; height:16px; background:var(--rsep); margin:0 4px;"></div>
+                    <button class="rbtn rbtn--icon" id="btn-spacing" title="Line and Paragraph Spacing">↕</button>
+                    <button class="rbtn rbtn--icon" id="btn-shading" title="Shading">🪣</button>
+                    <button class="rbtn rbtn--icon" id="btn-borders" title="Borders">⊞</button>
+                    <button class="rbtn rbtn--icon" id="btn-sort" title="Sort A-Z">A↓</button>
+                    <button class="rbtn rbtn--icon" id="btn-show-marks" title="Show/Hide ¶">¶</button>
+                    <button class="rbtn rbtn--icon" id="btn-rtl" title="Right-to-Left Text Direction">⮂</button>
+                </div>
+                <!-- Bullet Picker Popup -->
+                <div class="table-picker" id="bullet-picker" hidden style="width: 120px; padding: 4px; display: flex; flex-direction: column; gap: 2px;">
+                    <button class="fmenu-item" data-list="disc">• Disc</button>
+                    <button class="fmenu-item" data-list="circle">○ Circle</button>
+                    <button class="fmenu-item" data-list="square">■ Square</button>
+                </div>
+                <!-- Number Picker Popup -->
+                <div class="table-picker" id="num-picker" hidden style="width: 150px; padding: 4px; display: flex; flex-direction: column; gap: 2px;">
+                    <button class="fmenu-item" data-list="decimal">1, 2, 3</button>
+                    <button class="fmenu-item" data-list="lower-alpha">a, b, c</button>
+                    <button class="fmenu-item" data-list="upper-alpha">A, B, C</button>
+                    <button class="fmenu-item" data-list="lower-roman">i, ii, iii</button>
+                    <button class="fmenu-item" data-list="upper-roman">I, II, III</button>
+                </div>
+                <!-- Spacing Popup -->
+                <div class="table-picker" id="spacing-picker" hidden style="width: 180px; padding: 4px; display: flex; flex-direction: column; gap: 2px;">
+                    <button class="fmenu-item" data-spacing="1.0">1.0</button>
+                    <button class="fmenu-item" data-spacing="1.15">1.15</button>
+                    <button class="fmenu-item" data-spacing="1.5">1.5</button>
+                    <button class="fmenu-item" data-spacing="2.0">2.0</button>
+                    <div style="height:1px; background:var(--border-color); margin:4px 0;"></div>
+                    <button class="fmenu-item" data-spacing="add-before">Add Space Before</button>
+                    <button class="fmenu-item" data-spacing="add-after">Add Space After</button>
+                    <button class="fmenu-item" data-spacing="remove-before">Remove Space Before</button>
+                    <button class="fmenu-item" data-spacing="remove-after">Remove Space After</button>
+                </div>
+                <!-- Shading Popup -->
+                <div class="table-picker" id="shading-picker" hidden style="width: 150px; padding: 4px; display: flex; flex-wrap: wrap; gap: 4px;">
+                    <button class="fmenu-item" data-shading="transparent" style="width:100%;">No Color</button>
+                    <div style="width:100%; height:1px; background:var(--border-color); margin:2px 0;"></div>
+                    <button class="color-swatch" data-shading="#f1f3f5" style="background:#f1f3f5; width:20px; height:20px; border:1px solid #ccc;"></button>
+                    <button class="color-swatch" data-shading="#ffe3e3" style="background:#ffe3e3; width:20px; height:20px; border:1px solid #ccc;"></button>
+                    <button class="color-swatch" data-shading="#fff3bf" style="background:#fff3bf; width:20px; height:20px; border:1px solid #ccc;"></button>
+                    <button class="color-swatch" data-shading="#d8f5a2" style="background:#d8f5a2; width:20px; height:20px; border:1px solid #ccc;"></button>
+                    <button class="color-swatch" data-shading="#c3fae8" style="background:#c3fae8; width:20px; height:20px; border:1px solid #ccc;"></button>
+                    <button class="color-swatch" data-shading="#d0ebff" style="background:#d0ebff; width:20px; height:20px; border:1px solid #ccc;"></button>
+                    <button class="color-swatch" data-shading="#e5dbff" style="background:#e5dbff; width:20px; height:20px; border:1px solid #ccc;"></button>
+                    <button class="color-swatch" data-shading="#fcc2d7" style="background:#fcc2d7; width:20px; height:20px; border:1px solid #ccc;"></button>
+                </div>
+                <!-- Borders Popup -->
+                <div class="table-picker" id="borders-picker" hidden style="width: 150px; padding: 4px; display: flex; flex-direction: column; gap: 2px;">
+                    <button class="fmenu-item" data-border="none">No Border</button>
+                    <button class="fmenu-item" data-border="bottom">Bottom Border</button>
+                    <button class="fmenu-item" data-border="top">Top Border</button>
+                    <button class="fmenu-item" data-border="left">Left Border</button>
+                    <button class="fmenu-item" data-border="right">Right Border</button>
+                    <button class="fmenu-item" data-border="all">All Borders</button>
+                    <button class="fmenu-item" data-border="outside">Outside Borders</button>
                 </div>
                 <span class="rgroup-label">Paragraph</span>
             </div>
             <div class="rsep"></div>
             <div class="rgroup">
-                <div class="rinline-controls">
-                    <button class="rsbtn" data-cmd="formatBlock" data-val="h1">H1</button>
-                    <button class="rsbtn" data-cmd="formatBlock" data-val="h2">H2</button>
-                    <button class="rsbtn" data-cmd="formatBlock" data-val="h3">H3</button>
-                    <button class="rsbtn" data-cmd="formatBlock" data-val="p">Normal</button>
-                    <button class="rsbtn" data-cmd="formatBlock" data-val="blockquote">Quote</button>
-                    <button class="rsbtn" data-cmd="formatBlock" data-val="pre">Code</button>
+                <div class="style-gallery" id="style-gallery">
+                    <button class="style-card" data-cmd="formatBlock" data-val="p">
+                        <div class="scard-preview" style="font-family:Inter;font-size:11px;">AaBbCc</div>
+                        <div class="scard-label">Normal</div>
+                    </button>
+                    <button class="style-card" data-style-name="title">
+                        <div class="scard-preview" style="font-family:Inter;font-size:16px;font-weight:700;letter-spacing:-0.02em;">AaBbCc</div>
+                        <div class="scard-label">Title</div>
+                    </button>
+                    <button class="style-card" data-style-name="subtitle">
+                        <div class="scard-preview" style="font-family:Inter;font-size:12px;font-weight:400;color:#6c757d;font-style:italic;">AaBbCc</div>
+                        <div class="scard-label">Subtitle</div>
+                    </button>
+                    <button class="style-card" data-cmd="formatBlock" data-val="h1">
+                        <div class="scard-preview" style="font-family:Inter;font-size:14px;font-weight:700;">AaBbCc</div>
+                        <div class="scard-label">Heading 1</div>
+                    </button>
+                    <button class="style-card" data-cmd="formatBlock" data-val="h2">
+                        <div class="scard-preview" style="font-family:Inter;font-size:13px;font-weight:700;color:var(--text-secondary);">AaBbCc</div>
+                        <div class="scard-label">Heading 2</div>
+                    </button>
+                    <button class="style-card" data-cmd="formatBlock" data-val="h3">
+                        <div class="scard-preview" style="font-family:Inter;font-size:12px;font-weight:600;color:var(--text-secondary);">AaBbCc</div>
+                        <div class="scard-label">Heading 3</div>
+                    </button>
+                    <button class="style-card" data-cmd="formatBlock" data-val="h4">
+                        <div class="scard-preview" style="font-family:Inter;font-size:11px;font-weight:600;font-style:italic;">AaBbCc</div>
+                        <div class="scard-label">Heading 4</div>
+                    </button>
+                    <button class="style-card" data-style-name="body-text">
+                        <div class="scard-preview" style="font-family:Inter;font-size:11px;line-height:1.6;">AaBbCc</div>
+                        <div class="scard-label">Body Text</div>
+                    </button>
+                    <button class="style-card" data-style-name="emphasis">
+                        <div class="scard-preview" style="font-family:Inter;font-size:11px;font-style:italic;color:var(--accent);">AaBbCc</div>
+                        <div class="scard-label">Emphasis</div>
+                    </button>
+                    <button class="style-card" data-cmd="formatBlock" data-val="blockquote">
+                        <div class="scard-preview" style="font-family:Inter;font-size:11px;font-style:italic;color:#868e96;border-left:2px solid #868e96;padding-left:4px;">AaBbCc</div>
+                        <div class="scard-label">Quote</div>
+                    </button>
+                    <button class="style-card" data-style-name="intense-quote">
+                        <div class="scard-preview" style="font-family:Inter;font-size:11px;font-style:italic;font-weight:600;color:var(--accent);border-left:3px solid var(--accent);padding-left:4px;">AaBbCc</div>
+                        <div class="scard-label">Intense Quote</div>
+                    </button>
+                    <button class="style-card" data-style-name="caption">
+                        <div class="scard-preview" style="font-family:Inter;font-size:9px;color:#868e96;font-style:italic;">AaBbCc</div>
+                        <div class="scard-label">Caption</div>
+                    </button>
+                    <button class="style-card" data-cmd="formatBlock" data-val="pre">
+                        <div class="scard-preview" style="font-family:monospace;font-size:10px;background:#f1f3f5;padding:2px;">AaBbCc</div>
+                        <div class="scard-label">Code</div>
+                    </button>
                 </div>
                 <span class="rgroup-label">Styles</span>
+            </div>
+            <div class="rsep"></div>
+            <div class="rgroup">
+                <div class="rinline-controls" style="flex-direction: column; align-items: flex-start; gap: 2px;">
+                    <button class="rbtn rbtn--small" id="btn-find" title="Find (Ctrl+F)" style="justify-content: flex-start; width: 100%;">
+                        <span class="rbtn-icon">🔍</span> Find
+                    </button>
+                    <button class="rbtn rbtn--small" id="btn-replace" title="Replace (Ctrl+H)" style="justify-content: flex-start; width: 100%;">
+                        <span class="rbtn-icon">🔄</span> Replace
+                    </button>
+                    <button class="rbtn rbtn--small" id="btn-select-menu" title="Select" style="justify-content: flex-start; width: 100%;">
+                        <span class="rbtn-icon">↖</span> Select &#9660;
+                    </button>
+                </div>
+                <div class="table-picker" id="select-picker" hidden style="width: 200px; padding: 4px; display: flex; flex-direction: column; gap: 2px;">
+                    <button class="fmenu-item" onclick="document.execCommand('selectAll')">Select All</button>
+                    <button class="fmenu-item" data-select="similar">Select All w/ Similar Formatting</button>
+                    <button class="fmenu-item" disabled title="Selects embedded objects">Select Objects</button>
+                </div>
+                <span class="rgroup-label">Editing</span>
+            </div>
+            <div class="rsep"></div>
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <button class="rbtn" id="btn-dictate" title="Dictate (Voice Input)">
+                        <span class="rbtn-icon">🎙️</span>
+                        <span>Dictate</span>
+                    </button>
+                </div>
+                <span class="rgroup-label">Voice</span>
             </div>
         </div>
 
         <!-- Insert Panel -->
         <div class="ribbon-panel" id="panel-insert">
+            <!-- H28: Cover Page -->
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <button class="rbtn" id="btn-insert-cover" title="Insert Cover Page — choose from pre-built templates">
+                        <span class="rbtn-icon">📄</span>
+                        <span>Cover Page ▾</span>
+                    </button>
+                </div>
+                <span class="rgroup-label">Pages</span>
+            </div>
+            <div class="rsep"></div>
             <div class="rgroup">
                 <div class="rinline-controls">
                     <button class="rbtn" id="btn-insert-picture" title="Insert Picture">
                         <span class="rbtn-icon">🖼</span>
                         <span>Picture</span>
+                    </button>
+                    <button class="rbtn" id="btn-insert-textbox" title="Insert Text Box">
+                        <span class="rbtn-icon">📝</span>
+                        <span>Text Box</span>
                     </button>
                     <button class="rbtn" id="btn-insert-table" title="Insert Table" aria-haspopup="true">
                         <span class="rbtn-icon">&#8862;</span>
@@ -151,13 +788,365 @@
                         <span class="rbtn-icon">∑</span>
                         <span>Equation</span>
                     </button>
+                    <button class="rbtn" id="btn-insert-diagram" title="Insert Diagram">
+                        <span class="rbtn-icon">M</span>
+                        <span>Diagram</span>
+                    </button>
+                    <!-- M13 Shapes -->
+                    <button class="rbtn" id="btn-insert-shape" title="Insert Shape" aria-haspopup="true">
+                        <span class="rbtn-icon">⭕</span>
+                        <span>Shapes &#9660;</span>
+                    </button>
+                    <div class="table-picker" id="shape-picker" hidden style="width: 120px; padding: 4px; display: flex; flex-direction: column; gap: 2px;">
+                        <button class="fmenu-item" data-shape="rect">Rectangle</button>
+                        <button class="fmenu-item" data-shape="circle">Circle</button>
+                        <button class="fmenu-item" data-shape="line">Line</button>
+                    </div>
+                    <!-- M36 Form Fields -->
+                    <button class="rbtn" id="btn-insert-form" title="Insert Form Field" aria-haspopup="true">
+                        <span class="rbtn-icon">☑</span>
+                        <span>Form &#9660;</span>
+                    </button>
+                    <div class="table-picker" id="form-picker" hidden style="width: 140px; padding: 4px; display: flex; flex-direction: column; gap: 2px;">
+                        <button class="fmenu-item" data-form="text">Text Input</button>
+                        <button class="fmenu-item" data-form="checkbox">Checkbox</button>
+                        <button class="fmenu-item" data-form="dropdown">Dropdown</button>
+                    </div>
+                    <div style="width:1px; height:16px; background:var(--rsep); margin:0 4px;"></div>
+                    <button class="rbtn" id="btn-insert-toc" title="Table of Contents">
+                        <span class="rbtn-icon">📑</span>
+                        <span>TOC</span>
+                    </button>
+                    <button class="rbtn" id="btn-insert-symbol" title="Symbol" aria-haspopup="true">
+                        <span class="rbtn-icon">Ω</span>
+                        <span>Symbol &#9660;</span>
+                    </button>
+                    <!-- Symbol Picker -->
+                    <div class="table-picker" id="symbol-picker" hidden style="width: 220px; padding: 8px;">
+                        <div class="symbol-grid" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px;">
+                            <button class="symbol-btn" data-char="©">©</button>
+                            <button class="symbol-btn" data-char="®">®</button>
+                            <button class="symbol-btn" data-char="™">™</button>
+                            <button class="symbol-btn" data-char="°">°</button>
+                            <button class="symbol-btn" data-char="±">±</button>
+                            <button class="symbol-btn" data-char="§">§</button>
+                            <button class="symbol-btn" data-char="¶">¶</button>
+                            <button class="symbol-btn" data-char="†">†</button>
+                            <button class="symbol-btn" data-char="‡">‡</button>
+                            <button class="symbol-btn" data-char="•">•</button>
+                            <button class="symbol-btn" data-char="∞">∞</button>
+                            <button class="symbol-btn" data-char="µ">µ</button>
+                            <button class="symbol-btn" data-char="€">€</button>
+                            <button class="symbol-btn" data-char="£">£</button>
+                            <button class="symbol-btn" data-char="¥">¥</button>
+                            <button class="symbol-btn" data-char="½">½</button>
+                            <button class="symbol-btn" data-char="¼">¼</button>
+                            <button class="symbol-btn" data-char="¾">¾</button>
+                        </div>
+                    </div>
                 </div>
                 <span class="rgroup-label">Insert</span>
+            </div>
+            <div class="rsep"></div>
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <button class="rbtn" id="btn-insert-header" title="Header">
+                        <span class="rbtn-icon">⬆</span>
+                        <span>Header</span>
+                    </button>
+                    <button class="rbtn" id="btn-insert-footer" title="Footer">
+                        <span class="rbtn-icon">⬇</span>
+                        <span>Footer</span>
+                    </button>
+                    <button class="rbtn" id="btn-insert-page-num" title="Page Number">
+                        <span class="rbtn-icon">#</span>
+                        <span>Page Number</span>
+                    </button>
+                </div>
+                <span class="rgroup-label">Header & Footer</span>
+            </div>
+        </div>
+
+        <!-- Design Panel (D01-D09) -->
+        <div class="ribbon-panel" id="panel-design">
+            <!-- Themes group (D02) -->
+            <div class="rgroup" style="min-width: 280px;">
+                <div class="rinline-controls" style="gap: 3px; overflow-x: auto;">
+                    <button class="theme-card" id="btn-theme-modern" data-theme="modern" title="Modern">
+                        <div class="theme-preview"><div class="theme-preview-h" style="background:#2563eb;"></div><div class="theme-preview-b"></div></div>
+                        Modern
+                    </button>
+                    <button class="theme-card" id="btn-theme-classic" data-theme="classic" title="Classic">
+                        <div class="theme-preview"><div class="theme-preview-h" style="background:#1a3a5c;"></div><div class="theme-preview-b"></div></div>
+                        Classic
+                    </button>
+                    <button class="theme-card" id="btn-theme-academic" data-theme="academic" title="Academic">
+                        <div class="theme-preview"><div class="theme-preview-h" style="background:#6b2737;"></div><div class="theme-preview-b"></div></div>
+                        Academic
+                    </button>
+                    <button class="theme-card" id="btn-theme-minimal" data-theme="minimal" title="Minimal">
+                        <div class="theme-preview"><div class="theme-preview-h" style="background:#374151;"></div><div class="theme-preview-b"></div></div>
+                        Minimal
+                    </button>
+                    <button class="theme-card" id="btn-theme-warm" data-theme="warm" title="Warm">
+                        <div class="theme-preview"><div class="theme-preview-h" style="background:#b45309;"></div><div class="theme-preview-b"></div></div>
+                        Warm
+                    </button>
+                    <button class="theme-card" id="btn-theme-dark-doc" data-theme="dark" title="Dark Doc">
+                        <div class="theme-preview"><div class="theme-preview-h" style="background:#818cf8;"></div><div class="theme-preview-b" style="background:#1e293b;"></div></div>
+                        Dark Doc
+                    </button>
+                </div>
+                <span class="rgroup-label">Themes</span>
+            </div>
+            <div class="rsep"></div>
+            <!-- Formatting (D04, D05) -->
+            <div class="rgroup">
+                <div class="rinline-controls" style="flex-direction: column; gap: 4px; align-items: flex-start;">
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <span style="font-size: 11px; width: 40px;">Colors:</span>
+                        <select id="design-color-picker" class="toolbar-select" style="width: 100px;">
+                            <option value="">(Theme Default)</option>
+                            <option value="office">Office</option>
+                            <option value="grayscale">Grayscale</option>
+                            <option value="warm-blue">Warm Blue</option>
+                            <option value="verve">Verve</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <span style="font-size: 11px; width: 40px;">Fonts:</span>
+                        <select id="design-font-picker" class="toolbar-select" style="width: 100px;">
+                            <option value="">(Theme Default)</option>
+                            <option value="georgia-inter">Georgia / Inter</option>
+                            <option value="playfair-source">Playfair / Source</option>
+                            <option value="merriweather-open">Merriweather / Open Sans</option>
+                            <option value="roboto-roboto">Roboto / Roboto</option>
+                        </select>
+                    </div>
+                </div>
+                <span class="rgroup-label">Formatting</span>
+            </div>
+            <div class="rsep"></div>
+            <!-- Style Sets (D03) -->
+            <div class="rgroup" style="min-width: 200px;">
+                <div class="rinline-controls" style="gap: 4px; overflow-x: auto;">
+                    <button class="theme-card style-card" id="btn-style-basic" data-style="basic" title="Basic">
+                        Basic
+                    </button>
+                    <button class="theme-card style-card" id="btn-style-casual" data-style="casual" title="Casual">
+                        Casual
+                    </button>
+                    <button class="theme-card style-card" id="btn-style-formal" data-style="formal" title="Formal">
+                        Formal
+                    </button>
+                    <button class="theme-card style-card" id="btn-style-elegant" data-style="elegant" title="Elegant">
+                        Elegant
+                    </button>
+                    <button class="theme-card style-card" id="btn-style-draft" data-style="draft" title="Draft">
+                        Draft
+                    </button>
+                </div>
+                <span class="rgroup-label">Style Sets</span>
+            </div>
+            <div class="rsep"></div>
+            <!-- Document Formatting / Spacing (D06) -->
+            <div class="rgroup">
+                <div class="rinline-controls" style="flex-direction: column; gap: 4px; align-items: flex-start;">
+                    <div style="display: flex; gap: 4px;">
+                        <button class="spacing-preset-btn" id="btn-spacing-compact" data-spacing="compact">Compact</button>
+                        <button class="spacing-preset-btn" id="btn-spacing-open" data-spacing="open">Open</button>
+                    </div>
+                    <div style="display: flex; gap: 4px;">
+                        <button class="spacing-preset-btn" id="btn-spacing-double" data-spacing="double">Double</button>
+                        <button class="spacing-preset-btn" id="btn-spacing-default" data-spacing="">Default</button>
+                    </div>
+                </div>
+                <span class="rgroup-label">Paragraph Spacing</span>
+            </div>
+            <div class="rsep"></div>
+            <!-- Page Background (D07) -->
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <label class="rbtn" title="Page Color" style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+                        <span class="rbtn-icon">🎨</span>
+                        <span>Page Color</span>
+                        <input type="color" id="design-page-color" value="#ffffff" style="position:absolute;opacity:0;width:0;height:0;">
+                    </label>
+                    <button class="rbtn" id="btn-design-page-borders" title="Page Borders">
+                        <span class="rbtn-icon">▣</span>
+                        <span>Page Borders</span>
+                    </button>
+                    <button class="rbtn" id="btn-watermark" title="Watermark">
+                        <span class="rbtn-icon">🔏</span>
+                        <span>Watermark</span>
+                    </button>
+                </div>
+                <span class="rgroup-label">Page Background</span>
+            </div>
+            <!-- M17: Drop Cap -->
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <button class="rbtn rbtn--active-toggle" id="btn-drop-cap" title="Drop Cap">
+                        <span class="rbtn-icon" style="font-size:20px;font-weight:700;line-height:1;">T</span>
+                        <span>Drop Cap</span>
+                    </button>
+                </div>
+                <span class="rgroup-label">Text</span>
+            </div>
+            <div class="rsep"></div>
+            <!-- Set as Default (D09) -->
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <button class="rbtn" id="btn-design-set-default" title="Set as Default for new documents">
+                        <span class="rbtn-icon">💾</span>
+                        <span>Set Default</span>
+                    </button>
+                </div>
+                <span class="rgroup-label">Document</span>
             </div>
         </div>
 
         <!-- Layout Panel -->
         <div class="ribbon-panel" id="panel-layout">
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <button class="rbtn" id="btn-margins" title="Margins" aria-haspopup="true">
+                        <span class="rbtn-icon">📄</span>
+                        <span>Margins &#9660;</span>
+                    </button>
+                    <!-- Margins Picker -->
+                    <div class="table-picker" id="margins-picker" hidden style="width: 150px; padding: 4px; display: flex; flex-direction: column; gap: 2px;">
+                        <button class="fmenu-item" data-margin="96">Normal (1")</button>
+                        <button class="fmenu-item" data-margin="48">Narrow (0.5")</button>
+                        <button class="fmenu-item" data-margin="72">Moderate (0.75")</button>
+                        <button class="fmenu-item" data-margin="144">Wide (1.5")</button>
+                    </div>
+                    
+                    <button class="rbtn" id="btn-orientation" title="Orientation" aria-haspopup="true">
+                        <span class="rbtn-icon">🔃</span>
+                        <span>Orientation &#9660;</span>
+                    </button>
+                    <!-- Orientation Picker -->
+                    <div class="table-picker" id="orientation-picker" hidden style="width: 120px; padding: 4px; display: flex; flex-direction: column; gap: 2px;">
+                        <button class="fmenu-item" data-orientation="portrait">Portrait</button>
+                        <button class="fmenu-item" data-orientation="landscape">Landscape</button>
+                    </div>
+                    
+                    <button class="rbtn" id="btn-page-size" title="Size" aria-haspopup="true">
+                        <span class="rbtn-icon">📏</span>
+                        <span>Size &#9660;</span>
+                    </button>
+                    <!-- Size Picker -->
+                    <div class="table-picker" id="size-picker" hidden style="width: 140px; padding: 4px; display: flex; flex-direction: column; gap: 2px;">
+                        <button class="fmenu-item" data-size="letter">Letter (8.5" x 11")</button>
+                        <button class="fmenu-item" data-size="legal">Legal (8.5" x 14")</button>
+                        <button class="fmenu-item" data-size="a4">A4 (210 x 297mm)</button>
+                        <button class="fmenu-item" data-size="executive">Executive</button>
+                    </div>
+
+                    <button class="rbtn" id="btn-columns" title="Columns" aria-haspopup="true">
+                        <span class="rbtn-icon">🪟</span>
+                        <span>Columns &#9660;</span>
+                    </button>
+                    <!-- Columns Picker -->
+                    <div class="table-picker" id="columns-picker" hidden style="width: 120px; padding: 4px; display: flex; flex-direction: column; gap: 2px;">
+                        <button class="fmenu-item" data-columns="1">One</button>
+                        <button class="fmenu-item" data-columns="2">Two</button>
+                        <button class="fmenu-item" data-columns="3">Three</button>
+                    </div>
+
+                    <button class="rbtn" id="btn-breaks" title="Breaks" aria-haspopup="true">
+                        <span class="rbtn-icon">✂</span>
+                        <span>Breaks &#9660;</span>
+                    </button>
+                    <!-- Breaks Picker -->
+                    <div class="table-picker" id="breaks-picker" hidden style="width: 140px; padding: 4px; display: flex; flex-direction: column; gap: 2px;">
+                        <div class="fmenu-item fmenu-item--header">Page Breaks</div>
+                        <button class="fmenu-item" data-break="page">Page</button>
+                        <button class="fmenu-item" data-break="column">Column</button>
+                    </div>
+                    
+                    <button class="rbtn" id="btn-line-numbers" title="Line Numbers" aria-haspopup="true">
+                        <span class="rbtn-icon">🔢</span>
+                        <span>Line Numbers &#9660;</span>
+                    </button>
+                    <!-- Line Numbers Picker -->
+                    <div class="table-picker" id="line-numbers-picker" hidden style="width: 140px; padding: 4px; display: flex; flex-direction: column; gap: 2px;">
+                        <button class="fmenu-item" data-lineno="none">None</button>
+                        <button class="fmenu-item" data-lineno="continuous">Continuous</button>
+                    </div>
+
+                    <button class="rbtn" id="btn-hyphenation" title="Hyphenation" aria-haspopup="true">
+                        <span class="rbtn-icon">〰</span>
+                        <span>Hyphenation &#9660;</span>
+                    </button>
+                    <!-- Hyphenation Picker -->
+                    <div class="table-picker" id="hyphenation-picker" hidden style="width: 120px; padding: 4px; display: flex; flex-direction: column; gap: 2px;">
+                        <button class="fmenu-item" data-hyphen="none">None</button>
+                        <button class="fmenu-item" data-hyphen="auto">Automatic</button>
+                    </div>
+                </div>
+                <span class="rgroup-label">Page Setup</span>
+            </div>
+            <div class="rsep"></div>
+            <!-- Paragraph Group (H01, H02) -->
+            <div class="rgroup">
+                <div class="rinline-controls" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <span style="font-size: 11px; width: 60px;">Line Spacing:</span>
+                        <select id="layout-line-spacing" class="toolbar-select" style="width: 80px;">
+                            <option value="">(Default)</option>
+                            <option value="1.0">1.0</option>
+                            <option value="1.15">1.15</option>
+                            <option value="1.5">1.5</option>
+                            <option value="2.0">2.0</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <span style="font-size: 11px; width: 60px;">Before (pt):</span>
+                        <input type="number" id="layout-space-before" class="toolbar-select" style="width: 60px; padding: 2px;" min="0" max="100">
+                        <span style="font-size: 11px; width: 60px; padding-left: 8px;">After (pt):</span>
+                        <input type="number" id="layout-space-after" class="toolbar-select" style="width: 60px; padding: 2px;" min="0" max="100">
+                    </div>
+                </div>
+                <span class="rgroup-label">Paragraph</span>
+            </div>
+            <div class="rsep"></div>
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <button class="rbtn" id="btn-watermark" title="Watermark" aria-haspopup="true">
+                        <span class="rbtn-icon">🔤</span>
+                        <span>Watermark &#9660;</span>
+                    </button>
+                    <!-- Watermark Picker -->
+                    <div class="table-picker" id="watermark-picker" hidden style="width: 150px; padding: 4px; display: flex; flex-direction: column; gap: 2px;">
+                        <button class="fmenu-item" data-watermark="none">Remove Watermark</button>
+                        <div style="height:1px; background:var(--border-color); margin:4px 0;"></div>
+                        <button class="fmenu-item" data-watermark="CONFIDENTIAL">CONFIDENTIAL</button>
+                        <button class="fmenu-item" data-watermark="DO NOT COPY">DO NOT COPY</button>
+                        <button class="fmenu-item" data-watermark="DRAFT">DRAFT</button>
+                        <button class="fmenu-item" data-watermark="SAMPLE">SAMPLE</button>
+                    </div>
+
+                    <label class="rbtn" title="Page Color" style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                        <span class="rbtn-icon" style="border-bottom: 3px solid var(--bg-surface); padding-bottom: 2px;">🎨</span>
+                        <span>Page Color</span>
+                        <input type="color" id="page-color-picker" value="#ffffff" style="position:absolute;opacity:0;width:0;height:0;">
+                    </label>
+                </div>
+                <span class="rgroup-label">Page Background</span>
+            </div>
+            <!-- M17: Drop Cap -->
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <button class="rbtn rbtn--active-toggle" id="btn-drop-cap" title="Drop Cap">
+                        <span class="rbtn-icon" style="font-size:20px;font-weight:700;line-height:1;">T</span>
+                        <span>Drop Cap</span>
+                    </button>
+                </div>
+                <span class="rgroup-label">Text</span>
+            </div>
+            <div class="rsep"></div>
             <div class="rgroup">
                 <div class="rinline-controls">
                     <button class="rbtn rbtn--active-toggle" id="btn-layout-print" title="Print/Page Layout">
@@ -169,7 +1158,160 @@
                         <span>Web View</span>
                     </button>
                 </div>
-                <span class="rgroup-label">Page Setup</span>
+                <span class="rgroup-label">Views</span>
+            </div>
+        </div>
+
+        <!-- References Panel (G-H33) -->
+        <div class="ribbon-panel" id="panel-references">
+            <!-- Table of Contents group -->
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <button class="rbtn" id="btn-ref-toc" title="Insert Table of Contents">
+                        <span class="rbtn-icon">📑</span>
+                        <span>TOC</span>
+                    </button>
+                    <button class="rbtn" id="btn-ref-tof" title="Insert Table of Figures">
+                        <span class="rbtn-icon">🖼</span>
+                        <span>Table of Figures</span>
+                    </button>
+                    <button class="rbtn" id="btn-ref-tot" title="Insert Table of Tables">
+                        <span class="rbtn-icon">📊</span>
+                        <span>Table of Tables</span>
+                    </button>
+                </div>
+                <span class="rgroup-label">Table of Contents</span>
+            </div>
+            <div class="rsep"></div>
+            <!-- Footnotes group -->
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <button class="rbtn" id="btn-ref-footnote" title="Insert Footnote">
+                        <span class="rbtn-icon">[*]</span>
+                        <span>Footnote</span>
+                    </button>
+                    <button class="rbtn" id="btn-ref-endnote" title="Insert Endnote">
+                        <span class="rbtn-icon">[†]</span>
+                        <span>Endnote</span>
+                    </button>
+                </div>
+                <span class="rgroup-label">Footnotes</span>
+            </div>
+            <div class="rsep"></div>
+            <!-- Citations group -->
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <button class="rbtn" id="btn-ref-cite" title="Insert Citation" aria-haspopup="true">
+                        <span class="rbtn-icon">📖</span>
+                        <span>Citation &#9660;</span>
+                    </button>
+                    <!-- Citation source picker -->
+                    <div class="table-picker" id="citation-picker" hidden style="width: 260px; padding: 8px; display: flex; flex-direction: column; gap: 6px;">
+                        <div style="font-size:11px; font-weight:600; color:var(--text-secondary); margin-bottom:2px;">Insert Citation</div>
+                        <div style="display:flex; gap:4px;">
+                            <input type="text" id="citation-search" placeholder="Search sources…" style="flex:1; border:1px solid var(--border); border-radius:3px; padding:3px 7px; font-size:11px; background:var(--chrome-bg); color:var(--text-primary);">
+                        </div>
+                        <div id="citation-source-list" style="max-height:160px; overflow-y:auto; display:flex; flex-direction:column; gap:3px;"></div>
+                        <div style="height:1px; background:var(--border-color);"></div>
+                        <button class="fmenu-item" id="btn-add-new-source">+ Add New Source…</button>
+                    </div>
+                    <button class="rbtn" id="btn-ref-bibliography" title="Insert Bibliography">
+                        <span class="rbtn-icon">📚</span>
+                        <span>Bibliography</span>
+                    </button>
+                    <button class="rbtn" id="btn-manage-sources" title="Manage Sources">
+                        <span class="rbtn-icon">⚙</span>
+                        <span>Manage Sources</span>
+                    </button>
+                </div>
+                <span class="rgroup-label">Citations & Bibliography</span>
+            </div>
+            <div class="rsep"></div>
+            <!-- Captions group (G-H35) -->
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <button class="rbtn" id="btn-ref-caption" title="Insert Caption (Figure/Table label)">
+                        <span class="rbtn-icon">🏷</span>
+                        <span>Caption</span>
+                    </button>
+                    <button class="rbtn" id="btn-ref-cross-ref" title="Insert Cross-Reference (G-H36)" aria-haspopup="true">
+                        <span class="rbtn-icon">🔗</span>
+                        <span>Cross-ref &#9660;</span>
+                    </button>
+                    <!-- Cross-reference picker -->
+                    <div class="table-picker" id="cross-ref-picker" hidden style="width: 240px; padding: 8px; display: flex; flex-direction: column; gap: 6px;">
+                        <div style="font-size:11px; font-weight:600; color:var(--text-secondary); margin-bottom:2px;">Insert Cross-Reference</div>
+                        <select id="cross-ref-type" style="border:1px solid var(--border); border-radius:3px; padding:3px 6px; font-size:11px; background:var(--chrome-bg); color:var(--text-primary);">
+                            <option value="heading">Heading</option>
+                            <option value="figure">Figure</option>
+                            <option value="table">Table</option>
+                            <option value="footnote">Footnote</option>
+                            <option value="bookmark">Bookmark</option>
+                        </select>
+                        <div id="cross-ref-list" style="max-height:160px; overflow-y:auto; display:flex; flex-direction:column; gap:3px;"></div>
+                        <button class="fmenu-item" id="btn-insert-cross-ref">Insert</button>
+                    </div>
+                </div>
+                <span class="rgroup-label">Captions</span>
+            </div>
+            <div class="rsep"></div>
+            <!-- Index group (G-H37) -->
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <button class="rbtn" id="btn-ref-mark-index" title="Mark Index Entry">
+                        <span class="rbtn-icon">🔖</span>
+                        <span>Mark Entry</span>
+                    </button>
+                    <button class="rbtn" id="btn-ref-gen-index" title="Generate Index">
+                        <span class="rbtn-icon">📇</span>
+                        <span>Insert Index</span>
+                    </button>
+                </div>
+                <span class="rgroup-label">Index</span>
+            </div>
+            <div class="rsep"></div>
+            <!-- Bookmarks group (G-M11) -->
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <button class="rbtn" id="btn-ref-bookmark" title="Insert Bookmark / Named Anchor">
+                        <span class="rbtn-icon">🔖</span>
+                        <span>Bookmark</span>
+                    </button>
+                </div>
+                <span class="rgroup-label">Bookmarks</span>
+            </div>
+        </div>
+
+        <!-- Source Manager Modal -->
+        <div id="source-manager-scrim" hidden style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9000;display:flex;align-items:center;justify-content:center;">
+            <div id="source-manager" style="background:var(--bg-primary);border-radius:8px;padding:20px;width:560px;max-height:80vh;overflow-y:auto;display:flex;flex-direction:column;gap:12px;box-shadow:0 8px 32px rgba(0,0,0,0.4);">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <span style="font-size:15px;font-weight:600;">Source Manager</span>
+                    <button id="btn-source-manager-close" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--text-hint);">✕</button>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr auto;gap:8px;">
+                    <input type="text" id="sm-author" placeholder="Author(s)" style="border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:12px;background:var(--chrome-bg);color:var(--text-primary);">
+                    <input type="number" id="sm-year" placeholder="Year" style="width:70px;border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:12px;background:var(--chrome-bg);color:var(--text-primary);">
+                </div>
+                <input type="text" id="sm-title" placeholder="Title" style="border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:12px;background:var(--chrome-bg);color:var(--text-primary);">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                    <input type="text" id="sm-publisher" placeholder="Publisher / Journal" style="border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:12px;background:var(--chrome-bg);color:var(--text-primary);">
+                    <select id="sm-type" style="border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:12px;background:var(--chrome-bg);color:var(--text-primary);">
+                        <option value="book">Book</option>
+                        <option value="article">Journal Article</option>
+                        <option value="website">Website</option>
+                        <option value="conference">Conference Paper</option>
+                        <option value="thesis">Thesis / Dissertation</option>
+                        <option value="report">Report</option>
+                    </select>
+                </div>
+                <input type="text" id="sm-url" placeholder="URL / DOI (optional)" style="border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:12px;background:var(--chrome-bg);color:var(--text-primary);">
+                <div style="display:flex;gap:8px;justify-content:flex-end;">
+                    <button id="btn-sm-save" style="background:var(--accent);color:#fff;border:none;border-radius:4px;padding:6px 16px;font-size:12px;cursor:pointer;">Add Source</button>
+                </div>
+                <div style="height:1px;background:var(--border-color);"></div>
+                <div style="font-size:11px;font-weight:600;color:var(--text-secondary);">Current Sources</div>
+                <div id="sm-source-list" style="display:flex;flex-direction:column;gap:6px;max-height:200px;overflow-y:auto;"></div>
             </div>
         </div>
 
@@ -177,7 +1319,11 @@
         <div class="ribbon-panel" id="panel-review">
             <div class="rgroup">
                 <div class="rinline-controls">
-                    <button class="rbtn" id="btn-set-base">
+                    <button class="rbtn rbtn--active-toggle" id="btn-track-changes" title="Track Changes (Ctrl+Shift+E)">
+                        <span class="rbtn-icon">📝</span>
+                        <span>Track Changes</span>
+                    </button>
+                    <button class="rbtn" id="btn-set-base" title="Set base snapshot for diff">
                         <span class="rbtn-icon">📍</span>
                         <span>Set Base</span>
                     </button>
@@ -185,8 +1331,31 @@
                         <span class="rbtn-icon">🔍</span>
                         <span>Show Changes</span>
                     </button>
+                    <!-- M24/M34 Readability Stats -->
+                    <button class="rbtn" id="btn-review-stats" title="Document Statistics">
+                        <span class="rbtn-icon">📊</span>
+                        <span>Stats</span>
+                    </button>
                 </div>
                 <span class="rgroup-label">Tracking</span>
+            </div>
+            <div class="rsep"></div>
+            <div class="rgroup">
+                <div class="rinline-controls" style="flex-direction: column; align-items: flex-start; gap: 2px;">
+                    <button class="rbtn rbtn--small" id="btn-accept-all" title="Accept All Changes" style="justify-content: flex-start; width: 100%;">
+                        <span class="rbtn-icon">✔</span> Accept All
+                    </button>
+                    <button class="rbtn rbtn--small" id="btn-reject-all" title="Reject All Changes" style="justify-content: flex-start; width: 100%;">
+                        <span class="rbtn-icon">✘</span> Reject All
+                    </button>
+                    <button class="rbtn rbtn--small" id="btn-prev-change" title="Previous Change" style="justify-content: flex-start; width: 100%;">
+                        <span class="rbtn-icon">↑</span> Previous
+                    </button>
+                    <button class="rbtn rbtn--small" id="btn-next-change" title="Next Change" style="justify-content: flex-start; width: 100%;">
+                        <span class="rbtn-icon">↓</span> Next
+                    </button>
+                </div>
+                <span class="rgroup-label">Changes</span>
             </div>
             <div class="rsep"></div>
             <div class="rgroup">
@@ -195,6 +1364,10 @@
                         <span class="rbtn-icon">📋</span>
                         <span>Sidebar</span>
                     </button>
+                    <button class="rbtn" id="btn-resolve-all" title="Resolve All Comments">
+                        <span class="rbtn-icon">✅</span>
+                        <span>Resolve All</span>
+                    </button>
                 </div>
                 <span class="rgroup-label">Comments</span>
             </div>
@@ -202,8 +1375,70 @@
 
         <!-- View Panel -->
         <div class="ribbon-panel" id="panel-view">
+            <!-- V01: View Mode Switcher -->
             <div class="rgroup">
                 <div class="rinline-controls">
+                    <button class="rbtn rbtn--active-toggle view-mode-btn" id="btn-view-print" data-view="print" title="Print Layout (default)">
+                        <span class="rbtn-icon">📄</span>
+                        <span>Print</span>
+                    </button>
+                    <button class="rbtn view-mode-btn" id="btn-view-read" data-view="read" title="Read Mode — locked, paginated">
+                        <span class="rbtn-icon">👁</span>
+                        <span>Read</span>
+                    </button>
+                    <button class="rbtn view-mode-btn" id="btn-view-web" data-view="web" title="Web Layout — continuous reflow">
+                        <span class="rbtn-icon">🌐</span>
+                        <span>Web</span>
+                    </button>
+                    <button class="rbtn view-mode-btn" id="btn-view-draft" data-view="draft" title="Draft — plain text, no images">
+                        <span class="rbtn-icon">✏️</span>
+                        <span>Draft</span>
+                    </button>
+                    <button class="rbtn view-mode-btn" id="btn-view-outline" data-view="outline" title="Outline — hierarchical heading view with promote/demote">
+                        <span class="rbtn-icon">🗂️</span>
+                        <span>Outline</span>
+                    </button>
+                </div>
+                <span class="rgroup-label">Views</span>
+            </div>
+            <div class="rsep"></div>
+            <!-- V03/V04: Show group -->
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <button class="rbtn rbtn--active-toggle" id="btn-gridlines" title="Toggle Gridlines">
+                        <span class="rbtn-icon">⊞</span>
+                        <span>Gridlines</span>
+                    </button>
+                    <button class="rbtn rbtn--active-toggle" id="btn-nav-pane" title="Navigation Pane">
+                        <span class="rbtn-icon">🗺</span>
+                        <span>Nav Pane</span>
+                    </button>
+                    <button class="rbtn rbtn--active-toggle" id="btn-ruler" title="Toggle Ruler">
+                        <span class="rbtn-icon">📐</span>
+                        <span>Ruler</span>
+                    </button>
+                </div>
+                <span class="rgroup-label">Show</span>
+            </div>
+            <div class="rsep"></div>
+            <!-- M09: Read Aloud -->
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <button class="rbtn" id="btn-read-aloud" title="Read Aloud">
+                        <span class="rbtn-icon">🔊</span>
+                        <span>Read Aloud</span>
+                    </button>
+                </div>
+                <span class="rgroup-label">Accessibility</span>
+            </div>
+            <div class="rsep"></div>
+            <!-- V05: Zoom group -->
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <button class="rbtn" id="btn-zoom-dialog" title="Zoom Options">
+                        <span class="rbtn-icon">🔍</span>
+                        <span>Zoom ▾</span>
+                    </button>
                     <button class="rbtn" onclick="zoomPage(75)"><span>75%</span></button>
                     <button class="rbtn" onclick="zoomPage(100)"><span>100%</span></button>
                     <button class="rbtn" onclick="zoomPage(125)"><span>125%</span></button>
@@ -212,11 +1447,24 @@
                 <span class="rgroup-label">Zoom</span>
             </div>
             <div class="rsep"></div>
+            <!-- Appearance group -->
             <div class="rgroup">
                 <div class="rinline-controls">
                     <button class="rbtn" id="btn-toggle-theme" title="Toggle Dark/Light Mode">
                         <span class="rbtn-icon">🌙</span>
                         <span>Theme</span>
+                    </button>
+                    <button class="rbtn" id="btn-focus-mode" title="Focus Mode (F11)">
+                        <span class="rbtn-icon">⛶</span>
+                        <span>Focus</span>
+                    </button>
+                    <button class="rbtn" id="btn-spellcheck" title="Toggle Spell Check">
+                        <span class="rbtn-icon">✓</span>
+                        <span>Spell</span>
+                    </button>
+                    <button class="rbtn" id="btn-print" title="Print (Ctrl+P)">
+                        <span class="rbtn-icon">🖨</span>
+                        <span>Print</span>
                     </button>
                 </div>
                 <span class="rgroup-label">Appearance</span>
@@ -256,13 +1504,31 @@
         </button>
         <button class="fmenu-item" id="btn-open">
             <span class="fmenu-icon">&#128194;</span>
-            <div><strong>Open</strong><small>Import DOCX, PDF, ODT, HTML, MD, Typst</small></div>
+            <div><strong>Open</strong><small>Import DOCX, PPTX, EPUB, PDF, ODT, HTML, MD, Typst</small></div>
         </button>
         <div id="recent-files-section" hidden>
             <div class="fmenu-sep"></div>
             <div class="fmenu-section-title">Recent</div>
             <div id="recent-files-list"></div>
         </div>
+        <button class="fmenu-item" id="btn-save">
+            <span class="fmenu-icon">💾</span>
+            <div><strong>Save</strong><small>Save to current file (Ctrl+S)</small></div>
+        </button>
+        <button class="fmenu-item" id="btn-save-as">
+            <span class="fmenu-icon">📂</span>
+            <div><strong>Save As…</strong><small>Choose location and format</small></div>
+        </button>
+        <div class="fmenu-sep"></div>
+        <button class="fmenu-item" id="btn-version-history">
+            <span class="fmenu-icon">📜</span>
+            <div><strong>Version History</strong><small>Browse and restore named snapshots</small></div>
+        </button>
+        <button class="fmenu-item" id="btn-doc-properties">
+            <span class="fmenu-icon">ℹ️</span>
+            <div><strong>Document Properties</strong><small>Title, author, keywords</small></div>
+        </button>
+        <div class="fmenu-sep"></div>
         <div class="fmenu-section-title">Export As</div>
         <button class="fmenu-item fmenu-export" data-export="markdown">
             <span class="fmenu-icon">⬇</span>
@@ -287,6 +1553,18 @@
         <button class="fmenu-item fmenu-export" data-export="typst">
             <span class="fmenu-icon">⬇</span>
             <div><strong>Typst</strong><small>.typ</small></div>
+        </button>
+        <button class="fmenu-item fmenu-export" data-export="pptx">
+            <span class="fmenu-icon">⬇</span>
+            <div><strong>PowerPoint</strong><small>.pptx</small></div>
+        </button>
+        <button class="fmenu-item fmenu-export" data-export="epub">
+            <span class="fmenu-icon">⬇</span>
+            <div><strong>eBook</strong><small>.epub</small></div>
+        </button>
+        <button class="fmenu-item fmenu-export" data-export="rtf">
+            <span class="fmenu-icon">⬇</span>
+            <div><strong>Rich Text</strong><small>.rtf</small></div>
         </button>
     </div>
     <div class="file-menu-scrim" id="file-menu-scrim" hidden></div>
@@ -402,32 +1680,184 @@
         <li class="ctx-item" id="ctx-merge-cells">&#8862; Merge Selected Cells</li>
         <li class="ctx-item" id="ctx-split-cell">&#8863; Split Cell</li>
         <li class="ctx-sep"></li>
-        <li class="ctx-item" id="ctx-clear-row">&#9003; Clear Row</li>
-        <li class="ctx-item" id="ctx-clear-col">&#9003; Clear Column</li>
-        <li class="ctx-item" id="ctx-select-table">&#9635; Select Table</li>
-        <li class="ctx-sep"></li>
         <li class="ctx-item ctx-item--danger" id="ctx-del-row">&#215; Delete Row</li>
         <li class="ctx-item ctx-item--danger" id="ctx-del-col">&#215; Delete Column</li>
         <li class="ctx-item ctx-item--danger" id="ctx-del-table">&#215; Delete Table</li>
+        <li class="ctx-sep"></li>
+        <li class="ctx-item" id="ctx-cell-props">&#9881; Cell Properties...</li>
+        <li class="ctx-sep" id="ctx-lang-sep"></li>
+        <li class="ctx-item" id="ctx-lang-props" title="Set Paragraph Language">&#127758; Language...</li>
     </ul>
 
-    <!-- ── Floating Table Toolbar ──────────────────────────── -->
-    <div class="table-float-bar" id="table-float-bar" hidden>
-        <button class="tfb-btn" id="tfb-add-row-above" title="Add Row Above">&#8593;&#9646;</button>
-        <button class="tfb-btn" id="tfb-add-row-below" title="Add Row Below">&#9646;&#8595;</button>
-        <button class="tfb-btn" id="tfb-add-col-left" title="Add Column Left">&#8592;&#9644;</button>
-        <button class="tfb-btn" id="tfb-add-col-right" title="Add Column Right">&#9644;&#8594;</button>
-        <div class="tfb-sep"></div>
-        <button class="tfb-btn" id="tfb-merge" title="Merge Selected Cells">&#8862;</button>
-        <button class="tfb-btn" id="tfb-split" title="Split Cell">&#8863;</button>
-        <div class="tfb-sep"></div>
-        <button class="tfb-btn" id="tfb-align-left"   title="Align Left">&#8676;</button>
-        <button class="tfb-btn" id="tfb-align-center" title="Align Center">&#8677;</button>
-        <button class="tfb-btn" id="tfb-align-right"  title="Align Right">&#8677;</button>
-        <div class="tfb-sep"></div>
-        <button class="tfb-btn tfb-btn--danger" id="tfb-del-row" title="Delete Row">&#215;Row</button>
-        <button class="tfb-btn tfb-btn--danger" id="tfb-del-col" title="Delete Column">&#215;Col</button>
-        <button class="tfb-btn tfb-btn--danger" id="tfb-del-table" title="Delete Table">&#215;Table</button>
+    <!-- ── Language Dialog (M10) ────────────────────────────────── -->
+    <div id="lang-props-scrim" class="dialog-scrim" hidden>
+        <div class="dialog-box" style="width: 280px;">
+            <div class="dialog-header">Paragraph Language</div>
+            <div class="dialog-body" style="display:flex; flex-direction:column; gap:8px;">
+                <label style="font-size:12px;">Select language for the current paragraph:</label>
+                <select id="lang-select" style="width:100%; padding:4px;">
+                    <option value="">Default (Inherit)</option>
+                    <option value="en-US">English (US)</option>
+                    <option value="en-GB">English (UK)</option>
+                    <option value="es-ES">Spanish (Spain)</option>
+                    <option value="fr-FR">French (France)</option>
+                    <option value="de-DE">German (Germany)</option>
+                    <option value="zh-CN">Chinese (Simplified)</option>
+                </select>
+            </div>
+            <div class="dialog-footer">
+                <button class="dbtn" id="btn-lang-cancel">Cancel</button>
+                <button class="dbtn dbtn-primary" id="btn-lang-ok">Apply</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Cell Properties Dialog (M07, M23) ───────────────────────── -->
+    <div id="cell-props-scrim" class="dialog-scrim" hidden>
+        <div class="dialog-box" style="width: 380px;">
+            <div class="dialog-header">Cell Properties</div>
+            <div class="dialog-body" style="display:flex; gap: 16px;">
+                <!-- Padding -->
+                <div style="flex:1;">
+                    <div style="font-weight:bold; font-size:12px; margin-bottom:8px; color:var(--text-primary);">Padding (px)</div>
+                    <div style="display:grid; grid-template-columns: 40px 1fr; gap:4px; align-items:center;">
+                        <label style="font-size:11px; color:var(--text-secondary);">Top</label><input type="number" id="cp-pad-t" style="width:100%; padding:2px;" min="0" value="4">
+                        <label style="font-size:11px; color:var(--text-secondary);">Right</label><input type="number" id="cp-pad-r" style="width:100%; padding:2px;" min="0" value="4">
+                        <label style="font-size:11px; color:var(--text-secondary);">Bottom</label><input type="number" id="cp-pad-b" style="width:100%; padding:2px;" min="0" value="4">
+                        <label style="font-size:11px; color:var(--text-secondary);">Left</label><input type="number" id="cp-pad-l" style="width:100%; padding:2px;" min="0" value="4">
+                    </div>
+                </div>
+                <!-- Border -->
+                <div style="flex:1;">
+                    <div style="font-weight:bold; font-size:12px; margin-bottom:8px; color:var(--text-primary);">Borders</div>
+                    <div style="display:grid; grid-template-columns: 40px 1fr; gap:4px; align-items:center;">
+                        <label style="font-size:11px; color:var(--text-secondary);">Width</label><input type="number" id="cp-border-w" style="width:100%; padding:2px;" min="0" value="1" title="px">
+                        <label style="font-size:11px; color:var(--text-secondary);">Style</label>
+                        <select id="cp-border-s" style="width:100%; padding:2px; font-size:12px;">
+                            <option value="solid">Solid</option>
+                            <option value="dashed">Dashed</option>
+                            <option value="dotted">Dotted</option>
+                            <option value="none">None</option>
+                        </select>
+                        <label style="font-size:11px; color:var(--text-secondary);">Color</label><input type="color" id="cp-border-c" style="width:100%; padding:0;" value="#e5e7eb">
+                    </div>
+                    <div style="display:flex; gap:4px; margin-top:8px;">
+                        <button class="dbtn" id="cp-apply-all" style="flex:1; padding:2px; font-size:10px;">Apply All</button>
+                    </div>
+                </div>
+            </div>
+            <div class="dialog-footer">
+                <button class="dbtn" id="btn-cp-cancel">Cancel</button>
+                <button class="dbtn dbtn-primary" id="btn-cp-ok">Apply Padding</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Inline Link Dialog ──────────────────────────────────── -->
+    <div id="link-dialog" class="link-dialog" hidden>
+        <div class="link-dialog-header">Insert / Edit Link</div>
+        <label class="link-dialog-label">Text</label>
+        <input class="link-dialog-input" id="link-text" type="text" placeholder="Link text">
+        <label class="link-dialog-label">URL</label>
+        <input class="link-dialog-input" id="link-url"  type="url"  placeholder="https://">
+        <div class="link-dialog-footer">
+            <button class="link-dialog-btn link-dialog-btn--cancel" id="link-cancel">Cancel</button>
+            <button class="link-dialog-btn link-dialog-btn--ok"     id="link-ok">Insert</button>
+        </div>
+    </div>
+
+    <!-- ── Equation Palette Dialog (M06) ────────────────────────── -->
+    <div id="equation-dialog-scrim" class="dialog-scrim" hidden>
+        <div class="dialog-box" style="width: 450px;">
+            <div class="dialog-header">Insert Equation</div>
+            <div class="dialog-body" style="display:flex; gap: 12px;">
+                <div style="flex: 0 0 120px; border-right: 1px solid var(--border); padding-right: 8px;">
+                    <div style="font-size:11px; font-weight:bold; margin-bottom:4px;">Symbols</div>
+                    <div id="eq-symbol-grid" style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 2px;">
+                        <!-- JS populated -->
+                    </div>
+                </div>
+                <div style="flex: 1;">
+                    <label style="font-size:11px; color:var(--text-secondary);">LaTeX Equation</label>
+                    <textarea id="eq-latex-input" style="width:100%; height:60px; font-family:monospace; margin-top:4px; padding:4px; border:1px solid var(--border); border-radius:3px; background:var(--chrome-bg); color:var(--text-primary);"></textarea>
+                    <div style="margin-top:8px;">
+                        <label style="font-size:11px; display:flex; align-items:center; gap:4px;"><input type="checkbox" id="eq-is-display" checked> Display format (block)</label>
+                    </div>
+                </div>
+            </div>
+            <div class="dialog-footer">
+                <button class="dbtn" id="btn-eq-cancel">Cancel</button>
+                <button class="dbtn dbtn-primary" id="btn-eq-insert">Insert</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Paste Special Modal (M03) ────────────────────────────── -->
+    <div id="paste-special-scrim" class="dialog-scrim" hidden>
+        <div class="dialog-box" style="width: 300px;">
+            <div class="dialog-header">Paste Special</div>
+            <div class="dialog-body" style="display:flex; flex-direction:column; gap:8px;">
+                <label style="font-size:12px; display:flex; align-items:center; gap:6px;">
+                    <input type="radio" name="paste-type" value="plain" checked> Unformatted Text
+                </label>
+                <label style="font-size:12px; display:flex; align-items:center; gap:6px;">
+                    <input type="radio" name="paste-type" value="html"> Keep Source Formatting (HTML)
+                </label>
+                <label style="font-size:12px; display:flex; align-items:center; gap:6px;">
+                    <input type="radio" name="paste-type" value="markdown"> Markdown Translation
+                </label>
+            </div>
+            <div class="dialog-footer">
+                <button class="dbtn" id="btn-paste-cancel">Cancel</button>
+                <button class="dbtn dbtn-primary" id="btn-paste-ok">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Keyboard Shortcuts Panel (M01) ───────────────────────── -->
+    <div id="shortcuts-scrim" class="dialog-scrim" hidden>
+        <div class="dialog-box" style="width: 500px; max-height: 80vh; display:flex; flex-direction:column;">
+            <div class="dialog-header">Keyboard Shortcuts</div>
+            <div class="dialog-body" style="overflow-y:auto; flex:1; padding-right:4px;">
+                <div id="shortcuts-grid"></div>
+            </div>
+            <div class="dialog-footer">
+                <button class="dbtn" id="btn-shortcuts-close">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Floating Selection Toolbar ─────────────────────────── -->
+    <div id="sel-toolbar" class="sel-toolbar" hidden>
+        <button class="sel-btn" data-cmd="bold"          title="Bold"><b>B</b></button>
+        <button class="sel-btn" data-cmd="italic"        title="Italic"><i>I</i></button>
+        <button class="sel-btn" data-cmd="underline"     title="Underline"><u>U</u></button>
+        <button class="sel-btn" data-cmd="strikeThrough" title="Strikethrough"><s>S</s></button>
+        <div class="sel-sep"></div>
+        <button class="sel-btn" id="sel-link"    title="Link">🔗</button>
+        <button class="sel-btn" id="sel-comment" title="Comment">💬</button>
+        <button class="sel-btn" id="sel-clear"   title="Clear Formatting">✕</button>
+    </div>
+
+    <!-- ── Table Hover Toolbar (appears beside hovered row) ─── -->
+    <div class="table-hover-bar" id="table-hover-bar" hidden>
+        <button class="thb-btn" id="thb-add-row-above" title="Add Row Above">&#8593; Row</button>
+        <button class="thb-btn" id="thb-add-row-below" title="Add Row Below">&#8595; Row</button>
+        <button class="thb-btn" id="thb-add-col-left"  title="Add Column Left">&#8592; Col</button>
+        <button class="thb-btn" id="thb-add-col-right" title="Add Column Right">Col &#8594;</button>
+        <div class="thb-sep"></div>
+        <button class="thb-btn" id="thb-merge"       title="Merge Selected">&#8862;</button>
+        <button class="thb-btn" id="thb-split"       title="Split Cell">&#8863;</button>
+        <div class="thb-sep"></div>
+        <button class="thb-btn" id="thb-align-left"  title="Align Left">&#8676;</button>
+        <button class="thb-btn" id="thb-align-center" title="Center">&#8677;</button>
+        <button class="thb-btn" id="thb-align-right" title="Align Right">&#8677;</button>
+        <div class="thb-sep"></div>
+        <button class="thb-btn thb-btn--danger" id="thb-del-row"   title="Delete Row">&#215;Row</button>
+        <button class="thb-btn thb-btn--danger" id="thb-del-col"   title="Delete Col">&#215;Col</button>
+        <button class="thb-btn thb-btn--danger" id="thb-del-table" title="Delete Table">&#215;Tbl</button>
+        <div class="thb-sep"></div>
+        <button class="thb-btn" id="ctx-table-style" title="Table Style">&#9638; Style</button>
     </div>
 
     <!-- ── Main Workspace ────────────────────────────────────── -->
@@ -436,8 +1866,26 @@
         <!-- Overlay for comment arrows -->
         <svg id="comment-arrows" style="position:fixed; pointer-events:none; z-index:100; inset:0; width:100%; height:100%;"></svg>
 
+        <!-- Ruler (M04) -->
+        <div id="doc-ruler" class="doc-ruler" hidden>
+            <div id="ruler-marks" class="ruler-marks"></div>
+            <div id="ruler-handles" class="ruler-handles">
+                <div class="ruler-handle" id="ruler-lmargin" title="Left Margin"></div>
+                <div class="ruler-handle" id="ruler-rmargin" title="Right Margin"></div>
+                <div class="ruler-handle" id="ruler-indent" title="First Line Indent"></div>
+            </div>
+            <div id="ruler-tabs" class="ruler-tabs"></div>
+        </div>
+
         <!-- Page canvas -->
         <div class="page-canvas" id="page-canvas">
+            <!-- Header zone (H10) — hidden until Insert→Header activates it -->
+            <div id="doc-header"
+                 class="doc-header-zone hidden-zone"
+                 contenteditable="true"
+                 spellcheck="false"
+                 data-field-zone="header"></div>
+
             <div id="editor"
                  class="document-page"
                  contenteditable="true"
@@ -447,6 +1895,13 @@
 <p>Welcome to <strong>Marksmen Editor</strong> — a native desktop document suite powered by Rust.</p>
 <p>Use the Ribbon above to format text, import files, or export to Word, PDF, and more.</p>
             </div>
+
+            <!-- Footer zone (H10) — hidden until Insert→Footer activates it -->
+            <div id="doc-footer"
+                 class="doc-footer-zone hidden-zone"
+                 contenteditable="true"
+                 spellcheck="false"
+                 data-field-zone="footer"></div>
         </div>
 
         <!-- Sidebar (Comments & Outline) -->
@@ -455,6 +1910,7 @@
                 <div class="sidebar-tabs">
                     <button class="stab stab--active" id="stab-comments" title="Comments">&#128172; Comments</button>
                     <button class="stab" id="stab-outline" title="Document Outline">&#128203; Outline</button>
+                    <button class="stab" id="stab-ai" title="AI Writing Assistant">&#x2728; AI</button>
                 </div>
                 <button class="sidebar-close" id="sidebar-close">&#10005;</button>
             </div>
@@ -464,21 +1920,355 @@
                 </div>
             </div>
             <div class="sidebar-body" id="outline-list" hidden></div>
+
+            <!-- ── AI Assistant Panel ──────────────────────────────── -->
+            <div class="sidebar-body ai-panel" id="ai-panel" hidden>
+                <!-- Connection bar -->
+                <div class="ai-connection-bar">
+                    <input id="ai-host" class="ai-host-input" type="text"
+                           value="http://localhost:1234"
+                           placeholder="LM Studio URL…" title="LM Studio base URL (default: http://localhost:1234)">
+                    <button id="ai-connect" class="ai-connect-btn" title="Connect and list models">&#x27F3; Connect</button>
+                </div>
+                <!-- Model selector -->
+                <div class="ai-model-row">
+                    <select id="ai-model-select" class="ai-model-select" disabled>
+                        <option value="">— connect first —</option>
+                    </select>
+                    <span id="ai-status-dot" class="ai-dot ai-dot--off" title="Disconnected"></span>
+                </div>
+                <!-- System prompt -->
+                <details class="ai-details">
+                    <summary class="ai-details-summary">System Prompt</summary>
+                    <textarea id="ai-system-prompt" class="ai-system-prompt" spellcheck="false">You are a professional academic writing assistant embedded in Marksmen Editor. Help the user refine, expand, rewrite, summarize, or critique the selected text. Be concise and precise.</textarea>
+                </details>
+                <!-- Preset actions -->
+                <div class="ai-preset-grid">
+                    <button class="ai-preset" data-prompt="Improve the clarity and conciseness of the following text:">&#x270F; Improve</button>
+                    <button class="ai-preset" data-prompt="Expand the following text with more detail and examples:">&#x1F4D6; Expand</button>
+                    <button class="ai-preset" data-prompt="Summarize the following text into 2–3 sentences:">&#x1F4CB; Summarize</button>
+                    <button class="ai-preset" data-prompt="Rewrite the following text in a more formal academic tone:">&#x1F393; Formalize</button>
+                    <button class="ai-preset" data-prompt="Fix all grammar, spelling, and punctuation errors in the following text:">&#x1F50D; Grammar</button>
+                    <button class="ai-preset" data-prompt="Identify logical gaps, weak arguments, or missing evidence in the following text:">&#x1F9E0; Critique</button>
+                </div>
+                <!-- Chat input -->
+                <div class="ai-input-row">
+                    <textarea id="ai-user-input" class="ai-user-input"
+                        rows="3" placeholder="Ask the AI… (Shift+Enter sends)"></textarea>
+                    <button id="ai-send" class="ai-send-btn" title="Send (Shift+Enter)">&#9658;</button>
+                </div>
+                <!-- Context toggles -->
+                <div class="ai-context-options" style="display:flex; flex-direction:column; gap:4px; margin-top:4px; margin-bottom:4px;">
+                    <label class="ai-context-toggle">
+                        <input type="checkbox" id="ai-use-selection" checked>
+                        Include selected text
+                    </label>
+                    <label class="ai-context-toggle">
+                        <input type="checkbox" id="ai-use-document">
+                        Include full document
+                    </label>
+                    <label class="ai-context-toggle">
+                        <input type="checkbox" id="ai-use-references">
+                        Include cite library
+                    </label>
+                </div>
+                <!-- Thinking / spinner -->
+                <div id="ai-thinking" class="ai-thinking" hidden>
+                    <span class="ai-spinner"></span> Generating…
+                </div>
+                <!-- Response area -->
+                <div id="ai-response" class="ai-response">
+                    <div class="ai-response-empty">Responses will appear here.</div>
+                </div>
+                <!-- Apply actions (shown after response arrives) -->
+                <div class="ai-apply-row" id="ai-apply-row" hidden>
+                    <button id="ai-apply-replace" class="ai-apply-btn ai-apply-btn--primary"
+                        title="Replace selected text with the AI response">&#x21C4; Replace</button>
+                    <button id="ai-apply-insert" class="ai-apply-btn"
+                        title="Insert AI response after cursor position">&#x2398; Insert</button>
+                    <button id="ai-copy-resp" class="ai-apply-btn"
+                        title="Copy response to clipboard">&#x29C9; Copy</button>
+                </div>
+            </div>
         </aside>
+
 
 
     </div><!-- /.workspace -->
 
+    <!-- ── Phase 22: Image Resizer & Text Wrap Toolbar ───────── -->
+    <div id="image-resizer" class="image-resizer" hidden>
+        <div class="resize-handle nw" data-dir="nw"></div>
+        <div class="resize-handle n"  data-dir="n"></div>
+        <div class="resize-handle ne" data-dir="ne"></div>
+        <div class="resize-handle w"  data-dir="w"></div>
+        <div class="resize-handle e"  data-dir="e"></div>
+        <div class="resize-handle sw" data-dir="sw"></div>
+        <div class="resize-handle s"  data-dir="s"></div>
+        <div class="resize-handle se" data-dir="se"></div>
+    </div>
+
+    <div id="image-wrap-toolbar" class="image-wrap-toolbar sel-toolbar" hidden>
+        <button class="sel-btn" data-wrap="inline" title="In Line with Text">📄</button>
+        <button class="sel-btn" data-wrap="left" title="Square Left">⬅️</button>
+        <button class="sel-btn" data-wrap="right" title="Square Right">➡️</button>
+        <button class="sel-btn" data-wrap="block" title="Break Text">⬇️</button>
+        <div class="sel-sep"></div>
+        <button class="sel-btn" id="btn-insert-caption" title="Insert Caption">💬</button>
+    </div>
+
     <!-- \u2500\u2500 Bottom Status Bar \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 -->
+    <!-- ── Watermark Dialog (M16) ────────────────────────────────── -->
+    <div id="watermark-scrim" class="dialog-scrim" hidden>
+        <div class="dialog-box" style="width: 320px;">
+            <div class="dialog-header">Watermark</div>
+            <div class="dialog-body" style="display:flex; flex-direction:column; gap:8px;">
+                <label style="display:flex; align-items:center; gap:8px; font-size:12px;">
+                    <input type="radio" name="wm-type" value="none" checked> No Watermark
+                </label>
+                <label style="display:flex; align-items:center; gap:8px; font-size:12px;">
+                    <input type="radio" name="wm-type" value="text"> Text Watermark
+                </label>
+                <div id="wm-text-opts" style="padding-left:24px; display:flex; flex-direction:column; gap:4px; opacity:0.5; pointer-events:none;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-size:11px; width:40px;">Text:</span>
+                        <input type="text" id="wm-text" value="DRAFT" style="flex:1; padding:2px;">
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-size:11px; width:40px;">Color:</span>
+                        <input type="color" id="wm-color" value="#cccccc" style="flex:1; padding:0;">
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-size:11px; width:40px;">Angle:</span>
+                        <input type="number" id="wm-angle" value="-45" style="flex:1; padding:2px;">
+                    </div>
+                </div>
+            </div>
+            <div class="dialog-footer">
+                <button class="dbtn" id="btn-wm-cancel">Cancel</button>
+                <button class="dbtn dbtn-primary" id="btn-wm-ok">Apply</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Mermaid Diagram Dialog (M12) ────────────────────────────────── -->
+    <div id="diagram-scrim" class="dialog-scrim" hidden>
+        <div class="dialog-box" style="width: 800px; height: 600px; max-width: 90vw; max-height: 90vh;">
+            <div class="dialog-header">Insert Diagram (Mermaid)</div>
+            <div class="dialog-body" style="display:flex; height: calc(100% - 100px); gap: 16px;">
+                <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
+                    <label style="font-size: 12px; font-weight: 500;">Source Code:</label>
+                    <textarea id="diagram-source" style="flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 8px; border: 1px solid var(--border); border-radius: 4px; resize: none; color: var(--text); background: var(--bg);" spellcheck="false">graph TD;
+    A-->B;
+    A-->C;
+    B-->D;
+    C-->D;</textarea>
+                </div>
+                <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
+                    <label style="font-size: 12px; font-weight: 500;">Live Preview:</label>
+                    <div id="diagram-preview" style="flex: 1; border: 1px solid var(--border); border-radius: 4px; background: white; padding: 8px; overflow: auto; display: flex; align-items: center; justify-content: center; color: black;">
+                        <!-- SVG renders here -->
+                    </div>
+                </div>
+            </div>
+            <div class="dialog-footer">
+                <button class="dbtn" id="btn-diagram-cancel">Cancel</button>
+                <button class="dbtn dbtn-primary" id="btn-diagram-insert">Insert</button>
+            </div>
+        </div>
+    </div>
+    <!-- M24/M34: Stats Scrim -->
+    <div id="stats-scrim" class="dialog-scrim" hidden>
+        <div class="dialog-box" style="width: 320px;">
+            <div class="dialog-header">Document Statistics</div>
+            <div class="dialog-body" style="font-size: 13px; line-height: 1.6; padding: 16px;">
+                <div style="display:flex; justify-content:space-between;"><span>Words:</span> <strong id="stat-words">0</strong></div>
+                <div style="display:flex; justify-content:space-between;"><span>Sentences:</span> <strong id="stat-sentences">0</strong></div>
+                <div style="display:flex; justify-content:space-between;"><span>Syllables:</span> <strong id="stat-syllables">0</strong></div>
+                <hr style="margin: 8px 0; border: 0; border-top: 1px solid var(--border);">
+                <div style="display:flex; justify-content:space-between;"><span>Reading Ease:</span> <strong id="stat-ease">0.0</strong></div>
+                <div style="display:flex; justify-content:space-between;"><span>Grade Level:</span> <strong id="stat-grade">0.0</strong></div>
+            </div>
+            <div class="dialog-footer">
+                <button class="dbtn dbtn-primary" id="btn-stats-close">Close</button>
+            </div>
+        </div>
+    </div>
+
     <div class="status-bar" id="status-bar">
-        <span class="sbar-item" id="sbar-caret">Ln 1, Col 1</span>
+        <span class="sbar-item" id="sbar-caret" aria-live="polite">Ln 1, Col 1</span>
         <span class="sbar-sep"></span>
-        <span class="sbar-item" id="sbar-reading">0 min read</span>
+        <span class="sbar-item" id="sbar-word-count" aria-live="polite" title="Click to open Document Statistics">0 words</span>
         <span class="sbar-sep"></span>
-        <span class="sbar-item" id="sbar-format">Markdown</span>
+        <span class="sbar-item" id="sbar-reading" aria-live="polite">0 min read</span>
+        <span class="sbar-sep"></span>
+        <span class="sbar-item" id="sbar-format" aria-live="polite">Markdown</span>
         <div class="sbar-right">
             <span class="sbar-item" id="sbar-zoom-label">100%</span>
             <input type="range" id="sbar-zoom" min="50" max="200" step="10" value="100" title="Zoom" style="width:80px; accent-color: var(--accent);">
+        </div>
+    </div>
+
+    <!-- Document Properties Dialog (G-M31) -->
+    <div class="modal-scrim" id="doc-props-scrim" hidden>
+        <div class="modal-dialog" id="doc-props-dialog" role="dialog" aria-modal="true" aria-labelledby="doc-props-title">
+            <div class="modal-header">
+                <h2 class="modal-title" id="doc-props-title">Document Properties</h2>
+                <button class="modal-close" id="doc-props-close" aria-label="Close">&#x2715;</button>
+            </div>
+            <div class="modal-body">
+                <label class="prop-label" for="doc-prop-title">Title</label>
+                <input type="text" id="doc-prop-title" class="prop-input" placeholder="Document title">
+                <label class="prop-label" for="doc-prop-author">Author</label>
+                <input type="text" id="doc-prop-author" class="prop-input" placeholder="Author name">
+                <label class="prop-label" for="doc-prop-subject">Subject</label>
+                <input type="text" id="doc-prop-subject" class="prop-input" placeholder="Subject or description">
+                <label class="prop-label" for="doc-prop-keywords">Keywords</label>
+                <input type="text" id="doc-prop-keywords" class="prop-input" placeholder="Comma-separated keywords">
+                <label class="prop-label" for="doc-prop-date">Date</label>
+                <input type="date" id="doc-prop-date" class="prop-input">
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn modal-btn--primary" id="doc-props-save">Apply</button>
+                <button class="modal-btn" id="doc-props-cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Print Preview Dialog (G-M32) -->
+    <div class="modal-scrim" id="print-preview-scrim" hidden>
+        <div class="modal-dialog" id="print-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="print-preview-title" style="max-width:420px">
+            <div class="modal-header">
+                <h2 class="modal-title" id="print-preview-title">Print Preview</h2>
+                <button class="modal-close" id="print-preview-close" aria-label="Close">&#x2715;</button>
+            </div>
+            <div class="modal-body">
+                <div class="print-preview-info">
+                    <div class="print-stat"><span class="print-stat-label">Estimated pages</span><span id="pp-page-est" class="print-stat-value">—</span></div>
+                    <div class="print-stat"><span class="print-stat-label">Word count</span><span id="pp-word-count" class="print-stat-value">—</span></div>
+                    <div class="print-stat"><span class="print-stat-label">Paper size</span><span class="print-stat-value">Letter (8.5 × 11 in)</span></div>
+                </div>
+                <label class="prop-label" style="margin-top:12px">Color mode</label>
+                <select id="pp-color-mode" class="prop-input">
+                    <option value="color">Color</option>
+                    <option value="gray">Grayscale</option>
+                </select>
+                <label class="prop-label">Orientation</label>
+                <select id="pp-orientation" class="prop-input">
+                    <option value="portrait">Portrait</option>
+                    <option value="landscape">Landscape</option>
+                </select>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn modal-btn--primary" id="pp-print-btn">&#128438; Print</button>
+                <button class="modal-btn" id="pp-cancel-btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Version History Modal (G-M28) -->
+    <div class="modal-scrim" id="version-history-scrim" hidden>
+        <div class="modal-dialog" id="version-history-dialog" role="dialog" aria-modal="true" aria-labelledby="vh-title" style="max-width:560px;width:96%">
+            <div class="modal-header">
+                <h2 class="modal-title" id="vh-title">📜 Version History</h2>
+                <button class="modal-close" id="vh-close" aria-label="Close">&#x2715;</button>
+            </div>
+            <div class="modal-body" style="padding:0">
+                <div id="vh-empty" style="padding:24px;text-align:center;color:var(--text-secondary);font-size:13px;">
+                    No saved versions yet.<br>Save the document or click "Save Version" to create a snapshot.
+                </div>
+                <ul id="vh-list" style="list-style:none;margin:0;padding:0;max-height:380px;overflow-y:auto;"></ul>
+            </div>
+            <div class="modal-footer" style="justify-content:space-between">
+                <button class="modal-btn modal-btn--primary" id="vh-save-version">&#x1F4BE; Save Version Now</button>
+                <div style="display:flex;gap:8px">
+                    <button class="modal-btn" id="vh-clear-all" style="color:#e55;">Clear All</button>
+                    <button class="modal-btn" id="vh-close-btn">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Outline View Toolbar (G-V08) -->
+    <div id="outline-toolbar" hidden style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10000;
+         background:var(--panel-bg,#1e1e2e);border:1px solid var(--border-color,#333);border-radius:10px;
+         box-shadow:0 16px 48px rgba(0,0,0,0.4);padding:0;min-width:560px;max-width:96vw;max-height:80vh;
+         display:flex;flex-direction:column;overflow:hidden;">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border-color,#333);">
+            <span style="font-weight:600;font-size:13px;color:var(--text-primary)">🗂️ Outline View</span>
+            <div style="display:flex;gap:6px">
+                <button class="modal-btn" id="outline-promote" title="Promote selected heading (Shift+Tab)">&#8593; Promote</button>
+                <button class="modal-btn" id="outline-demote" title="Demote selected heading (Tab)">&#8595; Demote</button>
+                <button class="modal-btn" id="outline-close-btn">&#x2715; Exit</button>
+            </div>
+        </div>
+        <ul id="outline-items" style="list-style:none;margin:0;padding:8px 0;overflow-y:auto;flex:1;"></ul>
+    </div>
+
+    <!-- Cover Page Gallery (G-H28) -->
+    <div class="modal-scrim" id="cover-page-scrim" hidden>
+        <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="cp-title" style="max-width:680px;width:96%">
+            <div class="modal-header">
+                <h2 class="modal-title" id="cp-title">📄 Cover Page Templates</h2>
+                <button class="modal-close" id="cp-close" aria-label="Close">&#x2715;</button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size:12px;color:var(--text-secondary);margin:0 0 12px">Click a template to insert it at the beginning of the document. Fill in the placeholder text after inserting.</p>
+                <div id="cp-gallery" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;"></div>
+            </div>
+            <div class="modal-footer" style="justify-content:flex-end">
+                <button class="modal-btn" id="cp-close-btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page Borders Dialog (G-D08 upgrade) -->
+    <div class="modal-scrim" id="page-borders-scrim" hidden>
+        <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="pb-title" style="max-width:480px;width:96%">
+            <div class="modal-header">
+                <h2 class="modal-title" id="pb-title">Page Borders</h2>
+                <button class="modal-close" id="pb-close" aria-label="Close">&#x2715;</button>
+            </div>
+            <div class="modal-body" style="display:grid;gap:14px">
+                <div style="display:flex;gap:12px;align-items:center">
+                    <label style="min-width:80px;font-size:12px;color:var(--text-secondary)">Style</label>
+                    <select id="pb-style" class="toolbar-select" style="flex:1">
+                        <option value="none">None</option>
+                        <option value="solid">Solid</option>
+                        <option value="dashed">Dashed</option>
+                        <option value="dotted">Dotted</option>
+                        <option value="double">Double</option>
+                        <option value="groove">Groove</option>
+                        <option value="ridge">Ridge</option>
+                        <option value="inset">Inset</option>
+                        <option value="outset">Outset</option>
+                    </select>
+                </div>
+                <div style="display:flex;gap:12px;align-items:center">
+                    <label style="min-width:80px;font-size:12px;color:var(--text-secondary)">Color</label>
+                    <input type="color" id="pb-color" value="#333333" style="width:48px;height:28px;border:none;cursor:pointer;border-radius:4px">
+                </div>
+                <div style="display:flex;gap:12px;align-items:center">
+                    <label style="min-width:80px;font-size:12px;color:var(--text-secondary)">Width</label>
+                    <input type="range" id="pb-width" min="1" max="12" value="2" style="flex:1">
+                    <span id="pb-width-label" style="min-width:30px;font-size:12px;color:var(--text-secondary)">2px</span>
+                </div>
+                <div style="display:flex;gap:12px;align-items:center">
+                    <label style="min-width:80px;font-size:12px;color:var(--text-secondary)">Scope</label>
+                    <select id="pb-scope" class="toolbar-select" style="flex:1">
+                        <option value="all">Whole Document</option>
+                        <option value="first">First Page Only</option>
+                    </select>
+                </div>
+                <div id="pb-preview" style="height:80px;border:2px solid var(--border);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text-secondary)">Preview</div>
+            </div>
+            <div class="modal-footer" style="justify-content:space-between">
+                <button class="modal-btn" id="pb-remove">Remove Border</button>
+                <div style="display:flex;gap:8px">
+                    <button class="modal-btn" id="pb-close-btn">Cancel</button>
+                    <button class="modal-btn modal-btn--primary" id="pb-apply">Apply</button>
+                </div>
+            </div>
         </div>
     </div>
 

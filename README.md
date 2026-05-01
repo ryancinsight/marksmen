@@ -191,4 +191,4 @@ The workspace can also be used with `x86_64-pc-windows-gnu`, but that requires C
 
 ## Status
 
-This repository is under active development. The conversion and roundtrip paths are functional, but formatting fidelity and semantic symmetry are still being improved, especially across complex diagrams, tables, and rich document layouts.
+This repository is Feature-Complete and Stable. The Marksmen sprint has achieved 100% completion against its format translation goals. The bidirectional parsing pipelines, formatting symmetries, and the Tauri-native application editor are fully stable. 

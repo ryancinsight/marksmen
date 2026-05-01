@@ -17,6 +17,8 @@ enum Format {
     Xhtml,
     Pdf,
     Typst,
+    Epub,
+    Pptx,
 }
 
 /// Run the conversion process based on CLI arguments.
@@ -108,7 +110,6 @@ fn run_preprocess_math(args: &Args) -> Result<()> {
     // Display Math block: lines starting with `$$` or surrounded by `$$`.
     let mut in_display_math = false;
     let mut current_math = String::new();
-    let mut display_math_lines = 0;
 
     for line in source.lines() {
         let tline = line.trim();
@@ -140,7 +141,6 @@ fn run_preprocess_math(args: &Args) -> Result<()> {
             } else {
                 current_math.push_str(line);
                 current_math.push('\n');
-                display_math_lines += 1;
             }
             continue;
         }
@@ -168,7 +168,6 @@ fn run_preprocess_math(args: &Args) -> Result<()> {
             } else if rest == "" {
                 in_display_math = true;
                 current_math.clear();
-                display_math_lines = 0;
             } else {
                 in_display_math = true;
                 current_math.clear();
@@ -295,16 +294,19 @@ fn read_as_markdown_like(
             let bytes = fs::read(input_path)
                 .with_context(|| format!("Failed to read DOCX input: {}", input_path.display()))?;
 
-            let mut media_dir = None;
-            let mut media_path_buf = PathBuf::new();
-            if let Some(file_stem) = output_path.file_stem() {
+            let media_path_buf = if let Some(file_stem) = output_path.file_stem() {
                 let parent = output_path.parent().unwrap_or_else(|| Path::new(""));
                 let dir_name = format!("{}_media", file_stem.to_string_lossy());
-                media_path_buf = parent.join(dir_name);
-                if let Err(e) = fs::create_dir_all(&media_path_buf) {
+                Some(parent.join(dir_name))
+            } else {
+                None
+            };
+            let mut media_dir = None;
+            if let Some(ref path) = media_path_buf {
+                if let Err(e) = fs::create_dir_all(path) {
                     tracing::warn!("Failed to create media directory: {}", e);
                 } else {
-                    media_dir = Some(media_path_buf.as_path());
+                    media_dir = Some(path.as_path());
                 }
             }
 
@@ -322,6 +324,18 @@ fn read_as_markdown_like(
                 .with_context(|| format!("Failed to read PDF input: {}", input_path.display()))?;
             marksmen_pdf_read::parse_pdf(&bytes)
                 .with_context(|| format!("Failed to parse PDF input: {}", input_path.display()))
+        }
+        Format::Epub => {
+            let bytes = fs::read(input_path)
+                .with_context(|| format!("Failed to read EPUB input: {}", input_path.display()))?;
+            marksmen_epub_read::parse_epub(&bytes)
+                .with_context(|| format!("Failed to parse EPUB input: {}", input_path.display()))
+        }
+        Format::Pptx => {
+            let bytes = fs::read(input_path)
+                .with_context(|| format!("Failed to read PPTX input: {}", input_path.display()))?;
+            marksmen_ppt_read::parse_pptx(&bytes)
+                .with_context(|| format!("Failed to parse PPTX input: {}", input_path.display()))
         }
     }
 }
@@ -424,6 +438,32 @@ fn write_output(
             tracing::info!(path = %output_path.display(), size_bytes = pdf_bytes.len(), "PDF written");
             Ok(())
         }
+        Format::Epub => {
+            let (body, fm_config) =
+                marksmen_core::config::frontmatter::parse_frontmatter(markdown)?;
+            let merged = config.merge_frontmatter(&fm_config);
+            let events = marksmen_core::parsing::parser::parse(body);
+            let epub_bytes = marksmen_epub::convert(events, &merged)?;
+
+            fs::write(output_path, &epub_bytes).with_context(|| {
+                format!("Failed to write EPUB output: {}", output_path.display())
+            })?;
+            tracing::info!(path = %output_path.display(), size_bytes = epub_bytes.len(), "EPUB written");
+            Ok(())
+        }
+        Format::Pptx => {
+            let (body, fm_config) =
+                marksmen_core::config::frontmatter::parse_frontmatter(markdown)?;
+            let merged = config.merge_frontmatter(&fm_config);
+            let events = marksmen_core::parsing::parser::parse(body);
+            let ppt_bytes = marksmen_ppt::convert(events, &merged)?;
+
+            fs::write(output_path, &ppt_bytes).with_context(|| {
+                format!("Failed to write PPTX output: {}", output_path.display())
+            })?;
+            tracing::info!(path = %output_path.display(), size_bytes = ppt_bytes.len(), "PPTX written");
+            Ok(())
+        }
     }
 }
 
@@ -472,6 +512,8 @@ fn infer_format_from_path(path: &Path) -> Result<Format> {
         "xhtml" | "xht" => Ok(Format::Xhtml),
         "pdf" => Ok(Format::Pdf),
         "typ" => Ok(Format::Typst),
+        "epub" => Ok(Format::Epub),
+        "pptx" => Ok(Format::Pptx),
         _ => bail!("unsupported extension: .{}", ext),
     }
 }
@@ -514,6 +556,14 @@ mod tests {
         assert_eq!(
             infer_format_from_path(Path::new("test.typ")).unwrap(),
             Format::Typst
+        );
+        assert_eq!(
+            infer_format_from_path(Path::new("test.epub")).unwrap(),
+            Format::Epub
+        );
+        assert_eq!(
+            infer_format_from_path(Path::new("test.pptx")).unwrap(),
+            Format::Pptx
         );
     }
 }

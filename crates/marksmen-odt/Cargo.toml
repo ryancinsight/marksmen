@@ -13,3 +13,4 @@ tempfile = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 latex2mathml = "0.2.3"
+base64 = { workspace = true }

@@ -6,7 +6,7 @@
 //!    and traceable through the intermediate markdown representation.
 
 use marksmen_core::config::Config;
-use marksmen_pdf_read::{AnnotationSubtype, extract_annotations};
+use marksmen_pdf_read::extract_annotations;
 
 const SAMPLE_MARKDOWN: &str = r#"# Phase 12 Architecture
 

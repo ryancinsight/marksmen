@@ -1,0 +1,15 @@
+[package]
+name = "marksmen-rich"
+version = "0.1.0"
+edition = "2021"
+description = "Bidirectional RTF ↔ Markdown conversion for the Marksmen workspace."
+
+[dependencies]
+marksmen-core = { path = "../marksmen-core" }
+marksmen-xml  = { path = "../marksmen-xml" }
+pulldown-cmark = { workspace = true }
+anyhow = { workspace = true }
+base64 = { workspace = true }
+
+[dev-dependencies]
+marksmen-rich-read = { path = "../marksmen-rich-read" }

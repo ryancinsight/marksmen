@@ -189,6 +189,27 @@ pub fn translate_events<'a>(
                     output.push_str("<text:span text:style-name=\"S_Sup\">");
                 } else if tag.starts_with("</sup") {
                     output.push_str("</text:span>");
+                } else if tag.starts_with("<table") {
+                    output.push_str("<table:table table:style-name=\"Table_Full\">\n");
+                } else if tag.starts_with("</table") {
+                    output.push_str("</table:table>\n");
+                } else if tag.starts_with("<thead") {
+                    output.push_str("<table:table-header-rows>\n");
+                } else if tag.starts_with("</thead") {
+                    output.push_str("</table:table-header-rows>\n");
+                } else if tag.starts_with("<tr") {
+                    output.push_str("<table:table-row>\n");
+                } else if tag.starts_with("</tr") {
+                    output.push_str("</table:table-row>\n");
+                } else if tag.starts_with("<td") || tag.starts_with("<th") {
+                    if let Some(colspan) = extract_attr(original_tag, "colspan") {
+                        let colspan_attr = format!(" table:number-columns-spanned=\"{}\"", colspan);
+                        output.push_str(&format!("<table:table-cell{}><text:p>", colspan_attr));
+                    } else {
+                        output.push_str("<table:table-cell><text:p>");
+                    }
+                } else if tag.starts_with("</td") || tag.starts_with("</th") {
+                    output.push_str("</text:p></table:table-cell>\n");
                 } else if tag.starts_with("<ins") || tag.starts_with("<del") {
                     let author = extract_attr(original_tag, "data-author")
                         .unwrap_or_else(|| "Unknown".to_string());
@@ -288,15 +309,32 @@ pub fn translate_events<'a>(
             Event::Start(Tag::Image {
                 dest_url, title, ..
             }) => {
-                let img_path = input_dir.join(dest_url.as_ref());
+                let img_path_str = dest_url.as_ref();
+                let mut image_bytes = None;
+                let mut filename = format!("image_{}.png", images.len() + 1);
+
+                if img_path_str.starts_with("data:image/") {
+                    if let Some(comma_idx) = img_path_str.find(',') {
+                        let base64_data = &img_path_str[comma_idx + 1..];
+                        use base64::Engine as _;
+                        if let Ok(raw_bytes) =
+                            base64::engine::general_purpose::STANDARD.decode(base64_data)
+                        {
+                            image_bytes = Some(raw_bytes);
+                        }
+                    }
+                } else {
+                    let img_path = input_dir.join(img_path_str);
+                    if let Ok(bytes) = std::fs::read(&img_path) {
+                        image_bytes = Some(bytes);
+                        if let Some(name) = img_path.file_name() {
+                            filename = name.to_string_lossy().into_owned();
+                        }
+                    }
+                }
 
                 // If we can load the image, embed it. Otherwise fallback to text placeholder.
-                if let Ok(bytes) = std::fs::read(&img_path) {
-                    let filename = img_path
-                        .file_name()
-                        .map(|n| n.to_string_lossy().into_owned())
-                        .unwrap_or_else(|| format!("image_{}.png", images.len() + 1));
-
+                if let Some(bytes) = image_bytes {
                     let image_id = format!("Pictures/{}", filename);
                     images.push((image_id.clone(), bytes));
 

@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow.workspace = true
+base64.workspace = true
 marksmen-xml-read = { path = "../marksmen-xml-read" }
 pulldown-cmark.workspace = true
 zip.workspace = true

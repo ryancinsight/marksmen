@@ -4,6 +4,8 @@ use marksmen_docx::translation::document::convert as convert_docx;
 use marksmen_html::convert as convert_html;
 use marksmen_odt::translate_and_render as convert_odt;
 use marksmen_ppt::convert as convert_ppt;
+use marksmen_rich;
+use marksmen_rich_read;
 
 // ── HTML ↔ Markdown sync ────────────────────────────────────────────────────
 
@@ -26,22 +28,28 @@ fn md_to_html(markdown: String) -> Result<String, String> {
 // ── File Import via native OS dialog ───────────────────────────────────────
 
 #[tauri::command]
-async fn import_file(app: tauri::AppHandle) -> Result<(String, String), String> {
+async fn import_file(app: tauri::AppHandle) -> Result<(String, String, String), String> {
     use tauri_plugin_dialog::DialogExt;
 
     let file_path = app
         .dialog()
         .file()
-        .add_filter("Documents", &["md", "html", "docx", "odt", "pdf", "typ"])
+        .add_filter(
+            "Documents",
+            &[
+                "md", "html", "docx", "odt", "pdf", "typ", "rtf", "pptx", "epub",
+            ],
+        )
         .blocking_pick_file()
         .ok_or_else(|| "No file selected".to_string())?;
 
     let path = file_path.into_path().map_err(|e| e.to_string())?;
-    let filename = path.file_name()
+    let filename = path
+        .file_name()
         .unwrap_or_default()
         .to_string_lossy()
         .into_owned();
-        
+
     let ext = path
         .extension()
         .unwrap_or_default()
@@ -70,10 +78,21 @@ async fn import_file(app: tauri::AppHandle) -> Result<(String, String), String> 
             let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
             marksmen_typst_read::parse_typst(&content).map_err(|e| e.to_string())
         }
+        "rtf" => {
+            let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+            marksmen_rich_read::parse_rtf(&bytes).map_err(|e| e.to_string())
+        }
+        "pptx" => {
+            let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+            marksmen_ppt_read::parse_pptx(&bytes).map_err(|e| e.to_string())
+        }
+        "epub" => {
+            let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+            marksmen_epub_read::parse_epub(&bytes).map_err(|e| e.to_string())
+        }
         other => Err(format!("Unsupported extension: {other}")),
     }?;
-    
-    Ok((content, filename))
+    Ok((content, filename, path.to_string_lossy().into_owned()))
 }
 
 // ── Tracked Changes via marksmen-diff ─────────────────────────────────────
@@ -100,9 +119,19 @@ fn export_format(
     let stem: String = doc_name
         .as_deref()
         .map(|n| {
-            let s = if let Some(idx) = n.rfind('.') { &n[..idx] } else { n };
+            let s = if let Some(idx) = n.rfind('.') {
+                &n[..idx]
+            } else {
+                n
+            };
             s.chars()
-                .map(|c| if c.is_alphanumeric() || c == ' ' || c == '-' || c == '_' { c } else { '_' })
+                .map(|c| {
+                    if c.is_alphanumeric() || c == ' ' || c == '-' || c == '_' {
+                        c
+                    } else {
+                        '_'
+                    }
+                })
                 .collect()
         })
         .unwrap_or_else(|| "document".to_string());
@@ -138,12 +167,20 @@ fn export_format(
                 format!("{stem}.pdf"),
             ))
         }
-        "ppt" => {
+        "ppt" | "pptx" => {
             let bytes = convert_ppt(events, &config).map_err(|e| e.to_string())?;
             Ok((
                 enc.encode(&bytes),
                 "application/vnd.openxmlformats-officedocument.presentationml.presentation".into(),
                 format!("{stem}.pptx"),
+            ))
+        }
+        "epub" => {
+            let bytes = marksmen_epub::convert(events, &config).map_err(|e| e.to_string())?;
+            Ok((
+                enc.encode(&bytes),
+                "application/epub+zip".into(),
+                format!("{stem}.epub"),
             ))
         }
         "markdown" => Ok((
@@ -168,8 +205,75 @@ fn export_format(
                 format!("{stem}.typ"),
             ))
         }
+        "rtf" => {
+            let bytes = marksmen_rich::convert(events, &config).map_err(|e| e.to_string())?;
+            Ok((
+                enc.encode(&bytes),
+                "application/rtf".into(),
+                format!("{stem}.rtf"),
+            ))
+        }
         _ => Err(format!("Unknown format: {format}")),
     }
+}
+
+#[tauri::command]
+fn get_system_fonts() -> Vec<String> {
+    let source = font_kit::source::SystemSource::new();
+    let mut families = source.all_families().unwrap_or_default();
+    families.sort_unstable();
+    families
+}
+
+// ── Assets ─────────────────────────────────────────────────────────────
+
+#[tauri::command]
+fn save_base64_asset(app: tauri::AppHandle, base64_data: String, ext: String, current_path: Option<String>) -> Result<String, String> {
+    use base64::Engine as _;
+    use sha2::{Digest, Sha256};
+    use tauri::Manager;
+    use std::path::PathBuf;
+
+    // Strip prefix if present (e.g. "data:image/png;base64,")
+    let b64_str = if let Some(idx) = base64_data.find(',') {
+        &base64_data[idx + 1..]
+    } else {
+        &base64_data
+    };
+
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(b64_str)
+        .map_err(|e| e.to_string())?;
+
+    let mut hasher = Sha256::new();
+    hasher.update(&decoded);
+    let hash: String = hasher.finalize().iter().map(|b| format!("{:02x}", b)).collect();
+    let filename = format!("{}.{}", hash, ext.trim_start_matches('.'));
+
+    let assets_dir = if let Some(p) = current_path.filter(|p| !p.is_empty()) {
+        let p = PathBuf::from(p);
+        p.parent().unwrap_or_else(|| std::path::Path::new("")).join("assets")
+    } else {
+        let local_data = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+        local_data.join("autosaves").join("assets")
+    };
+
+    std::fs::create_dir_all(&assets_dir).map_err(|e| e.to_string())?;
+    let file_path = assets_dir.join(&filename);
+    std::fs::write(&file_path, &decoded).map_err(|e| e.to_string())?;
+
+    Ok(format!("assets/{}", filename))
+}
+
+#[tauri::command]
+fn load_marksmen_cite_db(app: tauri::AppHandle) -> Result<String, String> {
+    use tauri::Manager;
+    let local_data = app.path().local_data_dir().map_err(|e| e.to_string())?;
+    let db_path = local_data.join("com.ryancinsight.marksmen-cite").join("cite_library").join("references.json");
+    if !db_path.exists() {
+        return Ok("[]".to_string());
+    }
+    std::fs::read_to_string(&db_path).map_err(|e| e.to_string())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -182,8 +286,268 @@ pub fn run() {
             md_to_html,
             export_format,
             import_file,
-            generate_diff
+            generate_diff,
+            save_file,
+            save_as_format,
+            autosave_file,
+            load_latest_autosave,
+            print_pdf,
+            open_file_by_path,
+            get_system_fonts,
+            save_base64_asset,
+            load_marksmen_cite_db,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+// ── Native Save ────────────────────────────────────────────────────────────
+
+/// Write `markdown` to `current_path` if provided; otherwise open an OS Save
+/// dialog (.md). Returns the absolute path that was written.
+#[tauri::command]
+async fn save_file(
+    app: tauri::AppHandle,
+    markdown: String,
+    current_path: Option<String>,
+) -> Result<String, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let path = if let Some(p) = current_path.filter(|p| !p.is_empty()) {
+        std::path::PathBuf::from(p)
+    } else {
+        app.dialog()
+            .file()
+            .add_filter("Markdown", &["md"])
+            .set_file_name("document.md")
+            .blocking_save_file()
+            .ok_or_else(|| "No file selected".to_string())?
+            .into_path()
+            .map_err(|e| e.to_string())?
+    };
+
+    let ext = path
+        .extension()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_lowercase();
+    let config = Config::default();
+
+    // For markdown, we just write the string directly
+    if ext == "md" {
+        std::fs::write(&path, markdown.as_bytes()).map_err(|e| e.to_string())?;
+        return Ok(path.to_string_lossy().into_owned());
+    }
+
+    // For PDF, we shouldn't implicitly overwrite because it's not round-trippable losslessly
+    // in the same way (can't save midway). But if the user opened a PDF, we should let them save it.
+    // However, the prompt is to allow saving to DOCX/ODT/RTF etc.
+    let events = parser::parse(&markdown);
+    let bytes: Vec<u8> = match ext.as_str() {
+        "docx" => convert_docx(events, &config, std::path::Path::new("."), None)
+            .map_err(|e| e.to_string())?,
+        "odt" => {
+            convert_odt(&events, &config, std::path::Path::new(".")).map_err(|e| e.to_string())?
+        }
+        "html" => convert_html(events, &config)
+            .map_err(|e| e.to_string())?
+            .into_bytes(),
+        "typ" => marksmen_typst::translator::translate(events, &config)
+            .map_err(|e| e.to_string())?
+            .into_bytes(),
+        "rtf" => marksmen_rich::convert(events, &config).map_err(|e| e.to_string())?,
+        "pdf" => marksmen_pdf::convert(&markdown, &config, None).map_err(|e| e.to_string())?,
+        "pptx" => convert_ppt(events, &config).map_err(|e| e.to_string())?,
+        "epub" => marksmen_epub::convert(events, &config).map_err(|e| e.to_string())?,
+        _ => markdown.into_bytes(),
+    };
+
+    std::fs::write(&path, &bytes).map_err(|e| e.to_string())?;
+    Ok(path.to_string_lossy().into_owned())
+}
+
+/// Export to a specific format and write it to a user-chosen path via OS dialog.
+#[tauri::command]
+async fn save_as_format(
+    app: tauri::AppHandle,
+    markdown: String,
+    format: String,
+    doc_name: String,
+) -> Result<(), String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let config = Config::default();
+    let events = parser::parse(&markdown);
+
+    let (bytes, ext): (Vec<u8>, &str) = match format.as_str() {
+        "docx" => (
+            convert_docx(events, &config, std::path::Path::new("."), None)
+                .map_err(|e| e.to_string())?,
+            "docx",
+        ),
+        "odt" => (
+            convert_odt(&events, &config, std::path::Path::new(".")).map_err(|e| e.to_string())?,
+            "odt",
+        ),
+        "pdf" => (
+            marksmen_pdf::convert(&markdown, &config, None).map_err(|e| e.to_string())?,
+            "pdf",
+        ),
+        "html" => (
+            convert_html(events, &config)
+                .map_err(|e| e.to_string())?
+                .into_bytes(),
+            "html",
+        ),
+        "typst" => (
+            marksmen_typst::translator::translate(events, &config)
+                .map_err(|e| e.to_string())?
+                .into_bytes(),
+            "typ",
+        ),
+        "pptx" => (
+            convert_ppt(events, &config).map_err(|e| e.to_string())?,
+            "pptx",
+        ),
+        "epub" => (
+            marksmen_epub::convert(events, &config).map_err(|e| e.to_string())?,
+            "epub",
+        ),
+        "markdown" => (markdown.into_bytes(), "md"),
+        _ => return Err(format!("Unknown format: {format}")),
+    };
+
+    let path = app
+        .dialog()
+        .file()
+        .add_filter(&format.to_uppercase(), &[ext])
+        .set_file_name(&format!("{doc_name}.{ext}"))
+        .blocking_save_file()
+        .ok_or_else(|| "No file selected".to_string())?
+        .into_path()
+        .map_err(|e| e.to_string())?;
+
+    std::fs::write(&path, &bytes).map_err(|e| e.to_string())
+}
+
+/// Write markdown to an autosave shadow file in the app's local data directory.
+#[tauri::command]
+fn autosave_file(app: tauri::AppHandle, markdown: String, doc_name: String) -> Result<(), String> {
+    use tauri::Manager;
+    let local_data = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+    let autosave_dir = local_data.join("autosaves");
+    std::fs::create_dir_all(&autosave_dir).map_err(|e| e.to_string())?;
+
+    let stem: String = doc_name
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '_' })
+        .collect();
+
+    let path = autosave_dir.join(format!("{stem}_autosave.md"));
+    std::fs::write(&path, markdown.as_bytes()).map_err(|e| e.to_string())
+}
+
+/// Load the most recently modified autosave file from the local data directory.
+#[tauri::command]
+fn load_latest_autosave(app: tauri::AppHandle) -> Result<Option<(String, String)>, String> {
+    use tauri::Manager;
+    let local_data = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+    let autosave_dir = local_data.join("autosaves");
+
+    if !autosave_dir.exists() {
+        return Ok(None);
+    }
+
+    let mut latest_file = None;
+    let mut latest_time = std::time::UNIX_EPOCH;
+
+    for entry in std::fs::read_dir(&autosave_dir).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        if let Ok(metadata) = entry.metadata() {
+            if let Ok(modified) = metadata.modified() {
+                if modified > latest_time {
+                    latest_time = modified;
+                    latest_file = Some(entry.path());
+                }
+            }
+        }
+    }
+
+    if let Some(path) = latest_file {
+        let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        let name = path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .replace("_autosave.md", "");
+        Ok(Some((content, name)))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Render markdown → PDF → write to OS temp dir → open with native viewer.
+#[tauri::command]
+fn print_pdf(markdown: String) -> Result<(), String> {
+    let config = Config::default();
+    let bytes = marksmen_pdf::convert(&markdown, &config, None).map_err(|e| e.to_string())?;
+    let path = std::env::temp_dir().join("marksmen_print.pdf");
+    std::fs::write(&path, &bytes).map_err(|e| e.to_string())?;
+    let url = format!("file://{}", path.to_string_lossy().replace('\\', "/"));
+    tauri_plugin_opener::open_url(url, None::<&str>).map_err(|e| e.to_string())
+}
+
+/// Reopen a document by its absolute path. Returns (markdown, filename, absolute_path).
+/// Uses the same format-dispatch as `import_file`.
+#[tauri::command]
+fn open_file_by_path(path: String) -> Result<(String, String, String), String> {
+    let p = std::path::Path::new(&path);
+    let filename = p
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .into_owned();
+    let ext = p
+        .extension()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_lowercase();
+
+    let content = match ext.as_str() {
+        "md" => std::fs::read_to_string(p).map_err(|e| e.to_string()),
+        "html" => {
+            let h = std::fs::read_to_string(p).map_err(|e| e.to_string())?;
+            marksmen_html_read::parse_html(&h).map_err(|e| e.to_string())
+        }
+        "docx" => {
+            let b = std::fs::read(p).map_err(|e| e.to_string())?;
+            marksmen_docx_read::parse_docx(&b, None).map_err(|e| e.to_string())
+        }
+        "odt" => {
+            let b = std::fs::read(p).map_err(|e| e.to_string())?;
+            marksmen_odt_read::parse_odt(&b, None).map_err(|e| e.to_string())
+        }
+        "pdf" => {
+            let b = std::fs::read(p).map_err(|e| e.to_string())?;
+            marksmen_pdf_read::parse_pdf(&b).map_err(|e| e.to_string())
+        }
+        "typ" => {
+            let s = std::fs::read_to_string(p).map_err(|e| e.to_string())?;
+            marksmen_typst_read::parse_typst(&s).map_err(|e| e.to_string())
+        }
+        "rtf" => {
+            let b = std::fs::read(p).map_err(|e| e.to_string())?;
+            marksmen_rich_read::parse_rtf(&b).map_err(|e| e.to_string())
+        }
+        "pptx" => {
+            let b = std::fs::read(p).map_err(|e| e.to_string())?;
+            marksmen_ppt_read::parse_pptx(&b).map_err(|e| e.to_string())
+        }
+        "epub" => {
+            let b = std::fs::read(p).map_err(|e| e.to_string())?;
+            marksmen_epub_read::parse_epub(&b).map_err(|e| e.to_string())
+        }
+        other => Err(format!("Unsupported extension: {other}")),
+    }?;
+    Ok((content, filename, p.to_string_lossy().into_owned()))
 }

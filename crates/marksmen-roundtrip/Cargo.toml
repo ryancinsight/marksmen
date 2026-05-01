@@ -24,6 +24,8 @@ marksmen-marp = { path = "../marksmen-marp" }
 marksmen-marp-read = { path = "../marksmen-marp-read" }
 marksmen-typst = { path = "../marksmen-typst" }
 marksmen-typst-read = { path = "../marksmen-typst-read" }
+marksmen-epub = { path = "../marksmen-epub" }
+marksmen-epub-read = { path = "../marksmen-epub-read" }
 strsim = "0.11.1"
 pulldown-cmark.workspace = true
 

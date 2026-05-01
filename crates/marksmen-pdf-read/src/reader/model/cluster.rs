@@ -700,11 +700,6 @@ fn detect_bullet(text: &str) -> (bool, Option<String>, String) {
     }
 }
 
-fn is_header_candidate(text: &str) -> bool {
-    let words = text.split_whitespace().count();
-    words <= 7 && !text.ends_with('.') && !text.ends_with(',') && !text.ends_with(':')
-}
-
 fn strip_markdown_marks(s: &str) -> String {
     let mut clean = s.replace("***", "").replace("**", "").replace('*', "");
     clean = clean

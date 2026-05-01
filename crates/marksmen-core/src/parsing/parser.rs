@@ -22,7 +22,8 @@ pub fn parse(markdown: &str) -> Vec<Event<'_>> {
         | Options::ENABLE_TABLES
         | Options::ENABLE_STRIKETHROUGH
         | Options::ENABLE_TASKLISTS
-        | Options::ENABLE_HEADING_ATTRIBUTES;
+        | Options::ENABLE_HEADING_ATTRIBUTES
+        | Options::ENABLE_FOOTNOTES;
 
     Parser::new_ext(markdown, options).collect()
 }
@@ -30,7 +31,7 @@ pub fn parse(markdown: &str) -> Vec<Event<'_>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pulldown_cmark::{Event, Tag, TagEnd};
+    use pulldown_cmark::{Event, Tag};
 
     #[test]
     fn parses_inline_math() {

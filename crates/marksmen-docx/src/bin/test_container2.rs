@@ -15,9 +15,9 @@ impl<'a> Container<'a> {
     }
 }
 
-pub fn handle_event<'a>(mut container: Container<'a>) {
+pub fn handle_event<'a>(container: Container<'a>) {
     let p = Paragraph::new().add_run(Run::new().add_text("Working!"));
-    container = container.add_paragraph(p);
+    container.add_paragraph(p);
 }
 
 fn main() {

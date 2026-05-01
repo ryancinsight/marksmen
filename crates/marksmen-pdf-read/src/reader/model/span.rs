@@ -41,15 +41,4 @@ impl RichSpan {
     pub fn right(&self) -> f32 {
         self.x + self.width
     }
-
-    /// Approximate top edge: y + font_size.
-    #[inline]
-    pub fn top(&self) -> f32 {
-        self.y + self.font_size
-    }
-
-    /// True if this span and `other` share the same visual line (Y-baseline within tolerance).
-    pub fn same_line_as(&self, other: &RichSpan, tolerance: f32) -> bool {
-        (self.y - other.y).abs() <= tolerance
-    }
 }
