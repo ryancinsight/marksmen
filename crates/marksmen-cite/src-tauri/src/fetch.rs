@@ -228,7 +228,7 @@ pub async fn fetch_arxiv(arxiv_id: String) -> Result<Reference, String> {
 #[tauri::command]
 pub async fn fetch_isbn(isbn: String) -> Result<Reference, String> {
     let client = http_client()?;
-    let isbn = isbn.trim().replace('-', "").replace(' ', "");
+    let isbn = isbn.trim().replace(['-', ' '], "");
     let url = format!(
         "https://openlibrary.org/api/books?bibkeys=ISBN:{}&format=json&jscmd=data",
         isbn

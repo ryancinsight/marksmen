@@ -30,8 +30,8 @@ pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> 
             reader.config_mut().trim_text(true);
             loop {
                 match reader.read_event() {
-                    Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                        if e.name().as_ref() == b"Relationship" {
+                    Ok(Event::Start(e)) | Ok(Event::Empty(e))
+                        if e.name().as_ref() == b"Relationship" => {
                             let mut id = String::new();
                             let mut target = String::new();
                             for attr in e.attributes().flatten() {
@@ -45,7 +45,6 @@ pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> 
                                 rels_map.insert(id, target);
                             }
                         }
-                    }
                     Ok(Event::Eof) | Err(_) => break,
                     _ => {}
                 }
@@ -80,13 +79,12 @@ pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> 
                             }
                         }
                     }
-                    Ok(Event::Text(e)) => {
-                        if in_comment {
+                    Ok(Event::Text(e))
+                        if in_comment => {
                             comment_text.push_str(&e.unescape().unwrap_or_default());
                         }
-                    }
-                    Ok(Event::End(e)) => {
-                        if e.name().as_ref() == b"w:comment" {
+                    Ok(Event::End(e))
+                        if e.name().as_ref() == b"w:comment" => {
                             in_comment = false;
                             if !current_id.is_empty() {
                                 comments_map.insert(
@@ -95,7 +93,6 @@ pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> 
                                 );
                             }
                         }
-                    }
                     Ok(Event::Eof) | Err(_) => break,
                     _ => {}
                 }
@@ -108,8 +105,8 @@ pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> 
     if let Ok(mut header_file) = archive.by_name("word/header1.xml") {
         let _ = header_file.read_to_string(&mut header_xml);
     }
-    if !header_xml.is_empty() {
-        if let Ok(parsed) = parse_xml_payload(
+    if !header_xml.is_empty()
+        && let Ok(parsed) = parse_xml_payload(
             &mut archive,
             &header_xml,
             &comments_map,
@@ -118,7 +115,6 @@ pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> 
         ) {
             header_text = parsed;
         }
-    }
 
     let mut footnotes_xml = String::new();
     if let Ok(mut footnotes_file) = archive.by_name("word/footnotes.xml") {
@@ -133,8 +129,8 @@ pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> 
                 let id_rest = &block[id_start + 6..];
                 if let Some(id_end) = id_rest.find('"') {
                     let id = &id_rest[..id_end];
-                    if id != "-1" && id != "0" {
-                        if let Some(end_idx) = block.find("</w:footnote>") {
+                    if id != "-1" && id != "0"
+                        && let Some(end_idx) = block.find("</w:footnote>") {
                             let footnote_xml =
                                 format!("<w:footnote>{}</w:footnote>", &block[..end_idx]);
                             if let Ok(parsed) = parse_xml_payload(
@@ -147,7 +143,6 @@ pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> 
                                 footnotes_map.insert(id.to_string(), parsed.trim().to_string());
                             }
                         }
-                    }
                 }
             }
         }
@@ -174,8 +169,8 @@ pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> 
     if let Ok(mut footer_file) = archive.by_name("word/footer1.xml") {
         let _ = footer_file.read_to_string(&mut footer_xml);
     }
-    if !footer_xml.is_empty() {
-        if let Ok(parsed) = parse_xml_payload(
+    if !footer_xml.is_empty()
+        && let Ok(parsed) = parse_xml_payload(
             &mut archive,
             &footer_xml,
             &comments_map,
@@ -184,7 +179,6 @@ pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> 
         ) {
             footer_text = parsed;
         }
-    }
 
     // Extract the page metadata comment from doc_text and hoist to TOP of final_out
     // so the DOCX writer sees it as the first event via peek().
@@ -443,17 +437,15 @@ fn parse_xml_payload(
                         p_ilvl = 0;
                         p_list_marker_emitted = false;
                         is_highlight = false;
-                        if in_tbl == 0 {
-                            if output.len() > 0 {
-                                if !output.ends_with("\n\n") {
+                        if in_tbl == 0
+                            && !output.is_empty()
+                                && !output.ends_with("\n\n") {
                                     if output.ends_with('\n') {
                                         output.push('\n');
                                     } else {
                                         output.push_str("\n\n");
                                     }
                                 }
-                            }
-                        }
                     }
                     b"w:tbl" => {
                         in_tbl += 1;
@@ -466,7 +458,7 @@ fn parse_xml_payload(
                                 .as_mut()
                                 .unwrap()
                                 .push_str("<table class=\"nested\">");
-                        } else if output.len() > 0 && !output.ends_with("\n\n") {
+                        } else if !output.is_empty() && !output.ends_with("\n\n") {
                             output.push_str("\n\n");
                         }
                     }
@@ -495,28 +487,26 @@ fn parse_xml_payload(
                         for attr in e.attributes().flatten() {
                             if attr.key.as_ref() == b"w:fill" {
                                 let fill_val = String::from_utf8_lossy(&attr.value);
-                                if fill_val != "auto" && fill_val != "clear" {
-                                    if let Some(state) = tc_state_stack.last_mut() {
+                                if fill_val != "auto" && fill_val != "clear"
+                                    && let Some(state) = tc_state_stack.last_mut() {
                                         state.2 = Some(fill_val.into_owned());
                                     }
-                                }
                             }
                         }
                     }
                     b"w:gridSpan" => {
                         for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"w:val" {
-                                if let Some(state) = tc_state_stack.last_mut() {
+                            if attr.key.as_ref() == b"w:val"
+                                && let Some(state) = tc_state_stack.last_mut() {
                                     state.0 =
                                         String::from_utf8_lossy(&attr.value).parse().unwrap_or(1);
                                 }
-                            }
                         }
                     }
                     b"w:pStyle" => {
                         for attr in e.attributes() {
-                            if let Ok(a) = attr {
-                                if a.key.as_ref() == b"w:val" {
+                            if let Ok(a) = attr
+                                && a.key.as_ref() == b"w:val" {
                                     let val = a.value;
                                     if val.as_ref() == b"Quote" {
                                         in_quote = true;
@@ -528,7 +518,7 @@ fn parse_xml_payload(
                                         in_code_block = true;
                                     } else if val.starts_with(b"Heading") && val.len() == 8 {
                                         let level = val[7] - b'0';
-                                        if level >= 1 && level <= 6 {
+                                        if (1..=6).contains(&level) {
                                             p_heading_level = level;
                                         }
                                     } else {
@@ -544,44 +534,39 @@ fn parse_xml_payload(
                                         }
                                     }
                                 }
-                            }
                         }
                     }
                     b"w:numId" => {
                         for attr in e.attributes() {
-                            if let Ok(a) = attr {
-                                if a.key.as_ref() == b"w:val" {
+                            if let Ok(a) = attr
+                                && a.key.as_ref() == b"w:val" {
                                     p_num_id =
                                         String::from_utf8_lossy(&a.value).parse().unwrap_or(0);
                                 }
-                            }
                         }
                     }
                     b"w:ilvl" => {
                         for attr in e.attributes() {
-                            if let Ok(a) = attr {
-                                if a.key.as_ref() == b"w:val" {
+                            if let Ok(a) = attr
+                                && a.key.as_ref() == b"w:val" {
                                     p_ilvl = String::from_utf8_lossy(&a.value).parse().unwrap_or(0);
                                 }
-                            }
                         }
                     }
                     b"w:jc" => {
                         for attr in e.attributes() {
-                            if let Ok(a) = attr {
-                                if a.key.as_ref() == b"w:val" {
+                            if let Ok(a) = attr
+                                && a.key.as_ref() == b"w:val" {
                                     if a.value.as_ref() == b"center" {
                                         p_aligned_center = true;
                                         if let Some(state) = tc_state_stack.last_mut() {
                                             state.1 = 1;
                                         }
-                                    } else if a.value.as_ref() == b"right" {
-                                        if let Some(state) = tc_state_stack.last_mut() {
+                                    } else if a.value.as_ref() == b"right"
+                                        && let Some(state) = tc_state_stack.last_mut() {
                                             state.1 = 2;
                                         }
-                                    }
                                 }
-                            }
                         }
                     }
                     b"w:r" => {
@@ -646,8 +631,8 @@ fn parse_xml_payload(
                                 } else if fld_type == b"separate" {
                                     in_fld_cached = true;
                                     in_fld_instr = false;
-                                } else if fld_type == b"end" {
-                                    if in_fld {
+                                } else if fld_type == b"end"
+                                    && in_fld {
                                         if !fld_instr_buf.is_empty() || !fld_eval_buf.is_empty() {
                                             output.push_str(&format!(
                                                 "<span data-field=\"{}\">{}</span>",
@@ -659,7 +644,6 @@ fn parse_xml_payload(
                                         in_fld_cached = false;
                                         in_fld_instr = false;
                                     }
-                                }
                             }
                         }
                     }
@@ -673,47 +657,43 @@ fn parse_xml_payload(
                     b"w:strike" | b"w:dstrike" => {
                         let mut strike_val = true;
                         for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"w:val" {
-                                if attr.value.as_ref() == b"false" || attr.value.as_ref() == b"0" {
+                            if attr.key.as_ref() == b"w:val"
+                                && (attr.value.as_ref() == b"false" || attr.value.as_ref() == b"0") {
                                     strike_val = false;
                                 }
-                            }
                         }
                         is_strike = strike_val;
                     }
                     b"w:highlight" => {
                         for attr in e.attributes() {
-                            if let Ok(a) = attr {
-                                if a.key.as_ref() == b"w:val" && a.value.as_ref() != b"none" {
+                            if let Ok(a) = attr
+                                && a.key.as_ref() == b"w:val" && a.value.as_ref() != b"none" {
                                     is_highlight = true;
                                 }
-                            }
                         }
                     }
                     b"w:vertAlign" => {
                         for attr in e.attributes() {
-                            if let Ok(a) = attr {
-                                if a.key.as_ref() == b"w:val" {
+                            if let Ok(a) = attr
+                                && a.key.as_ref() == b"w:val" {
                                     if a.value.as_ref() == b"subscript" {
                                         is_subscript = true;
                                     } else if a.value.as_ref() == b"superscript" {
                                         is_superscript = true;
                                     }
                                 }
-                            }
                         }
                     }
                     b"w:rFonts" => {
                         for attr in e.attributes() {
-                            if let Ok(a) = attr {
-                                if a.key.as_ref() == b"w:ascii" {
+                            if let Ok(a) = attr
+                                && a.key.as_ref() == b"w:ascii" {
                                     if a.value.as_ref() == b"Cambria Math" {
                                         is_math = true;
                                     } else if a.value.as_ref() == b"Consolas" {
                                         is_code = true;
                                     }
                                 }
-                            }
                         }
                     }
                     b"w:hyperlink" => {
@@ -736,11 +716,10 @@ fn parse_xml_payload(
                     b"w:br" => {
                         let mut is_page = false;
                         for attr in e.attributes() {
-                            if let Ok(a) = attr {
-                                if a.key.as_ref() == b"w:type" && a.value.as_ref() == b"page" {
+                            if let Ok(a) = attr
+                                && a.key.as_ref() == b"w:type" && a.value.as_ref() == b"page" {
                                     is_page = true;
                                 }
-                            }
                         }
                         if is_page {
                             output.push_str("\n<!-- pagebreak -->\n");
@@ -753,7 +732,7 @@ fn parse_xml_payload(
                         } else if in_tbl > 0 {
                             output.push_str("<br/>");
                         } else {
-                            output.push_str("\n");
+                            output.push('\n');
                         }
                     }
                     b"w:drawing" => {
@@ -879,7 +858,7 @@ fn parse_xml_payload(
                     }
                     if in_code_block {
                         if !output.ends_with('\n') {
-                            output.push_str("\n");
+                            output.push('\n');
                         }
                         output.push_str("```\n");
                         in_code_block = false;
@@ -972,11 +951,11 @@ fn parse_xml_payload(
                             buf.push_str("</tr>");
                         }
                     } else {
-                        output.push_str("\n");
+                        output.push('\n');
                         if let Some(cnt) = tr_count_stack.last_mut() {
                             *cnt += 1;
                             if *cnt == 1 {
-                                output.push_str("|");
+                                output.push('|');
                                 for i in 0..tc_count {
                                     let align = tc_alignments.get(i).copied().unwrap_or(0);
                                     match align {
@@ -985,7 +964,7 @@ fn parse_xml_payload(
                                         _ => output.push_str(" :--- |"),
                                     }
                                 }
-                                output.push_str("\n");
+                                output.push('\n');
                             }
                         }
                     }
@@ -997,13 +976,12 @@ fn parse_xml_payload(
                         if let Some(buf) = nested_html_buf.as_mut() {
                             buf.push_str("</table>");
                         }
-                        if in_tbl == 1 {
-                            if let Some(full_html) = nested_html_buf.take() {
+                        if in_tbl == 1
+                            && let Some(full_html) = nested_html_buf.take() {
                                 output.push_str(&full_html);
                             }
-                        }
                     } else {
-                        output.push_str("\n");
+                        output.push('\n');
                     }
                 }
                 b"w:drawing" => {
@@ -1028,7 +1006,7 @@ fn parse_xml_payload(
                     } else if in_tbl == 1 {
                         output.push_str(&format!("![{}]({})", alt, valid_path));
                     } else {
-                        if output.len() > 0 && !output.ends_with("\n\n") {
+                        if !output.is_empty() && !output.ends_with("\n\n") {
                             output.push_str("\n\n");
                         }
                         output.push_str(&format!("![{}]({})\n\n", alt, valid_path));
@@ -1042,12 +1020,11 @@ fn parse_xml_payload(
                     fld_instr_buf.push_str(&raw_text);
                     continue;
                 }
-                if in_t {
-                    if in_fld_cached {
+                if in_t
+                    && in_fld_cached {
                         fld_eval_buf.push_str(&raw_text);
                         continue;
                     }
-                }
                 if in_t && in_r && in_p {
                     let mut text = raw_text;
                     if !text.is_empty() {

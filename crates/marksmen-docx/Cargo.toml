@@ -16,6 +16,9 @@ marksmen-xml = { path = "../marksmen-xml" }
 uuid = { version = "1.22.0", features = ["v4"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 regex = "1.12.3"
+marksmen-crypto = { version = "0.1.0", path = "../marksmen-crypto" }
+marksmen-csl = { version = "0.1.0", path = "../marksmen-csl" }
+serde_json = "1.0.149"
 
 [[bin]]
 name = "test_page_meta"

@@ -82,8 +82,8 @@ pub fn parse_odt(bytes: &[u8], media_out_dir: Option<&std::path::Path>) -> Resul
                         hidden_meta_text.clear();
                         let mut is_quote_paragraph = false;
                         for attr in e.attributes() {
-                            if let Ok(a) = attr {
-                                if a.key.as_ref() == b"text:style-name" {
+                            if let Ok(a) = attr
+                                && a.key.as_ref() == b"text:style-name" {
                                     if a.value.as_ref() == b"P_Rule" {
                                         // Horizontal rule — not math.
                                     } else if a.value.as_ref() == b"P_DisplayMath" {
@@ -96,7 +96,6 @@ pub fn parse_odt(bytes: &[u8], media_out_dir: Option<&std::path::Path>) -> Resul
                                         in_hidden_meta = true;
                                     }
                                 }
-                            }
                         }
                         if in_hidden_meta {
                             continue;
@@ -105,7 +104,7 @@ pub fn parse_odt(bytes: &[u8], media_out_dir: Option<&std::path::Path>) -> Resul
                             if !list_ordered_stack.is_empty() {
                                 // Inside a list item: text:p is the item body;
                                 // do not insert paragraph break between the marker and body text.
-                            } else if output.len() > 0
+                            } else if !output.is_empty()
                                 && !output.ends_with("\n\n")
                                 && !output.ends_with("\n")
                                 && !output.ends_with("- ")
@@ -117,7 +116,7 @@ pub fn parse_odt(bytes: &[u8], media_out_dir: Option<&std::path::Path>) -> Resul
                             }
                         } else {
                             if !output.ends_with("| ") && !output.ends_with(" ") {
-                                output.push_str(" ");
+                                output.push(' ');
                             }
                         }
                     }
@@ -125,14 +124,13 @@ pub fn parse_odt(bytes: &[u8], media_out_dir: Option<&std::path::Path>) -> Resul
                         in_p = true; // treat heading as a block
                         let mut heading_level = 1u8;
                         for attr in e.attributes() {
-                            if let Ok(a) = attr {
-                                if a.key.as_ref() == b"text:outline-level" {
+                            if let Ok(a) = attr
+                                && a.key.as_ref() == b"text:outline-level" {
                                     heading_level = String::from_utf8_lossy(a.value.as_ref())
                                         .parse::<u8>()
                                         .unwrap_or(1)
                                         .clamp(1, 6);
                                 }
-                            }
                         }
                         output.push_str("\n\n");
                         output.push_str(&"#".repeat(heading_level as usize));
@@ -141,14 +139,14 @@ pub fn parse_odt(bytes: &[u8], media_out_dir: Option<&std::path::Path>) -> Resul
                     b"table:table" => {
                         in_tbl += 1;
                         tr_count = 0;
-                        if output.len() > 0 && !output.ends_with("\n\n") {
+                        if !output.is_empty() && !output.ends_with("\n\n") {
                             output.push_str("\n\n");
                         }
                     }
                     b"table:table-row" | b"table:table-header-rows" => {
-                        if output.len() > 0 && !output.ends_with("\n") && !output.ends_with("\n\n")
+                        if !output.is_empty() && !output.ends_with("\n") && !output.ends_with("\n\n")
                         {
-                            output.push_str("\n");
+                            output.push('\n');
                         }
                         output.push_str("| ");
                         tc_count = 0;
@@ -162,19 +160,18 @@ pub fn parse_odt(bytes: &[u8], media_out_dir: Option<&std::path::Path>) -> Resul
                         // Detect list style from text:style-name attribute.
                         let mut is_ordered = false;
                         for attr in e.attributes() {
-                            if let Ok(a) = attr {
-                                if a.key.as_ref() == b"text:style-name"
+                            if let Ok(a) = attr
+                                && a.key.as_ref() == b"text:style-name"
                                     && a.value.as_ref() == b"L_Numbered"
                                 {
                                     is_ordered = true;
                                 }
-                            }
                         }
                         list_ordered_stack.push(is_ordered);
                         list_counter_stack.push(0);
-                        if output.len() > 0 && !output.ends_with("\n\n") && !output.ends_with("\n")
+                        if !output.is_empty() && !output.ends_with("\n\n") && !output.ends_with("\n")
                         {
-                            output.push_str("\n");
+                            output.push('\n');
                         }
                     }
                     b"text:list-item" => {
@@ -184,12 +181,12 @@ pub fn parse_odt(bytes: &[u8], media_out_dir: Option<&std::path::Path>) -> Resul
                         if let Some(counter) = list_counter_stack.last_mut() {
                             *counter += 1;
                             if is_ordered {
-                                if output.len() > 0 && !output.ends_with("\n") {
+                                if !output.is_empty() && !output.ends_with("\n") {
                                     output.push('\n');
                                 }
                                 output.push_str(&format!("{}{}. ", indent, counter));
                             } else {
-                                if output.len() > 0 && !output.ends_with("\n") {
+                                if !output.is_empty() && !output.ends_with("\n") {
                                     output.push('\n');
                                 }
                                 output.push_str(&format!("{}- ", indent));
@@ -200,8 +197,8 @@ pub fn parse_odt(bytes: &[u8], media_out_dir: Option<&std::path::Path>) -> Resul
                         in_span = true;
                         // Determine styling from text:style-name
                         for attr in e.attributes() {
-                            if let Ok(a) = attr {
-                                if a.key.as_ref() == b"text:style-name" {
+                            if let Ok(a) = attr
+                                && a.key.as_ref() == b"text:style-name" {
                                     match a.value.as_ref() {
                                         b"S_Bold" => is_bold = true,
                                         b"S_Italic" => is_italic = true,
@@ -214,10 +211,9 @@ pub fn parse_odt(bytes: &[u8], media_out_dir: Option<&std::path::Path>) -> Resul
                                         _ => {}
                                     }
                                 }
-                            }
                         }
                     }
-                    b"text:line-break" => output.push_str("\n"),
+                    b"text:line-break" => output.push('\n'),
                     b"text:changed-region" => {
                         for attr in e.attributes().flatten() {
                             if attr.key.as_ref() == b"text:id" {
@@ -355,10 +351,10 @@ pub fn parse_odt(bytes: &[u8], media_out_dir: Option<&std::path::Path>) -> Resul
                     output.push_str(" | ");
                 }
                 b"table:table-row" | b"table:table-header-rows" => {
-                    output.push_str("\n");
+                    output.push('\n');
                     tr_count += 1;
                     if tr_count == 1 {
-                        output.push_str("|");
+                        output.push('|');
                         for i in 0..tc_count {
                             let align = tc_alignments.get(i).copied().unwrap_or(0);
                             match align {
@@ -367,12 +363,12 @@ pub fn parse_odt(bytes: &[u8], media_out_dir: Option<&std::path::Path>) -> Resul
                                 _ => output.push_str(" :--- |"),
                             }
                         }
-                        output.push_str("\n");
+                        output.push('\n');
                     }
                 }
                 b"table:table" => {
                     in_tbl -= 1;
-                    output.push_str("\n");
+                    output.push('\n');
                 }
                 b"text:list" => {
                     list_ordered_stack.pop();
@@ -390,9 +386,9 @@ pub fn parse_odt(bytes: &[u8], media_out_dir: Option<&std::path::Path>) -> Resul
                     if in_hidden_span_meta {
                         let meta = hidden_span_meta_text.trim();
                         if !meta.is_empty() {
-                            output.push_str("$");
+                            output.push('$');
                             output.push_str(meta);
-                            output.push_str("$");
+                            output.push('$');
                         }
                         in_hidden_span_meta = false;
                         hidden_span_meta_text.clear();
@@ -468,12 +464,11 @@ pub fn parse_odt(bytes: &[u8], media_out_dir: Option<&std::path::Path>) -> Resul
                             if is_bold {
                                 core_text = format!("**{}**", core_text);
                             }
-                            if is_italic {
-                                if !core_text.contains("$") {
+                            if is_italic
+                                && !core_text.contains("$") {
                                     // Only wrap if it's not pre-wrapped math
                                     core_text = format!("*{}*", core_text);
                                 }
-                            }
                             if is_underline {
                                 core_text = format!("<u>{}</u>", core_text);
                             }

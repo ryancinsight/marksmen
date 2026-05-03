@@ -1364,12 +1364,16 @@
                         <span class="rbtn-icon">📋</span>
                         <span>Sidebar</span>
                     </button>
+                    <button class="rbtn" id="btn-toggle-ai" title="Open AI Chatbot">
+                        <span class="rbtn-icon">✨</span>
+                        <span>AI Chatbot</span>
+                    </button>
                     <button class="rbtn" id="btn-resolve-all" title="Resolve All Comments">
                         <span class="rbtn-icon">✅</span>
                         <span>Resolve All</span>
                     </button>
                 </div>
-                <span class="rgroup-label">Comments</span>
+                <span class="rgroup-label">Sidebar</span>
             </div>
         </div>
 
@@ -1565,6 +1569,11 @@
         <button class="fmenu-item fmenu-export" data-export="rtf">
             <span class="fmenu-icon">⬇</span>
             <div><strong>Rich Text</strong><small>.rtf</small></div>
+        </button>
+        <div class="fmenu-sep"></div>
+        <button class="fmenu-item" id="btn-file-exit">
+            <span class="fmenu-icon">🚪</span>
+            <div><strong>Exit</strong><small>Close Marksmen</small></div>
         </button>
     </div>
     <div class="file-menu-scrim" id="file-menu-scrim" hidden></div>
@@ -1977,6 +1986,10 @@
                     <span class="ai-spinner"></span> Generating…
                 </div>
                 <!-- Response area -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; margin-bottom: 6px;">
+                    <span style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Chat</span>
+                    <button id="ai-clear-chat" style="background: none; border: none; cursor: pointer; color: var(--text-hint); font-size: 11px; padding: 2px 4px; border-radius: 3px;" title="Clear Chat History" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-hint)'">🗑️ Clear</button>
+                </div>
                 <div id="ai-response" class="ai-response">
                     <div class="ai-response-empty">Responses will appear here.</div>
                 </div>
@@ -2268,6 +2281,23 @@
                     <button class="modal-btn" id="pb-close-btn">Cancel</button>
                     <button class="modal-btn modal-btn--primary" id="pb-apply">Apply</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!--  Citation Dialog (Stage 2)  -->
+    <div id="citation-scrim" class="dialog-scrim" hidden>
+        <div class="dialog-box" style="width: 500px; max-height: 80vh; display: flex; flex-direction: column;">
+            <div class="dialog-header">Insert Citation</div>
+            <div class="dialog-body" style="overflow-y: auto; flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+                <input type="text" id="citation-search" placeholder="Search authors, title, or year..." style="width: 100%; padding: 6px; box-sizing: border-box; margin-bottom: 8px;" />
+                <div id="citation-list" style="display: flex; flex-direction: column; gap: 4px;">
+                    <!-- Dynamically populated from marksmen-cite references.json -->
+                </div>
+            </div>
+            <div class="dialog-footer">
+                <button class="dbtn" id="btn-citation-cancel">Cancel</button>
+                <button class="dbtn dbtn-primary" id="btn-citation-insert" disabled>Insert</button>
             </div>
         </div>
     </div>

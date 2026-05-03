@@ -43,8 +43,8 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
     let mut in_mermaid_block = false;
     let mut current_mermaid_source = String::new();
 
-    let mut iter = events.into_iter();
-    while let Some(event) = iter.next() {
+    let iter = events.into_iter();
+    for event in iter {
         match event {
             Event::Start(Tag::Paragraph) => out.push_str("<p>"),
             Event::End(TagEnd::Paragraph) => out.push_str("</p>\n"),
@@ -57,7 +57,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
             Event::Start(Tag::BlockQuote(_)) => out.push_str("<blockquote>"),
             Event::End(TagEnd::BlockQuote(_)) => out.push_str("</blockquote>\n"),
             Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(ref lang)))
-                if lang.as_ref() == "mermaid" =>
+                if lang.as_ref().starts_with("mermaid") =>
             {
                 in_mermaid_block = true;
                 current_mermaid_source.clear();
@@ -273,8 +273,8 @@ fn render_graph_to_svg(graph: &marksmen_mermaid::layout::coordinate_assign::Spac
             ));
             svg.push('\n');
 
-            if let Some(label) = &edge.label {
-                if edge.path.len() >= 2 {
+            if let Some(label) = &edge.label
+                && edge.path.len() >= 2 {
                     let mid_segment = (edge.path.len() - 1) / 2;
                     let start = edge.path[mid_segment];
                     let end = edge.path[mid_segment + 1];
@@ -296,12 +296,11 @@ fn render_graph_to_svg(graph: &marksmen_mermaid::layout::coordinate_assign::Spac
                     ));
                     svg.push('\n');
                 }
-            }
         }
     }
 
     // Draw nodes
-    for (_id, node) in &graph.nodes {
+    for node in graph.nodes.values() {
         let rx = node.x + padding;
         let ry = node.y + padding;
         let fill = node.style.fill.as_deref().unwrap_or("#E8F4FD");

@@ -39,12 +39,11 @@ fn extract_document_body(text: &str) -> &str {
     let begin_doc = "\\begin{document}";
     let end_doc = "\\end{document}";
     if let Some(start) = text.find(begin_doc) {
-        if let Some(end) = text.find(end_doc) {
-            let offset = start + begin_doc.len();
-            if offset < end {
+        let offset = start + begin_doc.len();
+        if let Some(end) = text.find(end_doc)
+            && offset < end {
                 return text[offset..end].trim();
             }
-        }
     }
     text
 }
@@ -58,26 +57,18 @@ fn process_replacements(text: &str) -> String {
 
     // Very rudimentary parser to strip closing braces for formatting tags that were converted
     while let Some(c) = chars.next() {
-        if c == '\\' {
-            if let Some(&n) = chars.peek() {
+        if c == '\\'
+            && let Some(&n) = chars.peek() {
                 if n == '\\' {
                     chars.next();
                     out.push('\n'); // convert \\ to newline
                     continue;
-                } else if n == '%'
-                    || n == '$'
-                    || n == '#'
-                    || n == '_'
-                    || n == '{'
-                    || n == '}'
-                    || n == '&'
-                {
+                } else if matches!(n, '%' | '$' | '#' | '_' | '{' | '}' | '&') {
                     chars.next();
                     out.push(n);
                     continue;
                 }
             }
-        }
 
         if c == '{' {
             brace_depth += 1;

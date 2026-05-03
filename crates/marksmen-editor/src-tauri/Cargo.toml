@@ -44,3 +44,4 @@ marksmen-epub = { path = "../../marksmen-epub" }
 marksmen-epub-read = { path = "../../marksmen-epub-read" }
 font-kit = "0.14.3"
 sha2 = "0.11.0"
+marksmen-csl = { version = "0.1.0", path = "../../marksmen-csl" }

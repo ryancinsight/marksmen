@@ -2,6 +2,20 @@
 
 All notable changes to the Marksmen workspace will be documented in this file.
 
+## [1.2.0] - 2026-05-03
+
+### Added
+- **WebAssembly Extensibility (`marksmen-plugin`)**: Deployed a zero-cost, sandboxed Wasm plugin engine leveraging `wasmtime`, enabling users to inject custom JS/Go/Rust AST filters equivalent to Pandoc's Lua architecture.
+- **Enterprise Legal Compliance**: Implemented strict Data Loss Prevention (DLP) across rendering pipelines. Introduced destructive redaction (`<redact>`) that mathematically strips sensitive byte data from the Typst and DOCX generators, replacing it with unrecoverable geometric blocks.
+- **Interactive Form Synthesis**: Bridged structural HTML forms (`<form>`) into native interactive Word Content Controls (`FORMTEXT`) and PDF visual bounding box markers.
+- **Cloud Synchronization & LWW Merge**: Finalized the `marksmen-cite` synchronization engine with a deterministic Last-Writer-Wins (LWW) resolution engine for handling divergent remote `references.json` databases across WebDAV/S3 limits.
+- **Browser Ingestion Extension**: Fully deployed a Chrome/Firefox extension that actively scrapes `citation_doi` metadata from academic journal portals and proxies it directly to the local `marksmen-cite` Axum server.
+- **AST Assembly Pipelines**: The `export_binder` compiler efficiently maps and namespaces unified references and footnotes across merged multi-chapter documents in O(n) memory.
+
+### Changed
+- **Zero-Warning Strict Compiler Sweep**: Cleared all remaining `unused_mut`, `dead_code`, and redundant generic warnings across `marksmen-html`, `marksmen-crypto`, and translation engines.
+- **Optimized Memory Profiling**: Eradicated unused state heap-inflation from translation tracking structs. `AstConcatenator` now enforces aggressive memory capacity allocations (`Vec::with_capacity(1024)`) during large-scale document bundling to eliminate OS-level fragmentations.
+
 ## [1.1.0] - 2026-05-01
 
 ### Added

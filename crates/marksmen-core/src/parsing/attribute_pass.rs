@@ -105,15 +105,13 @@ pub fn parse_attr_block(text: &str) -> Option<(Vec<String>, Option<String>)> {
     let mut id: Option<String> = None;
 
     for token in inner.split_whitespace() {
-        if token.starts_with('.') {
-            let name = &token[1..];
+        if let Some(name) = token.strip_prefix('.') {
             if !name.is_empty() && is_valid_ident(name) {
                 classes.push(name.to_string());
             } else {
                 return None; // Malformed — abort
             }
-        } else if token.starts_with('#') {
-            let name = &token[1..];
+        } else if let Some(name) = token.strip_prefix('#') {
             if !name.is_empty() && is_valid_ident(name) {
                 id = Some(name.to_string());
             } else {

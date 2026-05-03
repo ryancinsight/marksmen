@@ -74,8 +74,8 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
     let mut in_mermaid_block = false;
     let mut current_mermaid_source = String::new();
 
-    let mut iter = events.into_iter();
-    while let Some(event) = iter.next() {
+    let iter = events.into_iter();
+    for event in iter {
         match event {
             Event::Start(Tag::Paragraph) => out.push_str("<p>"),
             Event::End(TagEnd::Paragraph) => out.push_str("</p>\n"),
@@ -356,7 +356,7 @@ fn render_graph_to_svg(graph: &marksmen_mermaid::layout::coordinate_assign::Spac
         }
     }
 
-    for (_id, node) in &graph.nodes {
+    for node in graph.nodes.values() {
         let rx = node.x + padding;
         let ry = node.y + padding;
         let fill = node.style.fill.as_deref().unwrap_or("#E8F4FD");

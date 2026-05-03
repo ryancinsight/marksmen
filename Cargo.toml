@@ -1,12 +1,18 @@
 [workspace]
-members = ["crates/marksmen", "crates/marksmen-core", "crates/marksmen-diff", "crates/marksmen-docx", "crates/marksmen-docx-read", "crates/marksmen-html", "crates/marksmen-html-read", "crates/marksmen-latex", "crates/marksmen-latex-read", "crates/marksmen-marp", "crates/marksmen-marp-read", "crates/marksmen-mermaid", "crates/marksmen-odt", "crates/marksmen-odt-read", "crates/marksmen-pdf", "crates/marksmen-pdf-read", "crates/marksmen-ppt", "crates/marksmen-ppt-read", "crates/marksmen-render", "crates/marksmen-rich", "crates/marksmen-rich-read", "crates/marksmen-roundtrip", "crates/marksmen-typst", "crates/marksmen-typst-read", "crates/marksmen-editor/src-tauri", "crates/marksmen-cite/src-tauri", "crates/marksmen-xml", "crates/marksmen-xml-read", "crates/marksmen-xhtml", "crates/marksmen-xhtml-read", "examples", "crates/marksmen-epub", "crates/marksmen-epub-read"]
+members = ["crates/marksmen", "crates/marksmen-core", "crates/marksmen-diff", "crates/marksmen-docx", "crates/marksmen-docx-read", "crates/marksmen-html", "crates/marksmen-html-read", "crates/marksmen-latex", "crates/marksmen-latex-read", "crates/marksmen-marp", "crates/marksmen-marp-read", "crates/marksmen-mermaid", "crates/marksmen-odt", "crates/marksmen-odt-read", "crates/marksmen-pdf", "crates/marksmen-pdf-read", "crates/marksmen-ppt", "crates/marksmen-ppt-read", "crates/marksmen-render", "crates/marksmen-rich", "crates/marksmen-rich-read", "crates/marksmen-roundtrip", "crates/marksmen-typst", "crates/marksmen-typst-read", "crates/marksmen-editor/src-tauri", "crates/marksmen-cite/src-tauri", "crates/marksmen-xml", "crates/marksmen-xml-read", "crates/marksmen-xhtml", "crates/marksmen-xhtml-read", "examples", "crates/marksmen-epub", "crates/marksmen-epub-read", "crates/marksmen-csl", "crates/marksmen-crypto", "crates/marksmen-plugin"]
+# Tauri app crates require the WebView2 runtime DLL (Windows) / WebKitGTK (Linux) /
+# WKWebView (macOS) at process start.  Those runtimes are absent in the `cargo test`
+# environment, so their test binaries exit with STATUS_ENTRYPOINT_NOT_FOUND.
+# `default-members` excludes them from bare `cargo test` (without --workspace).
+# For CI using `--workspace`, use:
+#   cargo test --workspace --exclude marksmen-cite --exclude marksmen-editor
+default-members = ["crates/marksmen", "crates/marksmen-core", "crates/marksmen-diff", "crates/marksmen-docx", "crates/marksmen-docx-read", "crates/marksmen-html", "crates/marksmen-html-read", "crates/marksmen-latex", "crates/marksmen-latex-read", "crates/marksmen-marp", "crates/marksmen-marp-read", "crates/marksmen-mermaid", "crates/marksmen-odt", "crates/marksmen-odt-read", "crates/marksmen-pdf", "crates/marksmen-pdf-read", "crates/marksmen-ppt", "crates/marksmen-ppt-read", "crates/marksmen-render", "crates/marksmen-rich", "crates/marksmen-rich-read", "crates/marksmen-roundtrip", "crates/marksmen-typst", "crates/marksmen-typst-read", "crates/marksmen-xml", "crates/marksmen-xml-read", "crates/marksmen-xhtml", "crates/marksmen-xhtml-read", "examples", "crates/marksmen-epub", "crates/marksmen-epub-read", "crates/marksmen-csl", "crates/marksmen-crypto", "crates/marksmen-plugin"]
 resolver = "2"
 
 [workspace.dependencies]
-pulldown-cmark = { version = "0.13", features = ["simd"] }
+pulldown-cmark = { version = "0.13", features = ["simd", "serde"] }
 typst = "0.14"
 typst-pdf = "0.14"
-typst-svg = "0.14"
 typst-render = "0.14"
 typst-syntax = "0.14"
 typst-utils = "0.14"
@@ -21,3 +27,10 @@ serde_yaml = "0.9"
 zip = { version = "2", default-features = false, features = ["deflate", "time"] }
 quick-xml = "0.36"
 tempfile = "3"
+
+[profile.release]
+strip = true
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"

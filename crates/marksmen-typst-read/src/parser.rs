@@ -31,29 +31,29 @@ fn traverse_node(node: &SyntaxNode, output: &mut String) {
             output.push_str("**");
         }
         SyntaxKind::Emph => {
-            output.push_str("*");
+            output.push('*');
             for child in node.children() {
                 traverse_node(child, output);
             }
-            output.push_str("*");
+            output.push('*');
         }
         SyntaxKind::Heading => {
             let level = if let Some(heading) = node.cast::<ast::Heading>() {
-                heading.depth().get() as usize
+                heading.depth().get()
             } else {
                 1
             };
 
-            output.push_str("\n");
+            output.push('\n');
             output.push_str(&"#".repeat(level));
-            output.push_str(" ");
+            output.push(' ');
 
             for child in node.children() {
                 if child.kind() != SyntaxKind::HeadingMarker && child.kind() != SyntaxKind::Space {
                     traverse_node(child, output);
                 }
             }
-            output.push_str("\n");
+            output.push('\n');
         }
         SyntaxKind::Math => {
             if let Some(math) = node.cast::<ast::Equation>() {

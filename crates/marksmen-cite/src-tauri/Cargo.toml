@@ -25,6 +25,12 @@ reqwest = { version = "0.12", features = ["json"] }
 regex = "1"
 quick-xml = { version = "0.36", features = ["serialize"] }
 chrono = { version = "0.4", features = ["serde"] }
+sha2 = "0.11.0"
+
+# Web Importer Server
+tokio = { version = "1", features = ["full"] }
+axum = "0.7"
+tower-http = { version = "0.5", features = ["cors"] }
 
 marksmen-pdf-read = { path = "../../marksmen-pdf-read" }
 marksmen-core = { path = "../../marksmen-core" }

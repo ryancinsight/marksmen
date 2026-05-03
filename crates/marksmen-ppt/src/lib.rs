@@ -109,13 +109,13 @@ fn segment_slides(events: Vec<Event<'_>>, config: &Config) -> Vec<Slide> {
         current.title = config.title.clone();
         if !config.author.is_empty() {
             current.body.push(SlideContent::Para(BodyParagraph::plain(
-                format!("{}", config.author),
+                config.author.to_string(),
                 0,
             )));
         }
         if !config.date.is_empty() {
             current.body.push(SlideContent::Para(BodyParagraph::plain(
-                format!("{}", config.date),
+                config.date.to_string(),
                 0,
             )));
         }
@@ -161,8 +161,8 @@ fn segment_slides(events: Vec<Event<'_>>, config: &Config) -> Vec<Slide> {
                 Event::Start(Tag::TableRow) => {
                     current_row.clear();
                 }
-                Event::End(TagEnd::TableRow) => {
-                    if !in_table_head {
+                Event::End(TagEnd::TableRow)
+                    if !in_table_head => {
                         table_rows.push(
                             std::mem::take(&mut current_row)
                                 .into_iter()
@@ -170,7 +170,6 @@ fn segment_slides(events: Vec<Event<'_>>, config: &Config) -> Vec<Slide> {
                                 .collect(),
                         );
                     }
-                }
                 Event::Start(Tag::TableCell) => {
                     current_cell.clear();
                 }
@@ -506,12 +505,10 @@ fn pack_pptx(slides: &[Slide]) -> Result<Vec<u8>> {
         zip.write_all(slide_xml.as_bytes())?;
 
         // Each slide needs a .rels pointing to its layout.
-        let slide_rels = format!(
-            r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        let slide_rels = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>
-</Relationships>"#
-        );
+</Relationships>"#.to_string();
         zip.start_file(format!("ppt/slides/_rels/slide{n}.xml.rels"), opts)?;
         zip.write_all(slide_rels.as_bytes())?;
     }

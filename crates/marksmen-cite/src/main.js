@@ -1,6 +1,6 @@
 // marksmen-cite main.js — Phase 20
 const { invoke } = window.__TAURI__.core;
-
+const { listen } = window.__TAURI__.event;
 // ── State ──────────────────────────────────────────────────
 let references   = [];
 let collections  = [];
@@ -59,6 +59,39 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderCollectionsNav();
         renderList();
     } catch (e) { console.error('Init failed:', e); }
+
+    // Listen for Web Importer payloads
+    listen('web-import', (event) => {
+        const payload = event.payload;
+        const now = new Date().toISOString().slice(0,10);
+        const ref = {
+            id: crypto.randomUUID(),
+            reference_type: "Journal Article",
+            title: payload.title || "Untitled",
+            authors: payload.authors || [],
+            abstract_text: payload.abstract_text || "",
+            journal: payload.journal || "",
+            year: payload.year || "",
+            volume: "", issue: "", pages: "",
+            publisher: "",
+            doi: payload.doi || "",
+            pmid: "", isbn: "", issn: "",
+            url: payload.url || "",
+            language: "", access_date: "",
+            tags: [], notes: payload.source ? `Imported from ${payload.source}` : "",
+            pdf_path: null,
+            starred: false, read_status: false,
+            date_added: now,
+            date_modified: now,
+            collections: []
+        };
+        references.push(ref);
+        renderNavCounts();
+        renderList();
+        scheduleSave();
+        syncEl.textContent = 'Added from Web Importer';
+        setTimeout(() => syncEl.textContent = 'All changes saved', 2000);
+    });
 });
 
 // ── Helpers ───────────────────────────────────────────────
@@ -465,6 +498,20 @@ document.getElementById('btn-copy-citation').addEventListener('click', () => {
     const text = citationOutput.textContent;
     if (!text || text === '(citation unavailable)') return;
     navigator.clipboard.writeText(text).then(() => { syncEl.textContent = 'Citation copied!'; setTimeout(() => syncEl.textContent = 'All changes saved', 1500); });
+});
+
+// ── Open PDF ───────────────────────────────────────────────────────────────
+btnOpenPdf.addEventListener('click', async () => {
+    const ref = references.find(r => r.id === selectedId);
+    if (!ref || !ref.pdf_path) return;
+    syncEl.textContent = 'Opening PDF...';
+    try {
+        await invoke('open_pdf_native', { path: ref.pdf_path });
+        setTimeout(() => syncEl.textContent = 'All changes saved', 1500);
+    } catch (e) {
+        syncEl.textContent = 'Open failed';
+        alert(`Failed to open PDF: ${e}`);
+    }
 });
 
 // ── Copy Markdown ──────────────────────────────────────────

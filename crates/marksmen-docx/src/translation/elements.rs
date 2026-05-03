@@ -24,6 +24,7 @@ pub struct TextState {
     pub active_comment_id: Option<usize>,
     pub in_header: bool,
     pub in_footer: bool,
+    pub is_redact: bool,
     pub font_size: Option<f32>,
     /// Optional lookup table built from the source DOCX `comments.xml`.
     /// Maps normalized comment content → original `w:id` value (numeric).
@@ -31,6 +32,9 @@ pub struct TextState {
     /// the auto-incremented counter, so `w:commentRangeStart` in `document.xml`
     /// matches the verbatim-passed-through `comments.xml`.
     pub source_comment_ids: std::collections::HashMap<String, usize>,
+    
+    /// Tracked citations parsed from `<cite data-id="xyz">`.
+    pub cited_ids: Vec<String>,
 }
 
 pub enum Container<'a> {
@@ -110,14 +114,13 @@ pub fn handle_event<'a>(
                 override_style.unwrap_or_else(|| config.style_map.heading_style(level_num));
             *current_paragraph = Paragraph::new().style(heading_style);
         }
-        Event::End(TagEnd::Heading(_level)) => {
+        Event::End(TagEnd::Heading(_level))
             // Flush heading
-            if text_state.has_runs {
+            if text_state.has_runs => {
                 let p = std::mem::replace(current_paragraph, Paragraph::new());
                 let _ = container.add_paragraph(p);
                 text_state.has_runs = false;
             }
-        }
 
         // Tag::List, Tag::Item, TagEnd::List, TagEnd::Item are handled in document.rs
         // via DOCX numbering properties — handled before this fallthrough.
@@ -161,6 +164,18 @@ pub fn handle_event<'a>(
                 text_state.revision_del_date = extract_attr(original_tag, "data-date");
             } else if tag.starts_with("</del") {
                 text_state.is_del = false;
+            } else if tag.starts_with("<cite") {
+                if let Some(id) = extract_attr(original_tag, "data-id") {
+                    if !text_state.cited_ids.contains(&id) {
+                        text_state.cited_ids.push(id.clone());
+                    }
+                    let index = text_state.cited_ids.iter().position(|r| r == &id).unwrap_or(0) + 1;
+                    let run = Run::new().add_text(format!("[{}]", index));
+                    *current_paragraph = current_paragraph.clone().add_run(run);
+                    text_state.has_runs = true;
+                }
+            } else if tag.starts_with("</cite>") {
+                // Handled inline in opening tag
             } else if tag.starts_with("<header") {
                 text_state.in_header = true;
             } else if tag.starts_with("</header") {
@@ -169,6 +184,31 @@ pub fn handle_event<'a>(
                 text_state.in_footer = true;
             } else if tag.starts_with("</footer") {
                 text_state.in_footer = false;
+            } else if tag.starts_with("<redact") {
+                text_state.is_redact = true;
+            } else if tag.starts_with("</redact") {
+                text_state.is_redact = false;
+            } else if tag.starts_with("<form") {
+                let form_type = extract_attr(original_tag, "type").unwrap_or_else(|| "text".to_string());
+                let form_name = extract_attr(original_tag, "name").unwrap_or_else(|| "field".to_string());
+                
+                // Emulate Word legacy form fields using w:instrText FORMTEXT
+                let run_begin = Run::new().add_field_char(FieldCharType::Begin, false);
+                let run_instr = Run::new().add_instr_text(InstrText::Unsupported(
+                    " FORMTEXT ".to_string(),
+                ));
+                let run_sep = Run::new().add_field_char(FieldCharType::Separate, false);
+                let placeholder = format!(" [FORM: {} ({})] ", form_name, form_type);
+                let run_disp = Run::new().add_text(placeholder).highlight("lightGray");
+                let run_end = Run::new().add_field_char(FieldCharType::End, false);
+                *current_paragraph = current_paragraph
+                    .clone()
+                    .add_run(run_begin)
+                    .add_run(run_instr)
+                    .add_run(run_sep)
+                    .add_run(run_disp)
+                    .add_run(run_end);
+                text_state.has_runs = true;
             } else if tag.starts_with("<span") && tag.contains("font-size") {
                 let style = extract_attr(original_tag, "style").unwrap_or_default();
                 if let Some(fs_val) = style
@@ -288,7 +328,18 @@ pub fn handle_event<'a>(
         }
         // --- Content Insertion ---
         Event::Text(text) => {
-            let mut run = Run::new().add_text(text.to_string());
+            let (final_text, is_scrubbed) = if text_state.is_redact {
+                let redacted_len = text.chars().count();
+                ("█".repeat(redacted_len), true)
+            } else {
+                (text.to_string(), false)
+            };
+
+            let mut run = Run::new().add_text(final_text);
+            if is_scrubbed {
+                run = run.highlight("black");
+                run = run.color("black");
+            }
             if text_state.is_bold {
                 run = run.bold();
             }
@@ -423,8 +474,8 @@ pub fn handle_event<'a>(
             text_state.has_runs = true;
         }
         // Paragraph boundary (not Item — Item is flushed by document.rs)
-        Event::End(TagEnd::Paragraph) => {
-            if text_state.has_runs {
+        Event::End(TagEnd::Paragraph)
+            if text_state.has_runs => {
                 let mut p = std::mem::replace(current_paragraph, Paragraph::new());
                 if in_blockquote {
                     let bq_style =
@@ -452,7 +503,6 @@ pub fn handle_event<'a>(
                 }
                 text_state.has_runs = false;
             }
-        }
         Event::SoftBreak => {
             *current_paragraph = current_paragraph
                 .clone()

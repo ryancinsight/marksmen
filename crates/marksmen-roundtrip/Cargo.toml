@@ -32,3 +32,5 @@ pulldown-cmark.workspace = true
 [dev-dependencies]
 zip = { version = "2", default-features = false, features = ["deflate"] }
 regex = "1"
+proptest = "1"
+lopdf = "0.34.0"

@@ -32,7 +32,7 @@ fn get_manifest_xml(math_objects_count: usize, images: &[(String, Vec<u8>)]) -> 
             "\n  <manifest:file-entry manifest:full-path=\"Pictures/\" manifest:media-type=\"\"/>",
         );
         for (image_id, _data) in images {
-            let ext = image_id.split('.').last().unwrap_or("png");
+            let ext = image_id.split('.').next_back().unwrap_or("png");
             let mime_type = match ext.to_lowercase().as_str() {
                 "jpg" | "jpeg" => "image/jpeg",
                 "png" => "image/png",

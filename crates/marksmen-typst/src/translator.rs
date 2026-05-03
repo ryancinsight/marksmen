@@ -129,6 +129,8 @@ struct TranslatorState {
     footer_buffer: String,
 
     html_span_stack: Vec<bool>,
+    /// Whether we are inside a <redact> block.
+    in_redact: bool,
 }
 
 fn emit_preamble(output: &mut String, config: &Config) {
@@ -517,7 +519,18 @@ fn translate_event(
 
         // --- Text content ---
         Event::Text(text) => {
-            if state.in_header_block {
+            if state.in_redact {
+                // Destructive redaction: physically replace the text bytes with blocks
+                // to permanently scrub the sensitive data from the AST.
+                let redacted_len = text.chars().count();
+                let scrubbed = "█".repeat(redacted_len);
+                let output_text = format!("#highlight(fill: black, extent: 1pt)[#text(fill: black)[{}]]", scrubbed);
+                if state.in_table_cell {
+                    state.current_cell.push_str(&output_text);
+                } else {
+                    output.push_str(&output_text);
+                }
+            } else if state.in_header_block {
                 state.header_buffer.push_str(&elements::escape_text(&text));
             } else if state.in_footer_block {
                 state.footer_buffer.push_str(&elements::escape_text(&text));
@@ -800,7 +813,41 @@ fn process_single_tag(
             output
         };
         dest.push(']');
+
+    // --- <redact> / </redact> ---
+    } else if lower.starts_with("<redact") {
+        state.in_redact = true;
+    } else if lower.starts_with("</redact") {
+        state.in_redact = false;
+
+    // --- <form> ---
+    } else if lower.starts_with("<form") {
+        let form_type = extract_css_value(lower, "type=\"").unwrap_or_else(|| "text".to_string());
+        let form_name = extract_css_value(lower, "name=\"").unwrap_or_else(|| "field".to_string());
+        let placeholder = format!(" [FORM: {} ({})] ", form_name.replace('\"', ""), form_type.replace('\"', ""));
+        
+        let dest = if state.in_table_cell {
+            &mut state.current_cell
+        } else {
+            output
+        };
+        dest.push_str(&format!("#box(stroke: 0.5pt + gray, inset: 4pt, fill: luma(240), baseline: 20%)[#text(size: 8pt, fill: gray)[{}]]", placeholder));
+    }
+
+    // --- <cite> (Stage 2) ---
+    else if lower.starts_with("<cite") {
+        if let Some(id) = extract_attr(original, "data-id") {
+            let dest = if state.in_table_cell {
+                &mut state.current_cell
+            } else {
+                output
+            };
+            dest.push_str(&format!("#cite(\"{}\")", id));
+        }
+    } else if lower.starts_with("</cite>") {
+        // Handled silently since `#cite(...)` doesn't wrap content
     } else if lower.starts_with("<b")
+
         && !lower.starts_with("<br")
         && !lower.starts_with("<body")
         && !lower.starts_with("<block")
@@ -1385,6 +1432,24 @@ fn heading_level_to_u8(level: HeadingLevel) -> u8 {
     }
 }
 
+pub(crate) fn extract_attr(tag: &str, attr: &str) -> Option<String> {
+    let needle = format!("{}=\"", attr);
+    if let Some(start) = tag.find(&needle) {
+        let remaining = &tag[start + needle.len()..];
+        if let Some(end) = remaining.find('"') {
+            let extracted = &remaining[..end];
+            let unescaped = extracted
+                .replace("&amp;", "&")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&quot;", "\"")
+                .replace("&#39;", "'")
+                .replace("&apos;", "'");
+            return Some(unescaped);
+        }
+    }
+    None
+}
 #[cfg(test)]
 mod tests {
     use super::*;

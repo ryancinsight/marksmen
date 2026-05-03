@@ -94,7 +94,7 @@ pub fn render_to_typst(graph: &SpacedGraph) -> String {
     }
 
     // Render nodes
-    for (_, geom) in &graph.nodes {
+    for geom in graph.nodes.values() {
         // Construct visual shape based on AST
         let shape_str = match geom.shape {
             Some(crate::parsing::lexer::NodeShape::Round) => "radius: 10pt",
@@ -374,7 +374,7 @@ fn render_er_diagram_to_typst(input: &str) -> anyhow::Result<String> {
     let col_w = 280.0;
     let row_h = 180.0;
     let width = cols as f64 * col_w + 80.0;
-    let rows = ((diagram.entities.len() + cols - 1) / cols).max(1);
+    let rows = diagram.entities.len().div_ceil(cols).max(1);
     let height = rows as f64 * row_h + 80.0;
 
     let mut out = String::new();
@@ -522,7 +522,7 @@ fn render_class_diagram_to_typst(input: &str) -> anyhow::Result<String> {
     let col_w = 260.0;
     let row_h = 170.0;
     let width = cols as f64 * col_w + 80.0;
-    let rows = ((diagram.classes.len() + cols - 1) / cols).max(1);
+    let rows = diagram.classes.len().div_ceil(cols).max(1);
     let height = rows as f64 * row_h + 80.0;
 
     let mut out = String::new();
@@ -1496,12 +1496,11 @@ fn parse_er_diagram(input: &str) -> anyhow::Result<ErDiagram> {
         }
 
         let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() >= 4 && parts[1].contains("||")
+        if (parts.len() >= 4 && parts[1].contains("||")
             || parts.len() >= 4 && parts[1].contains('}')
             || parts[1].contains('|')
-            || parts[1].contains('o')
-        {
-            if parts.len() >= 4 {
+            || parts[1].contains('o'))
+            && parts.len() >= 4 {
                 let left = parts[0].to_string();
                 let cardinality = parts[1];
                 let right = parts[2].to_string();
@@ -1528,7 +1527,6 @@ fn parse_er_diagram(input: &str) -> anyhow::Result<ErDiagram> {
                     label,
                 });
             }
-        }
     }
 
     if entities.is_empty() {

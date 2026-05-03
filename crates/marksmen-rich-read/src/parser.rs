@@ -262,11 +262,11 @@ impl RtfParser {
             // ── Character formatting ─────────────────────────────────────────
             "b" => {
                 self.flush_run();
-                self.cur.bold = param.map_or(true, |p| p != 0);
+                self.cur.bold = param != Some(0);
             }
             "i" => {
                 self.flush_run();
-                self.cur.italic = param.map_or(true, |p| p != 0);
+                self.cur.italic = param != Some(0);
             }
             "ul" => {
                 self.flush_run();
@@ -290,11 +290,11 @@ impl RtfParser {
             }
             "strike" => {
                 self.flush_run();
-                self.cur.strike = param.map_or(true, |p| p != 0);
+                self.cur.strike = param != Some(0);
             }
             "striked" => {
                 self.flush_run();
-                self.cur.strike = param.map_or(true, |p| p != 0);
+                self.cur.strike = param != Some(0);
             }
             "fs" => {
                 self.flush_run();
@@ -318,7 +318,7 @@ impl RtfParser {
             // Revision tracking — skip deleted text
             "deleted" => {
                 self.flush_run();
-                self.cur.deleted = param.map_or(true, |p| p != 0);
+                self.cur.deleted = param != Some(0);
             }
             "insrsid" | "revtbl" | "rsid" | "charrsid" | "pararesid" => {}
 
@@ -357,7 +357,7 @@ impl RtfParser {
                 self.flush_run();
                 let lvl = param.unwrap_or(-1);
                 self.cur.outline = lvl;
-                if lvl >= 0 && lvl <= 5 {
+                if (0..=5).contains(&lvl) {
                     self.cur.heading = (lvl + 1) as u8;
                     self.cur.bold = true;
                 }

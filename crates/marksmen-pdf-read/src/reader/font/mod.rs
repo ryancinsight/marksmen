@@ -188,8 +188,7 @@ fn load_encoding(font_dict: &Dictionary) -> (EncodingKind, HashMap<u8, char>) {
                 .get(b"BaseEncoding")
                 .ok()
                 .and_then(|o| o.as_name().ok())
-                .map(|n| encoding_from_name(&String::from_utf8_lossy(n)))
-                .flatten()
+                .and_then(|n| encoding_from_name(&String::from_utf8_lossy(n)))
                 .unwrap_or(EncodingKind::WinAnsi);
 
             let diffs = parse_differences(d);

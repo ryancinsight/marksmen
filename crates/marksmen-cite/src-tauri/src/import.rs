@@ -8,6 +8,12 @@ use regex::Regex;
 // ── PDF ───────────────────────────────────────────────────────────────────────
 
 #[tauri::command]
+pub fn open_pdf_native(path: String) -> Result<(), String> {
+    let url = format!("file://{}", path.replace('\\', "/"));
+    tauri_plugin_opener::open_url(url, None::<&str>).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn import_pdf(app: tauri::AppHandle) -> Result<Option<Reference>, String> {
     use tauri_plugin_dialog::DialogExt;
     let path = match app.dialog().file()
@@ -48,7 +54,7 @@ pub async fn import_pdf(app: tauri::AppHandle) -> Result<Option<Reference>, Stri
     if let Ok(meta) = extract_pdf_metadata(&bytes) {
         if let Some(t) = meta.title.filter(|t| !t.is_empty()) { r.title = t; }
         if let Some(a) = meta.author.filter(|a| !a.is_empty()) {
-            r.authors = a.split(|c| c == ',' || c == ';')
+            r.authors = a.split([',', ';'])
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
                 .collect();
@@ -146,7 +152,7 @@ pub async fn import_bibtex(content: String) -> Result<Vec<Reference>, String> {
     for entry in content.split('@').skip(1) {
         let now = chrono::Utc::now().format("%Y-%m-%d").to_string();
         // Determine type from entry header
-        let entry_type = entry.split(|c| c == '{' || c == '(')
+        let entry_type = entry.split(['{', '('])
             .next().unwrap_or("").trim().to_lowercase();
         let ref_type = match entry_type.as_str() {
             "article"       => "Journal Article",

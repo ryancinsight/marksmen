@@ -82,15 +82,14 @@ fn get_opf_path(container_xml: &str) -> Option<String> {
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(XmlEvent::Start(ref e)) | Ok(XmlEvent::Empty(ref e)) => {
-                if e.name().as_ref() == b"rootfile" {
+            Ok(XmlEvent::Start(ref e)) | Ok(XmlEvent::Empty(ref e))
+                if e.name().as_ref() == b"rootfile" => {
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == b"full-path" {
                             return String::from_utf8(attr.value.into_owned()).ok();
                         }
                     }
                 }
-            }
             Ok(XmlEvent::Eof) => break,
             Err(_) => break,
             _ => {}

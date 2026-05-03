@@ -8,6 +8,7 @@ anyhow.workspace = true
 anymap2 = "0.13.0"
 lopdf = "0.34.0"
 marksmen-core = { version = "0.1.0", path = "../marksmen-core" }
+marksmen-crypto = { version = "0.1.0", path = "../marksmen-crypto" }
 marksmen-mermaid = { version = "0.1.0", path = "../marksmen-mermaid" }
 marksmen-render = { version = "0.1.0", path = "../marksmen-render" }
 marksmen-typst = { version = "0.1.0", path = "../marksmen-typst" }

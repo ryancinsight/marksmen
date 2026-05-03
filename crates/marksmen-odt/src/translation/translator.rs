@@ -1,5 +1,8 @@
 use marksmen_core::config::Config;
 use marksmen_xml::escape;
+use marksmen_mermaid::graph::directed_graph;
+use marksmen_mermaid::layout::{coordinate_assign, crossing_reduction, rank_assignment};
+use marksmen_mermaid::parsing::parser;
 use pulldown_cmark::{Event, Tag, TagEnd};
 use std::path::Path;
 
@@ -60,6 +63,7 @@ pub fn translate_events<'a>(
     }
 
     let mut in_mermaid_block = false;
+    let mut current_mermaid_source = String::new();
     // List state: track ordered/unordered per nesting level.
     // ODF nesting: <text:list-item> can contain <text:p> then a nested <text:list>.
     // We close </text:p> before emitting a nested <text:list>, reopen if needed.
@@ -140,7 +144,7 @@ pub fn translate_events<'a>(
                 if let pulldown_cmark::CodeBlockKind::Fenced(lang) = kind {
                     if lang.as_ref() == "mermaid" {
                         in_mermaid_block = true;
-                        output.push_str("<text:hidden-paragraph text:is-hidden=\"true\" text:condition=\"ooow:TRUE\">```mermaid<text:line-break/>");
+                        current_mermaid_source.clear();
                         continue;
                     }
                 }
@@ -157,18 +161,60 @@ pub fn translate_events<'a>(
             }
             Event::End(TagEnd::CodeBlock) => {
                 if in_mermaid_block {
-                    output.push_str("<text:line-break/>```</text:hidden-paragraph>\n");
                     in_mermaid_block = false;
+                    
+                    let ast = match parser::parse(&current_mermaid_source) {
+                        Ok(a) => a,
+                        Err(_) => {
+                            output.push_str(&format!(
+                                "<text:p text:style-name=\"P_CodeBlock\">{}</text:p>\n",
+                                escape(&current_mermaid_source)
+                            ));
+                            continue;
+                        }
+                    };
+
+                    let directed_graph = directed_graph::ast_to_graph(ast);
+                    let mut ranked_graph = rank_assignment::assign_ranks(&directed_graph);
+                    crossing_reduction::minimize_crossings(&mut ranked_graph);
+                    let spaced_graph = coordinate_assign::assign_coordinates(&ranked_graph);
+
+                    let svg_result = marksmen_render::mermaid::render_graph_to_svg(&spaced_graph);
+                    if let Some((png_bytes, _width, _height)) = marksmen_render::svg_bytes_to_png(svg_result.as_bytes()) {
+                        let filename = format!("mermaid_{}.png", images.len() + 1);
+                        let image_id = format!("Pictures/{}", filename);
+                        images.push((image_id.clone(), png_bytes));
+
+                        output.push_str(&format!(
+                            r#"<text:p text:style-name="P_DisplayMath"><draw:frame draw:z-index="1" text:anchor-type="paragraph" svg:width="6in"><draw:image xlink:href="{}" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/></draw:frame></text:p>
+"#,
+                            escape(&image_id)
+                        ));
+                    } else {
+                        output.push_str("<text:p>[Mermaid Graph Error]</text:p>\n");
+                    }
                 } else {
                     output.push_str("<text:line-break/>```</text:p>\n");
                 }
             }
-            Event::Code(c) => output.push_str(&format!(
-                "<text:span text:style-name=\"S_Code\">{}</text:span>",
-                escape(c.as_ref())
-            )),
+            Event::Code(c) => {
+                if in_mermaid_block {
+                    current_mermaid_source.push_str(c.as_ref());
+                } else {
+                    output.push_str(&format!(
+                        "<text:span text:style-name=\"S_Code\">{}</text:span>",
+                        escape(c.as_ref())
+                    ));
+                }
+            }
 
-            Event::Text(t) => output.push_str(&escape(t.as_ref())),
+            Event::Text(t) => {
+                if in_mermaid_block {
+                    current_mermaid_source.push_str(t.as_ref());
+                } else {
+                    output.push_str(&escape(t.as_ref()));
+                }
+            }
             Event::SoftBreak | Event::HardBreak => output.push_str("<text:line-break/>"),
 
             Event::Rule => output.push_str("<text:p text:style-name=\"P_Break\"/>\n"),

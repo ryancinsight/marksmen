@@ -1,0 +1,22 @@
+[package]
+name = "marksmen-crypto"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+aes = "0.8.4"
+anyhow.workspace = true
+cbc = "0.1.2"
+cipher = "0.4.4"
+cms = "0.2.3"
+der = "0.7.8"
+ecdsa = "0.16.9"
+hex = "0.4.3"
+lopdf = "0.40.0"
+ms-offcrypto-writer = "1.0.7"
+p12 = "0.6.3"
+pkcs8 = "0.10.2"
+rand = "0.9"
+rsa = "0.9.10"
+sha2 = "0.11.0"
+x509-cert = "0.2.5"

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      width: 320px;
+      padding: 16px;
+      background: #f9f9fb;
+      color: #333;
+      margin: 0;
+    }
+    h3 {
+      margin-top: 0;
+      margin-bottom: 12px;
+      font-size: 16px;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 6px;
+    }
+    .field {
+      margin-bottom: 8px;
+    }
+    .label {
+      font-size: 11px;
+      text-transform: uppercase;
+      color: #666;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+    .value {
+      font-size: 13px;
+      word-wrap: break-word;
+      background: #fff;
+      padding: 6px;
+      border: 1px solid #eee;
+      border-radius: 4px;
+    }
+    .error {
+      color: #d32f2f;
+      font-size: 12px;
+      margin-bottom: 12px;
+      display: none;
+    }
+    .success {
+      color: #2e7d32;
+      font-size: 12px;
+      margin-bottom: 12px;
+      display: none;
+    }
+    button {
+      width: 100%;
+      padding: 10px;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <h3>Marksmen Ingest</h3>
+  
+  <div id="status-error" class="error"></div>
+  <div id="status-success" class="success">Saved to Marksmen!</div>
+
+  <div id="data-container">
+    <div class="field">
+      <div class="label">Title</div>
+      <div class="value" id="val-title">Scanning...</div>
+    </div>
+    <div class="field">
+      <div class="label">Authors</div>
+      <div class="value" id="val-authors">-</div>
+    </div>
+    <div class="field">
+      <div class="label">DOI</div>
+      <div class="value" id="val-doi">-</div>
+    </div>
+  </div>
+
+  <button id="btn-save" disabled>Save to Marksmen</button>
+
+  <script src="popup.js"></script>
+</body>
+</html>

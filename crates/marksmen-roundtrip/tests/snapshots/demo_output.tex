@@ -1,0 +1,113 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{listings}
+\usepackage{color}
+\usepackage[margin=1in]{geometry}
+\definecolor{lightgray}{gray}{0.95}
+\lstset{
+    backgroundcolor=\color{lightgray},
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    frame=single,
+}
+
+\begin{document}
+
+\section{Output Capabilities \& Typst Extensibility}
+
+\subsection{1. Document Headers \& Configuration}
+
+
+Headers, footers, and page numbers are intrinsically supported via YAML frontmatter blocks. For example, this document has a custom footer string.
+
+\subsection{2. Advanced Typography \& Tables}
+
+
+Because the intermediate format is Typst, typography is mathematically precise. Let's look at a standard Markdown table:
+
+\begin{longtable}{lcrc}
+\toprule
+Subsystem & Underlying Tech & Role & Status\midrule
+\textbf{Parser} & \texttt{pulldown-cmark} & Emits syntax events & ✅ \\
+\textbf{Translator} & \texttt{marksmen-core} & Maps AST to Typst & ✅ \\
+\textbf{Compiler} & \texttt{typst} & Typesets elements & ✅ \\
+\textbf{Exporter} & \texttt{typst-pdf} & Emits binary format & ✅ \\
+\bottomrule
+\end{longtable}
+
+\subsubsection{2.1 CSS \& HTML Handling}
+
+
+Typst is an analytical typesetting engine, \textbf{not a web browser}. It cannot execute CSS or complex DOM layouts. However, the translator enforces semantic mapping for structural inline HTML subsets:
+
+\begin{itemize}
+\item \textbf{Underline}: This text is underlined via \texttt{\textless{}u\textgreater{}}
+\item \textbf{Subscripts}: H2O via \texttt{\textless{}sub\textgreater{}}
+\item \textbf{Superscripts}: E = mc2 via \texttt{\textless{}sup\textgreater{}}
+\item \textbf{Colors}: This text is colored via \texttt{\textless{}span style="color: ..."\textgreater{}}
+\item \textbf{Line breaks}: Forced HTML break  is translated correctly.
+\end{itemize}
+
+
+\textit{Note: Arbitrary \texttt{\textless{}div style="padding: 2px"\textgreater{}} blocks are ignored, preserving architectural invariants against empirical DOM approximations.}
+
+\subsection{3. Mathematical Typesetting}
+
+
+True native math (without KaTeX SVG hacks): \\
+
+\[
+
+\mathbf{J} = \nabla \times \mathbf{H} = \sigma \mathbf{E} + \frac{\partial \mathbf{D}}{\partial t}
+
+\]
+
+
+
+Inline equations like $\lim_{x \to \infty} f(x)$ blend seamlessly with the baseline.
+
+\subsection{4. Linked SVG Figures}
+
+
+Instead of relying on web-based JS to render graphics, Typst handles \texttt{SVG} vector embeddings natively without rasterization:
+
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{./diagram1.svg}
+Architecture Diagram\end{figure}
+
+
+\subsection{5. Native Diagram Rendering (\texttt{marksmen-mermaid})}
+
+\begin{quote}
+
+\textbf{Pure-Rust Mermaid Translation:} \\
+Executing standard \texttt{mermaid.js} typically requires evaluating an entire web runtime (V8/Browser) with empirical DOM measurement APIs, which violates our offline-first pure-Rust correctness guarantees.
+
+
+\textit{Instead, \texttt{marksmen} relies on a mathematically-verified \texttt{marksmen-mermaid} layout engine implementing the Sugiyama Framework. It parses this raw Mermaid block offline and renders it deterministically into Typst spatial vectors!}
+
+\end{quote}
+
+\begin{lstlisting}[language=mermaid]
+graph TD
+    A[Markdown AST] --\textgreater{} B\{Marksmen Core\}
+    B --\textgreater{} C[Typst Vectors]
+    C --\textgreater{} D(PDF Output)
+    C --\textgreater{} E(HTML5 Output)
+\end{lstlisting}
+
+\subsection{Appendix: Mathematical Justifications}
+
+
+Because \texttt{marksmen} leverages Typst, we can seamlessly write $e^(i pi) + 1 = 0$ in the middle of text, and be confident that it renders beautifully on a completely separated page.
+
+\end{document}

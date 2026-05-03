@@ -110,7 +110,7 @@ fn split_into_chapters(events: Vec<Event<'_>>) -> Vec<(String, Vec<Event<'_>>)> 
                 // Flush the accumulated chapter before starting a new one.
                 if !current_events.is_empty() {
                     chapters.push((
-                        std::mem::replace(&mut current_title, String::new()),
+                        std::mem::take(&mut current_title),
                         std::mem::take(&mut current_events),
                     ));
                 }

@@ -55,16 +55,14 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
 
     for event in events {
         match event {
-            Event::Start(Tag::Paragraph) => {
-                if !state.in_table {
-                    out.push_str("\n");
+            Event::Start(Tag::Paragraph)
+                if !state.in_table => {
+                    out.push('\n');
                 }
-            }
-            Event::End(TagEnd::Paragraph) => {
-                if !state.in_table {
+            Event::End(TagEnd::Paragraph)
+                if !state.in_table => {
                     out.push_str("\n\n");
                 }
-            }
             Event::Start(Tag::Heading { level, .. }) => {
                 let lev = match level {
                     pulldown_cmark::HeadingLevel::H1 => "\\section{",
@@ -109,7 +107,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
                 }
             }
             Event::Start(Tag::Item) => out.push_str("\\item "),
-            Event::End(TagEnd::Item) => out.push_str("\n"),
+            Event::End(TagEnd::Item) => out.push('\n'),
             Event::Start(Tag::Table(alignments)) => {
                 state.in_table = true;
                 let mut align_str = String::new();
@@ -146,15 +144,15 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
             }
             Event::End(TagEnd::TableCell) => {}
             Event::Start(Tag::Emphasis) => out.push_str("\\textit{"),
-            Event::End(TagEnd::Emphasis) => out.push_str("}"),
+            Event::End(TagEnd::Emphasis) => out.push('}'),
             Event::Start(Tag::Strong) => out.push_str("\\textbf{"),
-            Event::End(TagEnd::Strong) => out.push_str("}"),
+            Event::End(TagEnd::Strong) => out.push('}'),
             Event::Start(Tag::Strikethrough) => out.push_str(r"\sout{"), // requires \usepackage[normalem]{ulem} but we'll cheat or they can add it
-            Event::End(TagEnd::Strikethrough) => out.push_str("}"),
+            Event::End(TagEnd::Strikethrough) => out.push('}'),
             Event::Start(Tag::Link { dest_url, .. }) => {
                 out.push_str(&format!("\\href{{{}}}{{", dest_url))
             }
-            Event::End(TagEnd::Link) => out.push_str("}"),
+            Event::End(TagEnd::Link) => out.push('}'),
             Event::Start(Tag::Image {
                 dest_url, title, ..
             }) => {
@@ -176,7 +174,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
                 if !state.in_table {
                     out.push_str(" \\\\\n");
                 } else {
-                    out.push_str(" ");
+                    out.push(' ');
                 }
             }
             Event::InlineMath(math) => {

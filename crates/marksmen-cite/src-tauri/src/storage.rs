@@ -59,3 +59,22 @@ pub fn save_collections(
 pub fn get_library_path(app: tauri::AppHandle) -> Result<String, String> {
     Ok(db_path(&app)?.to_string_lossy().into_owned())
 }
+
+#[tauri::command]
+pub fn merge_cloud_sync(
+    app: tauri::AppHandle,
+    remote_payload: crate::sync::SyncPayload,
+    device_id: String,
+) -> Result<crate::sync::SyncPayload, String> {
+    let local_refs = load_references(app.clone())?;
+    let local_cols = load_collections(app.clone())?;
+    
+    let local_payload = crate::sync::SyncPayload::new(device_id, local_refs, local_cols);
+    let merged = crate::sync::merge_sync_payloads(local_payload, remote_payload);
+    
+    // Save merged state back to local disk
+    save_references(app.clone(), merged.references.clone())?;
+    save_collections(app.clone(), merged.collections.clone())?;
+    
+    Ok(merged)
+}

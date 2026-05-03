@@ -1310,6 +1310,98 @@ btnDiagramInsert?.addEventListener('click', () => {
     editor.dispatchEvent(new Event('input'));
 });
 
+// ── Insert: Citation (Stage 2) ──────────────────────────────────────────────
+const citationScrim = document.getElementById('citation-scrim');
+const btnRefCite = document.getElementById('btn-ref-cite');
+const btnCitationCancel = document.getElementById('btn-citation-cancel');
+const btnCitationInsert = document.getElementById('btn-citation-insert');
+const citationSearch = document.getElementById('citation-search');
+const citationList = document.getElementById('citation-list');
+let currentCitations = [];
+let selectedCitation = null;
+
+btnRefCite?.addEventListener('click', async () => {
+    saveSelection();
+    citationScrim.hidden = false;
+    citationSearch.value = '';
+    selectedCitation = null;
+    btnCitationInsert.disabled = true;
+    
+    try {
+        const dbStr = await window.__TAURI_INVOKE__('load_marksmen_cite_db');
+        currentCitations = JSON.parse(dbStr);
+        renderCitationList(currentCitations);
+    } catch (e) {
+        citationList.innerHTML = `<div style="color:red; font-size:12px;">Error loading citations: ${e}</div>`;
+    }
+});
+
+btnCitationCancel?.addEventListener('click', () => {
+    citationScrim.hidden = true;
+    restoreSelection();
+});
+
+citationSearch?.addEventListener('input', () => {
+    const query = citationSearch.value.toLowerCase();
+    const filtered = currentCitations.filter(c => {
+        const title = (c.title || '').toLowerCase();
+        const authors = (c.authors || []).join(' ').toLowerCase();
+        const year = (c.year || '').toLowerCase();
+        return title.includes(query) || authors.includes(query) || year.includes(query);
+    });
+    renderCitationList(filtered);
+});
+
+function renderCitationList(citations) {
+    if (!citations || citations.length === 0) {
+        citationList.innerHTML = '<div style="font-size:12px; color:var(--text-secondary); text-align:center; padding: 20px;">No references found. Add some using marksmen-cite.</div>';
+        return;
+    }
+    
+    citationList.innerHTML = '';
+    citations.forEach(c => {
+        const el = document.createElement('div');
+        el.className = 'citation-item';
+        
+        const title = document.createElement('div');
+        title.className = 'citation-title';
+        title.textContent = c.title || 'Untitled';
+        
+        const meta = document.createElement('div');
+        meta.className = 'citation-meta';
+        const authorsStr = (c.authors && c.authors.length > 0) ? c.authors.join(', ') : 'Unknown Author';
+        meta.textContent = `${authorsStr} (${c.year || 'n.d.'})`;
+        
+        el.appendChild(title);
+        el.appendChild(meta);
+        
+        el.addEventListener('click', () => {
+            document.querySelectorAll('.citation-item').forEach(i => i.classList.remove('selected'));
+            el.classList.add('selected');
+            selectedCitation = c;
+            btnCitationInsert.disabled = false;
+        });
+        
+        citationList.appendChild(el);
+    });
+}
+
+btnCitationInsert?.addEventListener('click', () => {
+    if (!selectedCitation) return;
+    citationScrim.hidden = true;
+    restoreSelection();
+    
+    const citeId = selectedCitation.id || selectedCitation.doi || String(Date.now());
+    const authorSurName = (selectedCitation.authors && selectedCitation.authors.length > 0) 
+        ? selectedCitation.authors[0].split(' ').pop() 
+        : 'Unknown';
+    const display = `${authorSurName}, ${selectedCitation.year || 'n.d.'}`;
+    
+    const html = `<cite data-id="${citeId}" class="citation-node" contenteditable="false">[${display}]</cite>&nbsp;`;
+    document.execCommand('insertHTML', false, html);
+    editor.dispatchEvent(new Event('input'));
+});
+
 // ── Layout toggles ────────────────────────────────────────────────────────────
 document.getElementById('btn-layout-print').addEventListener('click', () => {
     document.getElementById('page-canvas').style.alignItems = 'center';
@@ -1786,6 +1878,15 @@ document.getElementById('btn-toggle-sidebar').addEventListener('click', () => {
     sidebar.classList.toggle('collapsed');
     setTimeout(drawArrows, 200); // Wait for CSS transition
 });
+const btnToggleAi = document.getElementById('btn-toggle-ai');
+if (btnToggleAi) {
+    btnToggleAi.addEventListener('click', () => {
+        sidebar.classList.remove('collapsed');
+        const stabAi = document.getElementById('stab-ai');
+        if (stabAi) stabAi.click();
+        setTimeout(drawArrows, 200);
+    });
+}
 document.getElementById('sidebar-close').addEventListener('click', () => {
     sidebar.classList.add('collapsed');
     drawArrows();
@@ -2349,6 +2450,13 @@ document.getElementById('btn-save')?.addEventListener('click', async () => {
 document.getElementById('btn-save-as')?.addEventListener('click', async () => {
     fileMenu.hidden = true; fileScrim.hidden = true;
     await saveDocumentAs();
+});
+document.getElementById('btn-file-exit')?.addEventListener('click', async () => {
+    if (window.__TAURI__) {
+        await window.__TAURI__.process.exit(0);
+    } else {
+        window.close();
+    }
 });
 
 // ── Print via PDF ─────────────────────────────────────────────────────────────
@@ -4290,20 +4398,30 @@ window.stateObserver = new MutationObserver((mutations) => {
 window.stateObserver.observe(editor, { childList: true, characterData: true, subtree: true });
 
 // ── Window Close Warning ────────────────────────────────────────────────────
+let isClosing = false;
 if (window.__TAURI__ && window.__TAURI__.window) {
     const { getCurrentWindow } = window.__TAURI__.window;
     const { ask } = window.__TAURI__.dialog;
     if (getCurrentWindow && ask) {
         getCurrentWindow().onCloseRequested(async (event) => {
+            if (isClosing) return; // Prevent loop
+            
             if (isDirty) {
                 event.preventDefault();
-                const confirmed = await ask('You have unsaved changes. Are you sure you want to close without saving?', { 
-                    title: 'Marksmen', 
-                    kind: 'warning' 
-                });
-                if (confirmed) {
-                    isDirty = false;
-                    await getCurrentWindow().close();
+                try {
+                    const confirmed = await ask('You have unsaved changes. Are you sure you want to close without saving?', { 
+                        title: 'Marksmen', 
+                        kind: 'warning' 
+                    });
+                    if (confirmed) {
+                        isDirty = false;
+                        isClosing = true;
+                        await getCurrentWindow().destroy();
+                    }
+                } catch(e) {
+                    // Fallback force-close if dialog API fails
+                    isClosing = true;
+                    await getCurrentWindow().destroy();
                 }
             }
         });
@@ -6729,6 +6847,12 @@ document.getElementById('btn-ruler')?.addEventListener('click', function() {
             });
             aiModelSelect.disabled = false;
             setDot('on');
+            
+            const savedModel = localStorage.getItem('marksmen-ai-model');
+            if (savedModel && models.includes(savedModel)) {
+                aiModelSelect.value = savedModel;
+            }
+            localStorage.setItem('marksmen-ai-host', host);
         } catch (err) {
             setDot('error');
             aiModelSelect.innerHTML = '<option value="">— connection failed —</option>';
@@ -6738,6 +6862,10 @@ document.getElementById('btn-ruler')?.addEventListener('click', function() {
             aiConnectBtn.disabled = false;
             aiConnectBtn.textContent = '⟳ Connect';
         }
+    });
+
+    aiModelSelect.addEventListener('change', () => {
+        localStorage.setItem('marksmen-ai-model', aiModelSelect.value);
     });
 
     // ── Preset buttons ──────────────────────────────────────────────
@@ -6817,8 +6945,31 @@ document.getElementById('btn-ruler')?.addEventListener('click', function() {
         aiThinking.hidden = false;
         aiApplyRow.hidden = true;
         aiSendBtn.disabled = true;
-        aiResponse.innerHTML = '';
         lastResponse = '';
+
+        const emptyMsg = aiResponse.querySelector('.ai-response-empty');
+        if (emptyMsg) emptyMsg.remove();
+
+        function escapeHtml(str) {
+            return str.replace(/[&<>"']/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
+        }
+
+        const userBubble = document.createElement('div');
+        userBubble.className = 'ai-chat-msg';
+        userBubble.style.marginBottom = '8px';
+        userBubble.innerHTML = `<div class="ai-role-badge ai-role-badge--user">User</div><div style="white-space: pre-wrap; font-size: 11px; opacity: 0.9;">${escapeHtml(userText)}</div>`;
+        aiResponse.appendChild(userBubble);
+
+        const aiBubble = document.createElement('div');
+        aiBubble.className = 'ai-chat-msg';
+        aiBubble.style.marginBottom = '12px';
+        aiBubble.style.paddingBottom = '8px';
+        aiBubble.style.borderBottom = '1px solid var(--border)';
+        aiBubble.innerHTML = `<div class="ai-role-badge ai-role-badge--assistant">Assistant</div><div class="ai-msg-content" style="white-space: pre-wrap;"></div>`;
+        aiResponse.appendChild(aiBubble);
+        const aiContentDiv = aiBubble.querySelector('.ai-msg-content');
+
+        aiResponse.scrollTop = aiResponse.scrollHeight;
 
         try {
             const res = await fetch(`${host}/v1/chat/completions`, {
@@ -6855,7 +7006,7 @@ document.getElementById('btn-ruler')?.addEventListener('click', function() {
                         const delta = chunk.choices?.[0]?.delta?.content || '';
                         if (delta) {
                             lastResponse += delta;
-                            aiResponse.textContent = lastResponse;
+                            aiContentDiv.textContent = lastResponse;
                             aiResponse.scrollTop   = aiResponse.scrollHeight;
                         }
                     } catch { /* partial JSON — ignore */ }
@@ -6869,15 +7020,16 @@ document.getElementById('btn-ruler')?.addEventListener('click', function() {
             }
         } catch (err) {
             if (err.name === 'AbortError') {
-                aiResponse.textContent = '(cancelled)';
+                aiContentDiv.textContent = '(cancelled)';
             } else {
-                aiResponse.textContent = `Error: ${err.message}`;
+                aiContentDiv.textContent = `Error: ${err.message}`;
                 setDot('error');
                 console.error('[AI] Send failed:', err);
             }
         } finally {
             aiThinking.hidden = true;
             aiSendBtn.disabled = false;
+            saveAiState();
         }
     }
 
@@ -6914,4 +7066,40 @@ document.getElementById('btn-ruler')?.addEventListener('click', function() {
             setTimeout(() => { aiCopyResp.textContent = orig; }, 1500);
         });
     });
+
+    // ── Persistence functions ─────────────────────────────────────────
+    function saveAiState() {
+        localStorage.setItem('marksmen-ai-history', aiResponse.innerHTML);
+        localStorage.setItem('marksmen-ai-last-resp', lastResponse);
+    }
+
+    function loadAiState() {
+        const history = localStorage.getItem('marksmen-ai-history');
+        if (history) {
+            aiResponse.innerHTML = history;
+            aiResponse.scrollTop = aiResponse.scrollHeight;
+        }
+        lastResponse = localStorage.getItem('marksmen-ai-last-resp') || '';
+        if (lastResponse.trim()) {
+            aiApplyRow.hidden = false;
+        }
+
+        const savedHost = localStorage.getItem('marksmen-ai-host');
+        if (savedHost) {
+            aiHostInput.value = savedHost;
+            setTimeout(() => aiConnectBtn.click(), 50); // Auto-connect
+        }
+    }
+
+    const aiClearBtn = document.getElementById('ai-clear-chat');
+    if (aiClearBtn) {
+        aiClearBtn.addEventListener('click', () => {
+            aiResponse.innerHTML = '<div class="ai-response-empty">Responses will appear here.</div>';
+            lastResponse = '';
+            aiApplyRow.hidden = true;
+            saveAiState();
+        });
+    }
+
+    loadAiState();
 })();

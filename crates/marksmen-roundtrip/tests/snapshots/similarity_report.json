@@ -1,0 +1,10 @@
+[
+  {"format":"PDF","score":0.9800,"threshold":0.9800,"pass":true},
+  {"format":"DOCX","score":0.9723,"threshold":0.9450,"pass":true},
+  {"format":"ODT","score":0.9215,"threshold":0.8000,"pass":true},
+  {"format":"HTML","score":0.9135,"threshold":0.9000,"pass":true},
+  {"format":"EPUB","score":0.9115,"threshold":0.9000,"pass":true},
+  {"format":"PPTX","score":0.8763,"threshold":0.8500,"pass":true},
+  {"format":"LaTeX","score":0.8784,"threshold":0.8500,"pass":true},
+  {"format":"Typst","score":0.8375,"threshold":0.8500,"pass":false}
+]

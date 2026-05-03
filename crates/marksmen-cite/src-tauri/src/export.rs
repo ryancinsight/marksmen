@@ -138,7 +138,7 @@ fn format_chicago(r: &Reference) -> String {
 fn format_vancouver(r: &Reference) -> String {
     let authors: Vec<String> = r.authors.iter().map(|a| {
         let p = parse_author(a);
-        format!("{} {}", p.last, initials(&p.first).replace('.', "").replace(' ', ""))
+        format!("{} {}", p.last, initials(&p.first).replace(['.', ' '], ""))
     }).collect();
     let author_str = if authors.len() > 6 {
         format!("{}, et al.", authors[..6].join(", "))

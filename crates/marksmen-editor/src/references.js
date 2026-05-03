@@ -48,28 +48,7 @@ function saveSources() {
     localStorage.setItem(SOURCES_KEY, JSON.stringify(window.marksmenSources.filter(s => !s.url?.includes('doi.org'))));
 }
 
-/** APA in-text citation: (LastName, Year) */
-function apaInText(src) {
-    const lastName = (src.author || 'Unknown').split(',')[0].trim().split(' ').pop();
-    return `(${lastName}, ${src.year || 'n.d.'})`;
-}
-
-/** APA reference list entry (HTML) */
-function apaRef(src) {
-    const author = src.author || 'Unknown';
-    const year   = src.year   || 'n.d.';
-    const title  = src.title  || 'Untitled';
-    const pub    = src.publisher || '';
-    const url    = src.url ? ` Retrieved from ${src.url}` : '';
-    switch (src.type) {
-        case 'article':
-            return `${author} (${year}). ${title}. <em>${pub}</em>.${url}`;
-        case 'website':
-            return `${author} (${year}). <em>${title}</em>.${url}`;
-        default:
-            return `${author} (${year}). <em>${title}</em>. ${pub}.${url}`;
-    }
-}
+// Hardcoded APA formatters have been removed in favor of the Marksmen CSL Engine.
 
 function renderSourceManagerList() {
     const list = document.getElementById('sm-source-list');
@@ -93,7 +72,7 @@ function renderCitationPicker(filter) {
         const btn = document.createElement('button');
         btn.className = 'fmenu-item';
         btn.textContent = `${src.author || '?'}, ${src.year || 'n.d.'} — ${src.title || 'Untitled'}`;
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', async () => {
             const editorEl = document.getElementById('editor');
             editorEl.focus();
             const sel = window.getSelection();
@@ -102,7 +81,15 @@ function renderCitationPicker(filter) {
                 const cite = document.createElement('cite');
                 cite.className   = 'ref-citation';
                 cite.dataset.srcId = src.id;
-                cite.textContent = apaInText(src);
+                
+                try {
+                    const formatted = await invoke('format_csl_citation', { citation: src, style: 'apa' });
+                    cite.textContent = formatted;
+                } catch(e) {
+                    console.error('Failed to format citation', e);
+                    cite.textContent = `(Error: ${src.id})`;
+                }
+                
                 range.insertNode(cite);
                 range.setStartAfter(cite);
                 range.collapse(true);
@@ -179,7 +166,7 @@ document.getElementById('btn-sm-save')?.addEventListener('click', () => {
 });
 
 // ── Bibliography (G-H34) ─────────────────────────────────────────────────────
-document.getElementById('btn-ref-bibliography')?.addEventListener('click', () => {
+document.getElementById('btn-ref-bibliography')?.addEventListener('click', async () => {
     const editorEl = document.getElementById('editor');
     if (window.marksmenSources.length === 0) {
         if (window.showToast) window.showToast('No sources. Add sources via Manage Sources first.');
@@ -188,12 +175,22 @@ document.getElementById('btn-ref-bibliography')?.addEventListener('click', () =>
     const sorted = [...window.marksmenSources].sort((a, b) =>
         (a.author || '').localeCompare(b.author || '')
     );
+    
+    let bibHtml = '';
+    try {
+        bibHtml = await invoke('format_csl_bibliography', { citations: sorted, style: 'apa' });
+    } catch(e) {
+        console.error('Failed to format bibliography', e);
+        if (window.showToast) window.showToast('Error formatting bibliography.');
+        return;
+    }
+
     const section = document.createElement('div');
     section.className = 'ref-bibliography';
     section.contentEditable = 'false';
     section.innerHTML = `
         <h3 style="font-size:14px; font-weight:bold; margin-bottom:8px; border-bottom:1px solid var(--border); padding-bottom:4px;">References</h3>
-        ${sorted.map(src => `<p style="margin:4px 0; padding-left:2em; text-indent:-2em; font-size:12px;">${apaRef(src)}</p>`).join('')}
+        ${bibHtml}
     `;
     editorEl.appendChild(section);
     section.scrollIntoView({ behavior: 'smooth', block: 'start' });

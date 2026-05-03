@@ -10,6 +10,50 @@ use pulldown_cmark::{CodeBlockKind, Event, Tag, TagEnd};
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 
+fn load_references(input_dir: &Path) -> std::collections::HashMap<String, marksmen_csl::model::Reference> {
+    let mut map = std::collections::HashMap::new();
+    let mut try_parse = |path: std::path::PathBuf| {
+        if let Ok(json) = std::fs::read_to_string(&path) {
+            if let Ok(refs) = serde_json::from_str::<Vec<marksmen_csl::model::Reference>>(&json) {
+                for r in refs {
+                    map.insert(r.id.clone(), r);
+                }
+            }
+        }
+    };
+    
+    try_parse(input_dir.join("references.json"));
+    if let Ok(appdata) = std::env::var("APPDATA") {
+        try_parse(Path::new(&appdata).join("marksmen").join("references.json"));
+    }
+    map
+}
+
+fn format_reference(r: &marksmen_csl::model::Reference) -> String {
+    let mut s = String::new();
+    if let Some(authors) = &r.author {
+        let mut names = Vec::new();
+        for a in authors {
+            let mut name = String::new();
+            if let Some(first) = &a.given { name.push_str(first); name.push(' '); }
+            if let Some(last) = &a.family { name.push_str(last); }
+            if !name.is_empty() { names.push(name.trim().to_string()); }
+        }
+        if !names.is_empty() { s.push_str(&names.join(", ")); s.push_str(". "); }
+    }
+    if let Some(title) = &r.title { s.push_str(title); s.push_str(". "); }
+    if let Some(container) = &r.container_title { s.push_str(container); s.push_str(", "); }
+    if let Some(vol) = &r.volume { s.push_str(&format!("vol. {}, ", vol)); }
+    if let Some(page) = &r.page { s.push_str(&format!("pp. {}, ", page)); }
+    if let Some(issued) = &r.issued {
+        let dp = &issued.date_parts;
+        if let Some(year) = dp.get(0).and_then(|a| a.get(0)) {
+            s.push_str(&format!("{}. ", year));
+        }
+    }
+    s.trim().to_string()
+}
+
 pub fn convert(
     events: Vec<Event<'_>>,
     config: &Config,
@@ -287,13 +331,12 @@ pub fn convert(
                 for inner in scan_iter.by_ref() {
                     match inner {
                         Event::End(TagEnd::FootnoteDefinition) => break,
-                        Event::End(TagEnd::Paragraph) => {
-                            if fn_has_runs {
+                        Event::End(TagEnd::Paragraph)
+                            if fn_has_runs => {
                                 fn_paragraphs
                                     .push(std::mem::replace(&mut fn_paragraph, Paragraph::new()));
                                 fn_has_runs = false;
                             }
-                        }
                         Event::Text(t) => {
                             fn_paragraph = fn_paragraph.add_run(Run::new().add_text(t.to_string()));
                             fn_has_runs = true;
@@ -963,7 +1006,7 @@ pub fn convert(
                         .add_paragraph(std::mem::replace(&mut current_paragraph, Paragraph::new()));
                     text_state.has_runs = false;
                 }
-                let depth = list_ordered_stack.len().saturating_sub(1) as usize;
+                let depth = list_ordered_stack.len().saturating_sub(1);
                 let is_ordered = list_ordered_stack.last().copied().unwrap_or(false);
                 let numbering_id = if is_ordered { 2usize } else { 1usize };
                 current_paragraph = Paragraph::new()
@@ -1020,6 +1063,26 @@ pub fn convert(
     // Flush final paragraph if pending (and non-empty)
     if text_state.has_runs {
         doc = doc.add_paragraph(current_paragraph);
+    }
+
+    // --- Generate Bibliography ---
+    if !text_state.cited_ids.is_empty() {
+        let db = load_references(input_dir);
+        if !db.is_empty() {
+            doc = doc.add_paragraph(
+                Paragraph::new()
+                    .style("Heading1")
+                    .add_run(Run::new().add_text("Bibliography"))
+            );
+            
+            for (i, id) in text_state.cited_ids.iter().enumerate() {
+                if let Some(reference) = db.get(id) {
+                    let formatted = format_reference(reference);
+                    let p = Paragraph::new().add_run(Run::new().add_text(format!("[{}] {}", i + 1, formatted)));
+                    doc = doc.add_paragraph(p);
+                }
+            }
+        }
     }
 
     // Write to memory buffer
@@ -1420,7 +1483,25 @@ pub fn convert(
         }
 
         tpl_zip.finish()?;
-        return Ok(tpl_out.into_inner());
+        let raw_zip = tpl_out.into_inner();
+        
+        // Stage 3: Agile Encryption (OLE2 container)
+        if let Some(pwd) = &config.password {
+            let mut encrypted_buffer = std::io::Cursor::new(Vec::new());
+            if marksmen_crypto::protect_docx(std::io::Cursor::new(&raw_zip), &mut encrypted_buffer, pwd).is_ok() {
+                return Ok(encrypted_buffer.into_inner());
+            }
+        }
+        
+        return Ok(raw_zip);
+    }
+
+    // Stage 3: Agile Encryption for non-template path
+    if let Some(pwd) = &config.password {
+        let mut encrypted_buffer = std::io::Cursor::new(Vec::new());
+        if marksmen_crypto::protect_docx(std::io::Cursor::new(&generated_bytes), &mut encrypted_buffer, pwd).is_ok() {
+            return Ok(encrypted_buffer.into_inner());
+        }
     }
 
     Ok(generated_bytes)

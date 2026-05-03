@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 marksmen-core = { path = "../marksmen-core" }
 marksmen-mermaid = { path = "../marksmen-mermaid" }
+marksmen-render = { path = "../marksmen-render" }
 pulldown-cmark = { workspace = true }
 zip = { workspace = true }
 marksmen-xml = { path = "../marksmen-xml" }

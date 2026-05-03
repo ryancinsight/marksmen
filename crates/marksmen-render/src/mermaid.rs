@@ -131,7 +131,7 @@ pub fn render_graph_to_svg(
     }
 
     // Nodes
-    for (_id, node) in &graph.nodes {
+    for node in graph.nodes.values() {
         let rx = node.x + padding;
         let ry = node.y + padding;
         let fill = node.style.fill.as_deref().unwrap_or("#E8F4FD");

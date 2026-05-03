@@ -66,6 +66,18 @@ pub struct Config {
     /// body paragraphs. Populated from YAML front-matter `style_map:` block.
     #[serde(default)]
     pub style_map: StyleMap,
+
+    /// Optional password for DOCX/PDF encryption (Stage 3 Security)
+    #[serde(default)]
+    pub password: Option<String>,
+
+    /// Optional path to a PEM/DER X.509 certificate for PDF/DOCX digital signatures (Stage 4)
+    #[serde(default)]
+    pub certificate_path: Option<String>,
+
+    /// Optional path to a PEM/DER private key for digital signatures
+    #[serde(default)]
+    pub private_key_path: Option<String>,
 }
 
 fn default_highlight_theme() -> String {
@@ -86,6 +98,9 @@ impl Default for Config {
             template_path: None,
             pdf_standard: None,
             style_map: StyleMap::default(),
+            password: None,
+            certificate_path: None,
+            private_key_path: None,
         }
     }
 }
@@ -130,6 +145,9 @@ impl Config {
         if let Some(ref sm) = fm.style_map {
             merged.style_map = sm.clone();
         }
+        if let Some(ref pwd) = fm.password {
+            merged.password = Some(pwd.clone());
+        }
         merged
     }
 }
@@ -152,4 +170,6 @@ pub struct FrontMatterConfig {
     pub pdf_standard: Option<String>,
     /// Global Word style map from YAML `style_map:` block.
     pub style_map: Option<StyleMap>,
+    /// Document password for Agile Encryption.
+    pub password: Option<String>,
 }

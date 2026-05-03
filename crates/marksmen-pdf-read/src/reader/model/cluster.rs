@@ -255,8 +255,8 @@ pub fn cluster_to_markdown(mut spans: Vec<RichSpan>, rects: Vec<GraphicRect>) ->
             let left_gap = line_left - page_min_x;
             let right_gap = page_max_x - line_right;
             // Clean known typography artifacts from original PDF extraction
-            if content.contains("L T X") {}
-            if content.contains("OSX E") {}
+            content.contains("L T X");
+            content.contains("OSX E");
             if content.starts_with("A<i>") && content.contains("•</i>") {
                 content = content.replace("A<i>•</i>", "<i>•</i>");
             }
@@ -312,11 +312,7 @@ pub fn cluster_to_markdown(mut spans: Vec<RichSpan>, rects: Vec<GraphicRect>) ->
             || changed_center_state
             || changed_indent_state
         {
-            if is_bullet {
-                in_bullet_body = true;
-            } else {
-                in_bullet_body = false;
-            }
+            in_bullet_body = is_bullet;
             if in_center_div
                 && (line_gap > body_size * 1.5
                     || is_bullet
@@ -357,7 +353,7 @@ pub fn cluster_to_markdown(mut spans: Vec<RichSpan>, rects: Vec<GraphicRect>) ->
             if was_prev_short && !in_bullet_body {
                 md.push_str("  \n"); // Hard break
             } else {
-                md.push_str(" "); // Soft wrap
+                md.push(' '); // Soft wrap
             }
         }
 
@@ -501,8 +497,8 @@ fn assemble_inline(line: &[RichSpan], body_size: f32) -> String {
     // Group into runs of same style.
     let mut runs: Vec<(bool, bool, bool, bool, Vec<&RichSpan>)> = Vec::new(); // (bold, italic, underlined, strikethrough, spans)
     for span in line {
-        if let Some(last) = runs.last_mut() {
-            if last.0 == span.is_bold
+        if let Some(last) = runs.last_mut()
+            && last.0 == span.is_bold
                 && last.1 == span.is_italic
                 && last.2 == span.is_underlined
                 && last.3 == span.is_strikethrough
@@ -510,7 +506,6 @@ fn assemble_inline(line: &[RichSpan], body_size: f32) -> String {
                 last.4.push(span);
                 continue;
             }
-        }
         runs.push((
             span.is_bold,
             span.is_italic,
@@ -691,11 +686,10 @@ fn detect_bullet(text: &str) -> (bool, Option<String>, String) {
         (true, None, rest)
     } else {
         let mut parts = text.splitn(2, ". ");
-        if let (Some(num), Some(rest)) = (parts.next(), parts.next()) {
-            if num.chars().all(|c| c.is_ascii_digit()) && !num.is_empty() {
+        if let (Some(num), Some(rest)) = (parts.next(), parts.next())
+            && num.chars().all(|c| c.is_ascii_digit()) && !num.is_empty() {
                 return (true, Some(format!("{}.", num)), rest.to_string());
             }
-        }
         (false, None, text.to_string())
     }
 }
@@ -713,11 +707,10 @@ fn strip_markdown_marks(s: &str) -> String {
         .replace("</s>", "");
 
     // Also strip simple <span style="..."> tags for bullet detection
-    if clean.starts_with("<span") {
-        if let Some(idx) = clean.find('>') {
+    if clean.starts_with("<span")
+        && let Some(idx) = clean.find('>') {
             clean = clean[idx + 1..].to_string();
         }
-    }
     if clean.ends_with("</span>") {
         clean = clean[..clean.len() - 7].to_string();
     }

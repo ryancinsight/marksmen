@@ -1,41 +1,299 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Marksmen Roundtrip Snapshots</title>
-  <style>
-    body { font-family: sans-serif; margin: 2rem; background: #f5f5f5; }
-    h1 { color: #333; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-top: 1rem; }
-    .card { background: white; border-radius: 6px; padding: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
-    h2 { margin: 0 0 .5rem; font-size: 1rem; color: #555; }
-    iframe { width: 100%; height: 600px; border: 1px solid #ddd; }
-    a.dl { display: inline-block; margin-top: .5rem; font-size: .85rem; color: #0366d6; }
-    .meta { font-size: .8rem; color: #888; margin-top: .25rem; }
-  </style>
-</head>
-<body>
-  <h1>Marksmen Roundtrip Visual Snapshots</h1>
-  <p>Generated from <code>demo.md</code> — open in a browser to inspect formatting.</p>
-  <div class="grid">
-    <div class="card">
-      <h2>PDF Output</h2>
-      <iframe src="demo_output.pdf" title="PDF Output"></iframe>
-      <a class="dl" href="demo_output.pdf" download>Download PDF</a>
-      <p class="meta">151654 bytes</p>
-    </div>
-    <div class="card">
-      <h2>DOCX Output</h2>
-      <p style="color:#666;font-size:.9rem">DOCX cannot be embedded in-browser. Download to inspect.</p>
-      <a class="dl" href="demo_output.docx" download>Download DOCX</a>
-      <p class="meta">31502 bytes</p>
-    </div>
-    <div class="card">
-      <h2>ODT Output</h2>
-      <p style="color:#666;font-size:.9rem">ODT cannot be embedded in-browser. Download to inspect.</p>
-      <a class="dl" href="demo_output.odt" download>Download ODT</a>
-      <p class="meta">29750 bytes</p>
-    </div>
-  </div>
-</body>
-</html>
+<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><title>Marksmen Roundtrip Snapshots</title><style>body{font-family:sans-serif;margin:2rem;background:#f5f5f5}h1{color:#333}h2{font-size:1rem;color:#555;margin:0 0 .5rem}h3{font-size:.85rem;color:#666;margin:.2rem 0}.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-top:1rem}.card{background:#fff;border-radius:6px;padding:1rem;box-shadow:0 1px 3px rgba(0,0,0,.15)}.full-width{grid-column:1/-1}.diff-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}textarea{width:100%;font-family:monospace;font-size:.78rem;border:1px solid #ddd;padding:.25rem;resize:vertical;box-sizing:border-box}iframe{width:100%;height:520px;border:1px solid #ddd}a.dl{display:inline-block;margin-top:.4rem;font-size:.85rem;color:#0366d6}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:.35rem .7rem;text-align:left}th{background:#f0f0f0}.meta{font-size:.78rem;color:#888;margin-top:.2rem}</style></head><body><h1>Marksmen Roundtrip Visual Snapshots</h1><p>Generated from <code>demo.md</code>.</p><div class='card full-width' style='margin-bottom:1rem'><h2>Format Similarity Matrix</h2><table><thead><tr><th>Format</th><th>JW Score</th><th>Threshold</th><th>Status</th></tr></thead><tbody><tr><td>PDF</td><td style='font-family:monospace'>0.9800</td><td>0.9800</td><td style='color:#22c55e;font-weight:bold'>PASS</td></tr><tr><td>DOCX</td><td style='font-family:monospace'>0.9723</td><td>0.9450</td><td style='color:#22c55e;font-weight:bold'>PASS</td></tr><tr><td>ODT</td><td style='font-family:monospace'>0.9215</td><td>0.8000</td><td style='color:#22c55e;font-weight:bold'>PASS</td></tr><tr><td>HTML</td><td style='font-family:monospace'>0.9135</td><td>0.9000</td><td style='color:#22c55e;font-weight:bold'>PASS</td></tr><tr><td>EPUB</td><td style='font-family:monospace'>0.9115</td><td>0.9000</td><td style='color:#22c55e;font-weight:bold'>PASS</td></tr><tr><td>PPTX</td><td style='font-family:monospace'>0.8763</td><td>0.8500</td><td style='color:#22c55e;font-weight:bold'>PASS</td></tr><tr><td>LaTeX</td><td style='font-family:monospace'>0.8784</td><td>0.8500</td><td style='color:#22c55e;font-weight:bold'>PASS</td></tr><tr><td>Typst</td><td style='font-family:monospace'>0.8375</td><td>0.8500</td><td style='color:#ef4444;font-weight:bold'>FAIL</td></tr></tbody></table></div><div class='grid'><div class='card'><h2>PDF</h2><iframe src='demo_output.pdf'></iframe><a class='dl' href='demo_output.pdf' download>Download PDF</a><p class='meta'>151654 bytes</p></div><div class='card'><h2>DOCX</h2><p style='color:#666;font-size:.9rem'>Download to inspect in Word.</p><a class='dl' href='demo_output.docx' download>Download DOCX</a><p class='meta'>31500 bytes</p></div><div class='card'><h2>ODT</h2><a class='dl' href='demo_output.odt' download>Download ODT</a><p class='meta'>41587 bytes</p></div><div class='card'><h2>EPUB</h2><a class='dl' href='demo_output.epub' download>Download EPUB</a><p class='meta'>4386 bytes</p></div><div class='card'><h2>PPTX</h2><a class='dl' href='demo_output.pptx' download>Download PPTX</a><p class='meta'>12983 bytes</p></div><div class='card'><h2>HTML</h2><iframe src='demo_output.html'></iframe><a class='dl' href='demo_output.html' download>Download HTML</a><p class='meta'>7509 bytes</p></div><div class='card full-width'><h2>LaTeX Source vs Extracted</h2><div class='diff-grid'><div><h3>Source</h3><textarea readonly rows='16'># Output Capabilities &amp; Typst Extensibility
+
+## 1. Document Headers &amp; Configuration
+Headers, footers, and page numbers are intrinsically supported via YAML frontmatter blocks. For example, this document has a custom footer string.
+
+## 2. Advanced Typography &amp; Tables
+Because the intermediate format is Typst, typography is mathematically precise. Let's look at a standard Markdown table:
+
+| Subsystem | Underlying Tech | Role | Status |
+| :--- | :---: | ---: | :---: |
+| **Parser** | `pulldown-cmark` | Emits syntax events | ✅ |
+| **Translator** | `marksmen-core` | Maps AST to Typst | ✅ |
+| **Compiler** | `typst` | Typesets elements | ✅ |
+| **Exporter** | `typst-pdf` | Emits binary format | ✅ |
+
+### 2.1 CSS &amp; HTML Handling
+Typst is an analytical typesetting engine, **not a web browser**. It cannot execute CSS or complex DOM layouts. However, the translator enforces semantic mapping for structural inline HTML subsets:
+
+- **Underline**: &lt;u style=&quot;color:red&quot;&gt;This text is underlined&lt;/u&gt; via `&lt;u&gt;`
+- **Subscripts**: H&lt;sub&gt;2&lt;/sub&gt;O via `&lt;sub&gt;`
+- **Superscripts**: E = mc&lt;sup&gt;2&lt;/sup&gt; via `&lt;sup&gt;`
+- **Colors**: &lt;span style=&quot;color: #e11d48&quot;&gt;This text&lt;/span&gt; is colored via `&lt;span style=&quot;color: ...&quot;&gt;`
+- **Line breaks**: Forced HTML break &lt;br&gt; is translated correctly.
+
+*Note: Arbitrary `&lt;div style=&quot;padding: 2px&quot;&gt;` blocks are ignored, preserving architectural invariants against empirical DOM approximations.*
+
+## 3. Mathematical Typesetting
+True native math (without KaTeX SVG hacks):
+$$
+\mathbf{J} = \nabla \times \mathbf{H} = \sigma \mathbf{E} + \frac{\partial \mathbf{D}}{\partial t}
+$$
+
+Inline equations like $\lim_{x \to \infty} f(x)$ blend seamlessly with the baseline.
+
+## 4. Linked SVG Figures
+Instead of relying on web-based JS to render graphics, Typst handles `SVG` vector embeddings natively without rasterization:
+
+![Architecture Diagram](./diagram1.svg)
+
+## 5. Native Diagram Rendering (`marksmen-mermaid`)
+&gt; **Pure-Rust Mermaid Translation:**
+&gt; Executing standard `mermaid.js` typically requires evaluating an entire web runtime (V8/Browser) with empirical DOM measurement APIs, which violates our offline-first pure-Rust correctness guarantees.
+&gt; 
+&gt; *Instead, `marksmen` relies on a mathematically-verified `marksmen-mermaid` layout engine implementing the Sugiyama Framework. It parses this raw Mermaid block offline and renders it deterministically into Typst spatial vectors!*
+
+```mermaid
+graph TD
+    A[Markdown AST] --&gt; B{Marksmen Core}
+    B --&gt; C[Typst Vectors]
+    C --&gt; D(PDF Output)
+    C --&gt; E(HTML5 Output)
+```
+
+&lt;!-- pagebreak --&gt;
+
+## Appendix: Mathematical Justifications
+Because `marksmen` leverages Typst, we can seamlessly write $e^(i pi) + 1 = 0$ in the middle of text, and be confident that it renders beautifully on a completely separated page.</textarea></div><div><h3>Extracted</h3><textarea readonly rows='16'># Output Capabilities &amp; Typst Extensibility
+
+
+## 1. Document Headers &amp; Configuration
+
+
+Headers, footers, and page numbers are intrinsically supported via YAML frontmatter blocks. For example, this document has a custom footer string.
+
+
+## 2. Advanced Typography &amp; Tables
+
+
+Because the intermediate format is Typst, typography is mathematically precise. Let's look at a standard Markdown table:
+
+\begin{longtable}{lcrc}
+\toprule
+Subsystem &amp; Underlying Tech &amp; Role &amp; Status\midrule
+**Parser &amp; `pulldown-cmark &amp; Emits syntax events &amp; ✅ 
+
+**Translator &amp; `marksmen-core &amp; Maps AST to Typst &amp; ✅ 
+
+**Compiler &amp; `typst &amp; Typesets elements &amp; ✅ 
+
+**Exporter &amp; `typst-pdf &amp; Emits binary format &amp; ✅ 
+
+\bottomrule
+\end{longtable}
+
+
+### 2.1 CSS &amp; HTML Handling
+
+
+Typst is an analytical typesetting engine, **not a web browser. It cannot execute CSS or complex DOM layouts. However, the translator enforces semantic mapping for structural inline HTML subsets:
+
+
+- **Underline: This text is underlined via `\textless{}u\textgreater{}
+- **Subscripts: H2O via `\textless{}sub\textgreater{}
+- **Superscripts: E = mc2 via `\textless{}sup\textgreater{}
+- **Colors: This text is colored via `\textless{}span style=&quot;color: ...&quot;\textgreater{}
+- **Line breaks: Forced HTML break  is translated correctly.
+
+
+
+*Note: Arbitrary `\textless{}div style=&quot;padding: 2px&quot;\textgreater{} blocks are ignored, preserving architectural invariants against empirical DOM approximations.
+
+
+## 3. Mathematical Typesetting
+
+
+True native math (without KaTeX SVG hacks): 
+
+
+\[
+
+\mathbf{J} = \nabla \times \mathbf{H} = \sigma \mathbf{E} + \frac{\partial \mathbf{D}}{\partial t}
+
+\]
+
+
+
+Inline equations like $\lim_{x \to \infty} f(x)$ blend seamlessly with the baseline.
+
+
+## 4. Linked SVG Figures
+
+
+Instead of relying on web-based JS to render graphics, Typst handles `SVG vector embeddings natively without rasterization:
+
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{./diagram1.svg}
+Architecture Diagram\end{figure}
+
+
+
+## 5. Native Diagram Rendering (`marksmen-mermaid)
+
+&gt; 
+
+**Pure-Rust Mermaid Translation: 
+
+Executing standard `mermaid.js typically requires evaluating an entire web runtime (V8/Browser) with empirical DOM measurement APIs, which violates our offline-first pure-Rust correctness guarantees.
+
+
+*Instead, `marksmen relies on a mathematically-verified `marksmen-mermaid layout engine implementing the Sugiyama Framework. It parses this raw Mermaid block offline and renders it deterministically into Typst spatial vectors!
+
+
+
+```[language=mermaid]
+graph TD
+    A[Markdown AST] --\textgreater{} B{Marksmen Core}
+    B --\textgreater{} C[Typst Vectors]
+    C --\textgreater{} D(PDF Output)
+    C --\textgreater{} E(HTML5 Output)
+```
+
+
+## Appendix: Mathematical Justifications
+
+
+Because `marksmen leverages Typst, we can seamlessly write $e^(i pi) + 1 = 0$ in the middle of text, and be confident that it renders beautifully on a completely separated page.</textarea></div></div></div><div class='card full-width'><h2>Typst Source vs Extracted</h2><div class='diff-grid'><div><h3>Source</h3><textarea readonly rows='16'># Output Capabilities &amp; Typst Extensibility
+
+## 1. Document Headers &amp; Configuration
+Headers, footers, and page numbers are intrinsically supported via YAML frontmatter blocks. For example, this document has a custom footer string.
+
+## 2. Advanced Typography &amp; Tables
+Because the intermediate format is Typst, typography is mathematically precise. Let's look at a standard Markdown table:
+
+| Subsystem | Underlying Tech | Role | Status |
+| :--- | :---: | ---: | :---: |
+| **Parser** | `pulldown-cmark` | Emits syntax events | ✅ |
+| **Translator** | `marksmen-core` | Maps AST to Typst | ✅ |
+| **Compiler** | `typst` | Typesets elements | ✅ |
+| **Exporter** | `typst-pdf` | Emits binary format | ✅ |
+
+### 2.1 CSS &amp; HTML Handling
+Typst is an analytical typesetting engine, **not a web browser**. It cannot execute CSS or complex DOM layouts. However, the translator enforces semantic mapping for structural inline HTML subsets:
+
+- **Underline**: &lt;u style=&quot;color:red&quot;&gt;This text is underlined&lt;/u&gt; via `&lt;u&gt;`
+- **Subscripts**: H&lt;sub&gt;2&lt;/sub&gt;O via `&lt;sub&gt;`
+- **Superscripts**: E = mc&lt;sup&gt;2&lt;/sup&gt; via `&lt;sup&gt;`
+- **Colors**: &lt;span style=&quot;color: #e11d48&quot;&gt;This text&lt;/span&gt; is colored via `&lt;span style=&quot;color: ...&quot;&gt;`
+- **Line breaks**: Forced HTML break &lt;br&gt; is translated correctly.
+
+*Note: Arbitrary `&lt;div style=&quot;padding: 2px&quot;&gt;` blocks are ignored, preserving architectural invariants against empirical DOM approximations.*
+
+## 3. Mathematical Typesetting
+True native math (without KaTeX SVG hacks):
+$$
+\mathbf{J} = \nabla \times \mathbf{H} = \sigma \mathbf{E} + \frac{\partial \mathbf{D}}{\partial t}
+$$
+
+Inline equations like $\lim_{x \to \infty} f(x)$ blend seamlessly with the baseline.
+
+## 4. Linked SVG Figures
+Instead of relying on web-based JS to render graphics, Typst handles `SVG` vector embeddings natively without rasterization:
+
+![Architecture Diagram](./diagram1.svg)
+
+## 5. Native Diagram Rendering (`marksmen-mermaid`)
+&gt; **Pure-Rust Mermaid Translation:**
+&gt; Executing standard `mermaid.js` typically requires evaluating an entire web runtime (V8/Browser) with empirical DOM measurement APIs, which violates our offline-first pure-Rust correctness guarantees.
+&gt; 
+&gt; *Instead, `marksmen` relies on a mathematically-verified `marksmen-mermaid` layout engine implementing the Sugiyama Framework. It parses this raw Mermaid block offline and renders it deterministically into Typst spatial vectors!*
+
+```mermaid
+graph TD
+    A[Markdown AST] --&gt; B{Marksmen Core}
+    B --&gt; C[Typst Vectors]
+    C --&gt; D(PDF Output)
+    C --&gt; E(HTML5 Output)
+```
+
+&lt;!-- pagebreak --&gt;
+
+## Appendix: Mathematical Justifications
+Because `marksmen` leverages Typst, we can seamlessly write $e^(i pi) + 1 = 0$ in the middle of text, and be confident that it renders beautifully on a completely separated page.</textarea></div><div><h3>Extracted</h3><textarea readonly rows='16'>
+
+
+
+
+
+
+
+
+
+
+
+
+# Output Capabilities &amp; Typst Extensibility
+
+
+
+## 1. Document Headers &amp; Configuration
+
+
+Headers, footers, and page numbers are intrinsically supported via YAML frontmatter blocks. For example, this document has a custom footer string.
+
+
+## 2. Advanced Typography &amp; Tables
+
+
+Because the intermediate format is Typst, typography is mathematically precise. Let's look at a standard Markdown table:
+
+
+
+
+### 2.1 CSS &amp; HTML Handling
+
+
+Typst is an analytical typesetting engine, . It cannot execute CSS or complex DOM layouts. However, the translator enforces semantic mapping for structural inline HTML subsets:
+
+
+- :  via 
+
+- : HO via 
+
+- : E = mc via 
+
+- : This text is colored via 
+
+- : Forced HTML break  is translated correctly.
+
+
+
+
+## 3. Mathematical Typesetting
+
+
+True native math (without KaTeX SVG hacks):
+
+$ 
+
+ $
+
+Inline equations like $ $ blend seamlessly with the baseline.
+
+
+## 4. Linked SVG Figures
+
+
+Instead of relying on web-based JS to render graphics, Typst handles  vector embeddings natively without rasterization:
+
+
+Architecture Diagram
+
+
+## 5. Native Diagram Rendering ()
+
+
+
+
+
+
+
+
+
+## Appendix: Mathematical Justifications
+
+
+Because  leverages Typst, we can seamlessly write $$ in the middle of text, and be confident that it renders beautifully on a completely separated page.
+</textarea></div></div></div></div></body></html>

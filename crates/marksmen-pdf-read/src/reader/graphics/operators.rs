@@ -11,6 +11,8 @@ use crate::reader::{
     model::span::RichSpan,
 };
 use lopdf::{Dictionary, Document, Object};
+use tracing;
+
 
 /// Process a slice of PDF operations, appending decoded `RichSpan`s and `GraphicRect`s to output vectors.
 ///
@@ -24,12 +26,25 @@ pub fn process_ops(
     out: &mut Vec<RichSpan>,
     out_rects: &mut Vec<GraphicRect>,
 ) {
+    process_ops_at_depth(ops, state, resources, doc, page, out, out_rects, 0);
+}
+
+/// Depth-aware implementation.  Carries XObject recursion depth to prevent stack overflow.
+fn process_ops_at_depth(
+    ops: &[lopdf::content::Operation],
+    state: &mut GraphicsState,
+    resources: &Dictionary,
+    doc: &Document,
+    page: u32,
+    out: &mut Vec<RichSpan>,
+    out_rects: &mut Vec<GraphicRect>,
+    xobj_depth: u8,
+) {
     let mut curr_path: Vec<(f32, f32)> = Vec::new();
     let mut curr_rects: Vec<GraphicRect> = Vec::new();
 
-    // Pre-build font cache: resource key → Font (loaded lazily on Tf).
     for op in ops {
-        dispatch(
+        dispatch_at_depth(
             op,
             state,
             resources,
@@ -39,11 +54,12 @@ pub fn process_ops(
             out_rects,
             &mut curr_path,
             &mut curr_rects,
+            xobj_depth,
         );
     }
 }
 
-fn dispatch(
+fn dispatch_at_depth(
     op: &lopdf::content::Operation,
     state: &mut GraphicsState,
     resources: &Dictionary,
@@ -53,6 +69,7 @@ fn dispatch(
     out_rects: &mut Vec<GraphicRect>,
     curr_path: &mut Vec<(f32, f32)>,
     curr_rects: &mut Vec<GraphicRect>,
+    xobj_depth: u8,
 ) {
     match op.operator.as_str() {
         // ── Graphics state ────────────────────────────────────────────────────
@@ -232,7 +249,7 @@ fn dispatch(
                     match item {
                         Object::String(bytes, _) => show_string(bytes, state, page, out),
                         Object::Integer(kern) => state.apply_kerning(*kern as f32),
-                        Object::Real(kern) => state.apply_kerning(*kern as f32),
+                        Object::Real(kern) => state.apply_kerning(*kern),
                         _ => {}
                     }
                 }
@@ -243,7 +260,7 @@ fn dispatch(
         "Do" => {
             if let Some(name_bytes) = op.operands.first().and_then(|o| o.as_name().ok()) {
                 let name = String::from_utf8_lossy(name_bytes).into_owned();
-                invoke_xobject(&name, state, resources, doc, page, out, out_rects);
+                invoke_xobject(&name, state, resources, doc, page, out, out_rects, xobj_depth);
             }
         }
 
@@ -303,7 +320,7 @@ fn dispatch(
                     }
                 }
             }
-            out_rects.extend(curr_rects.drain(..));
+            out_rects.append(curr_rects);
             curr_path.clear();
         }
 
@@ -365,6 +382,11 @@ fn show_string(bytes: &[u8], state: &mut GraphicsState, page: u32, out: &mut Vec
 
 // ─── XObject invocation ──────────────────────────────────────────────────────
 
+/// Invoke a Form XObject by name.
+///
+/// `depth` is the current XObject recursion depth.  Capped at 16 to prevent stack
+/// overflow on circular XObject references (ISO 32000-1 does not forbid circularity;
+/// 16 matches Adobe Acrobat's documented nesting limit).
 fn invoke_xobject(
     name: &str,
     state: &mut GraphicsState,
@@ -373,7 +395,19 @@ fn invoke_xobject(
     page: u32,
     out: &mut Vec<RichSpan>,
     out_rects: &mut Vec<GraphicRect>,
+    depth: u8,
 ) {
+    const MAX_XOBJECT_DEPTH: u8 = 16;
+    if depth >= MAX_XOBJECT_DEPTH {
+        tracing::warn!(
+            page,
+            name,
+            "XObject nesting depth {} exceeded limit {}; skipping",
+            depth,
+            MAX_XOBJECT_DEPTH
+        );
+        return;
+    }
     // Resolve XObject dict from resources.
     let xobj_dict = match resources.get(b"XObject").ok() {
         Some(Object::Dictionary(d)) => d,
@@ -434,12 +468,12 @@ fn invoke_xobject(
         .dict
         .get(b"Matrix")
         .ok()
-        .and_then(|o| parse_matrix_obj(o))
+        .and_then(parse_matrix_obj)
     {
         state.ctm = matrix_mul(state.ctm, m);
     }
 
-    process_ops(
+    process_ops_at_depth(
         &content.operations,
         state,
         &local_res,
@@ -447,11 +481,12 @@ fn invoke_xobject(
         page,
         out,
         out_rects,
+        depth + 1,
     );
     state.pop();
 }
 
-// ─── Font resolution ─────────────────────────────────────────────────────────
+// ─── Font resolution ────────────────────────────────────────────────────
 
 fn resolve_font(name: &str, resources: &Dictionary, doc: &Document) -> Option<Font> {
     let font_res = resources.get(b"Font").ok()?;
@@ -468,6 +503,22 @@ fn resolve_font(name: &str, resources: &Dictionary, doc: &Document) -> Option<Fo
         _ => return None,
     };
 
+    // Type3 fonts define glyph procedures in their CharProcs dictionary.  Executing
+    // those procedures requires a sub-interpreter and is not implemented.  Emit a
+    // diagnostic so foreign PDFs using Type3 fonts are auditable.
+    let subtype = font_dict
+        .get(b"Subtype")
+        .ok()
+        .and_then(|o| o.as_name().ok())
+        .map(|n| String::from_utf8_lossy(n).into_owned())
+        .unwrap_or_default();
+    if subtype == "Type3" {
+        tracing::warn!(
+            font_name = name,
+            "Type3 font encountered; glyph procedures are not executed — text may be missing"
+        );
+    }
+
     Some(Font::load(font_dict, doc))
 }
 
@@ -475,7 +526,7 @@ fn resolve_font(name: &str, resources: &Dictionary, doc: &Document) -> Option<Fo
 
 fn f32_op(ops: &[Object], idx: usize) -> Option<f32> {
     match ops.get(idx)? {
-        Object::Real(f) => Some(*f as f32),
+        Object::Real(f) => Some(*f),
         Object::Integer(i) => Some(*i as f32),
         _ => None,
     }
@@ -492,7 +543,7 @@ fn parse_matrix(ops: &[Object]) -> Option<Matrix> {
     let nums: Vec<f32> = ops
         .iter()
         .filter_map(|o| match o {
-            Object::Real(f) => Some(*f as f32),
+            Object::Real(f) => Some(*f),
             Object::Integer(i) => Some(*i as f32),
             _ => None,
         })

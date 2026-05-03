@@ -118,7 +118,7 @@ impl DirectedGraph {
 
         self.adjacency
             .entry(from)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(edge_idx);
     }
 
@@ -127,7 +127,7 @@ impl DirectedGraph {
         for (idx, edge) in self.edges.iter().enumerate() {
             self.adjacency
                 .entry(edge.from.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(idx);
         }
     }

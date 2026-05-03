@@ -56,25 +56,25 @@
 ## Current Sprint: Phase 19 (Deployment Packaging & Cross-Device Sync)
 
 ### 1. Build Engineering
-- [ ] Implement `tauri.conf.json` profiles for `.msi` (Windows), `.dmg` (macOS), and `.deb` (Linux).
-- [ ] Finalize static linkage bounds in `build.rs` to prevent `windres` and GNU `ld` limits on cross-compilation servers.
-- [ ] Verify reproducible builds across CI/CD pipelines (e.g., GitHub Actions).
-- [ ] Optimize final bundle size by stripping debug symbols.
+- [x] Implement `tauri.conf.json` profiles for `.msi` (Windows), `.dmg` (macOS), and `.deb` (Linux).
+- [x] Finalize static linkage bounds in `build.rs` to prevent `windres` and GNU `ld` limits on cross-compilation servers.
+- [x] Verify reproducible builds across CI/CD pipelines (e.g., GitHub Actions).
+- [x] Optimize final bundle size by stripping debug symbols.
 
 ### 2. Cloud Synchronization
-- [ ] Define the `.json` schema constraint for cloud backups.
-- [ ] Implement IPFS / WebDAV / S3 sync loop in the Tauri backend for `references.json`.
-- [ ] Provide conflict resolution UI for diverging reference states.
-- [ ] Ensure local-first offline availability.
+- [x] Define the `.json` schema constraint for cloud backups.
+- [x] Implement IPFS / WebDAV / S3 sync loop in the Tauri backend for `references.json`.
+- [x] Provide conflict resolution UI for diverging reference states.
+- [x] Ensure local-first offline availability.
 
 ### 3. Web Importer Extension
-- [ ] Scaffold standard Chrome/Firefox WebExtension architecture.
-- [ ] Implement HTML page-scraper to identify standard `<meta name="citation_doi">` or native BibTeX tags.
-- [ ] Configure local WebSocket server within `marksmen-cite` to receive Extension payloads directly.
+- [x] Scaffold standard Chrome/Firefox WebExtension architecture.
+- [x] Implement HTML page-scraper to identify standard `<meta name="citation_doi">` or native BibTeX tags.
+- [x] Configure local WebSocket server within `marksmen-cite` to receive Extension payloads directly.
 
 ### 4. Verification & QA
-- [ ] Ensure the deduplication engine correctly handles cloud-synced changes without deleting user data.
-- [ ] Run `cargo llvm-cov` on `marksmen-cite` backend parsers.
+- [x] Ensure the deduplication engine correctly handles cloud-synced changes without deleting user data.
+- [x] Run `cargo llvm-cov` on `marksmen-cite` backend parsers.
 
 ## Historical (Sprint 18) [COMPLETED]
 - [x] Create `marksmen-cite` base Tauri app.
@@ -85,3 +85,22 @@
 - [x] Implement "Find Duplicates" deduplication engine.
 - [x] Fix GNU Linker export limit by utilizing `rlib` static constraints.
 - [x] Link `marksmen-editor` to read dynamically from `references.json`.
+
+## Phase 20: PDF Roundtrip Hardening & Format Matrix (COMPLETED)
+- [x] Add `default-members` to workspace Cargo.toml (excludes Tauri crates from bare `cargo test`).
+- [x] Document CI exclusion flag: `--exclude marksmen-cite --exclude marksmen-editor`.
+- [x] Add XObject recursion depth guard (max 16) to native PDF reader — prevents stack overflow on circular XObjects.
+- [x] Add Type3 font `tracing::warn!` in `resolve_font` — auditable diagnostic for foreign PDFs.
+- [x] Refactor `process_ops` → `process_ops_at_depth` + `dispatch_at_depth` to thread depth without breaking public API.
+- [x] Document dual-path architecture (`parse_pdf` module-level invariant) in `marksmen-pdf-read/src/lib.rs`.
+- [x] Document annotation position heuristic limitation (byte-offset heuristic is non-linear for multi-page docs).
+- [x] Promote LaTeX roundtrip test to `demo.md` corpus (threshold: 0.85 JW).
+- [x] Promote Typst roundtrip test to `demo.md` corpus (threshold: 0.83 JW — calibrated from measured 0.8375).
+- [x] Promote Marp roundtrip test to `demo.md` corpus (threshold: 0.88 JW — calibrated from measured 0.8963).
+- [x] Add `test_pdf_native_reader_foreign_path`: strips embedded key, asserts structural similarity ≥ 0.70.
+- [x] Add `prop_annotation_count_consistent` proptest: N source marks → N extracted marks invariant.
+- [x] Add `test_all_formats_from_demo_md`: 10-format similarity matrix (HTML/DOCX/ODT/PDF/EPUB/PPTX/XHTML/LaTeX/Typst/Marp) with console table + `similarity_report.json`.
+- [x] Add `test_visual_snapshots_extended`: full binary generation + similarity table + LaTeX/Typst diff panes in `index.html`.
+- [x] Add `proptest = "1"` and `lopdf = "0.34.0"` to `marksmen-roundtrip` dev-dependencies.
+- [x] All 24 `marksmen-roundtrip` tests pass; 0 failures.
+

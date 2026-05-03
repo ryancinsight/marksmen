@@ -111,11 +111,10 @@ fn parse_bfrange(iter: &mut impl Iterator<Item = String>, map: &mut CMap) {
                 let cp = base_cp + offset as u32;
                 // Rebuild string: all prefix chars + incremented last char.
                 let mut chars: Vec<char> = base_uni.chars().collect();
-                if let Some(last) = chars.last_mut() {
-                    if let Some(c) = char::from_u32(cp) {
+                if let Some(last) = chars.last_mut()
+                    && let Some(c) = char::from_u32(cp) {
                         *last = c;
                     }
-                }
                 map.insert(code, chars.into_iter().collect());
             }
         }
@@ -139,7 +138,7 @@ fn tokenize_cmap(text: &str) -> Vec<String> {
         match c {
             // Comment: skip to end of line.
             '%' => {
-                while let Some((_, ch)) = chars.next() {
+                for (_, ch) in chars.by_ref() {
                     if ch == '\n' {
                         break;
                     }
@@ -148,7 +147,7 @@ fn tokenize_cmap(text: &str) -> Vec<String> {
             // Hex string.
             '<' => {
                 let mut hex = String::from("<");
-                while let Some((_, ch)) = chars.next() {
+                for (_, ch) in chars.by_ref() {
                     hex.push(ch);
                     if ch == '>' {
                         break;

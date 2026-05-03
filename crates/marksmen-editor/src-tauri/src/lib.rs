@@ -6,6 +6,163 @@ use marksmen_odt::translate_and_render as convert_odt;
 use marksmen_ppt::convert as convert_ppt;
 use marksmen_rich;
 use marksmen_rich_read;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct CitationPayload {
+    pub id: String,
+    pub author: String,
+    pub year: String,
+    pub title: String,
+    pub publisher: String,
+    #[serde(rename = "type")]
+    pub item_type: String,
+    pub url: String,
+}
+
+impl From<CitationPayload> for marksmen_csl::model::Reference {
+    fn from(payload: CitationPayload) -> Self {
+        let mut ref_model = marksmen_csl::model::Reference::default();
+        ref_model.id = payload.id;
+        ref_model.r#type = payload.item_type;
+        ref_model.title = Some(payload.title);
+        ref_model.container_title = Some(payload.publisher);
+        ref_model.url = Some(payload.url);
+        
+        // Parse "LastName, FirstName"
+        if !payload.author.is_empty() {
+            let names: Vec<_> = payload.author.split(" and ").map(|a| {
+                let parts: Vec<_> = a.split(',').map(|s| s.trim()).collect();
+                let family = parts.first().map(|s| s.to_string());
+                let given = parts.get(1).map(|s| s.to_string());
+                marksmen_csl::model::NameVariable {
+                    family,
+                    given,
+                    dropping_particle: None,
+                    non_dropping_particle: None,
+                    literal: None,
+                    suffix: None,
+                }
+            }).collect();
+            ref_model.author = Some(names);
+        }
+
+        if let Ok(y) = payload.year.parse::<i32>() {
+            ref_model.issued = Some(marksmen_csl::model::DateVariable {
+                date_parts: vec![vec![y]],
+            });
+        }
+
+        ref_model
+    }
+}
+
+// ── CSL Formatting (Stage 5) ────────────────────────────────────────────────
+
+#[tauri::command]
+fn format_csl_citation(citation: CitationPayload, _style: String) -> Result<String, String> {
+    // For now, since the CSL XML parser isn't complete to load all APA nodes,
+    // we use the zero-cost CSL engine structure to construct a native citation layout.
+    // In the future, this parses the requested .csl file via quick_xml.
+    let ref_model = marksmen_csl::model::Reference::from(citation);
+    
+    // Construct a native APA-like in-text citation mock using the CSL layout AST
+    use marksmen_csl::schema::{Layout, RenderingElement, Text};
+    use marksmen_csl::engine::{Context, evaluate_layout};
+    
+    let layout = Layout {
+        prefix: Some("(".to_string()),
+        suffix: Some(")".to_string()),
+        delimiter: Some("; ".to_string()),
+        elements: vec![
+            RenderingElement::Text(Text {
+                variable: Some("author".to_string()),
+                macro_name: None,
+                term: None,
+                value: None,
+                prefix: None,
+                suffix: None,
+                quotes: None,
+                font_style: None,
+                font_weight: None,
+                text_decoration: None,
+                vertical_align: None,
+            }),
+            RenderingElement::Text(Text {
+                variable: None,
+                macro_name: None,
+                term: None,
+                value: Some(", ".to_string()),
+                prefix: None,
+                suffix: None,
+                quotes: None,
+                font_style: None,
+                font_weight: None,
+                text_decoration: None,
+                vertical_align: None,
+            }),
+            RenderingElement::Text(Text {
+                variable: Some("issued".to_string()),
+                macro_name: None,
+                term: None,
+                value: None,
+                prefix: None,
+                suffix: None,
+                quotes: None,
+                font_style: None,
+                font_weight: None,
+                text_decoration: None,
+                vertical_align: None,
+            }),
+        ],
+    };
+    
+    let style = marksmen_csl::schema::Style {
+        class: "in-text".into(),
+        version: "1.0".into(),
+        info: None,
+        locales: vec![],
+        macros: vec![],
+        citation: marksmen_csl::schema::Citation {
+            layout: Some(layout.clone()),
+            sort: None,
+        },
+        bibliography: None,
+    };
+    
+    let ctx = Context::new(&style, &ref_model);
+    Ok(evaluate_layout(&layout, &ctx))
+}
+
+#[tauri::command]
+fn format_csl_bibliography(citations: Vec<CitationPayload>, _style: String) -> Result<String, String> {
+    // Evaluate full APA reference strings
+    let mut html = String::new();
+    
+    for citation in citations {
+        let ref_model = marksmen_csl::model::Reference::from(citation);
+        
+        let author_str = ref_model.author.as_ref().map(|a| {
+            a.iter().filter_map(|n| n.family.clone()).collect::<Vec<_>>().join(", ")
+        }).unwrap_or_else(|| "Unknown".to_string());
+        
+        let year_str = ref_model.issued.as_ref().and_then(|d| d.date_parts.first())
+            .and_then(|p| p.first()).map(|y| y.to_string()).unwrap_or_else(|| "n.d.".to_string());
+            
+        let title_str = ref_model.title.as_deref().unwrap_or("Untitled");
+        let pub_str = ref_model.container_title.as_deref().unwrap_or("");
+        
+        // This simulates the evaluate_layout from a `<bibliography>` node
+        let item_html = format!("{} ({}). {}. <em>{}</em>.", author_str, year_str, title_str, pub_str);
+        
+        html.push_str(&format!(
+            "<p style=\"margin:4px 0; padding-left:2em; text-indent:-2em; font-size:12px;\">{}</p>",
+            item_html
+        ));
+    }
+    
+    Ok(html)
+}
 
 // ── HTML ↔ Markdown sync ────────────────────────────────────────────────────
 
@@ -217,6 +374,82 @@ fn export_format(
     }
 }
 
+/// Combine multiple Markdown files into a single exported document.
+#[tauri::command]
+async fn export_binder(
+    app: tauri::AppHandle,
+    files: Vec<String>,
+    format: String,
+    doc_name: String,
+) -> Result<(), String> {
+    use tauri_plugin_dialog::DialogExt;
+    use marksmen_core::parsing::combine::AstConcatenator;
+
+    let config = Config::default();
+    let mut concat = AstConcatenator::new();
+    let mut contents = Vec::new();
+
+    // First read all files to keep strings alive
+    for path_str in &files {
+        let path = std::path::Path::new(path_str);
+        let content = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+        contents.push(content);
+    }
+
+    // Parse and concatenate all files
+    for (idx, (path_str, content)) in files.iter().zip(contents.iter()).enumerate() {
+        let path = std::path::Path::new(path_str);
+        
+        // Use a safe namespace derived from the filename or index
+        let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+        let namespace = format!("doc{}-{}", idx, stem);
+        
+        let events = parser::parse(content);
+        concat.add_document(&namespace, events);
+    }
+
+    let unified_events = concat.build();
+
+    let (bytes, ext): (Vec<u8>, &str) = match format.as_str() {
+        "docx" => (
+            marksmen_docx::translation::document::convert(unified_events, &config, std::path::Path::new("."), None)
+                .map_err(|e| e.to_string())?,
+            "docx",
+        ),
+        "pdf" => {
+            // PDF conversion currently takes a raw Markdown string, not AST events.
+            // Wait! Our PDF pipeline relies on Typst string conversion.
+            // Typst conversion takes AST! `marksmen_typst::translator::translate(unified_events, &config)`!
+            // Let's generate Typst AST first:
+            let typst = marksmen_typst::translator::translate(unified_events, &config).map_err(|e| e.to_string())?;
+            // Then compile PDF using typst_library
+            (
+                marksmen_pdf::rendering::compiler::compile_to_pdf(&typst, &config, Some(std::path::PathBuf::from("."))).map_err(|e| e.to_string())?,
+                "pdf"
+            )
+        },
+        "html" => (
+            convert_html(unified_events, &config)
+                .map_err(|e| e.to_string())?
+                .into_bytes(),
+            "html",
+        ),
+        _ => return Err(format!("Unsupported binder format: {format}")),
+    };
+
+    let save_path = app
+        .dialog()
+        .file()
+        .add_filter(&format.to_uppercase(), &[ext])
+        .set_file_name(&format!("{doc_name}.{ext}"))
+        .blocking_save_file()
+        .ok_or_else(|| "No file selected".to_string())?
+        .into_path()
+        .map_err(|e| e.to_string())?;
+
+    std::fs::write(&save_path, &bytes).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn get_system_fonts() -> Vec<String> {
     let source = font_kit::source::SystemSource::new();
@@ -296,6 +529,9 @@ pub fn run() {
             get_system_fonts,
             save_base64_asset,
             load_marksmen_cite_db,
+            format_csl_citation,
+            format_csl_bibliography,
+            export_binder,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

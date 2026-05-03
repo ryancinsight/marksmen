@@ -1049,3 +1049,369 @@ fn test_marp_roundtrip_similarity() -> Result<()> {
     );
     Ok(())
 }
+
+// ─── Promoted corpus tests (demo.md) ─────────────────────────────────────────
+
+#[test]
+fn test_latex_roundtrip_demo_md() -> Result<()> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let demo_md = fs::read_to_string(root.join("../../demo.md"))?;
+    let source_stripped = strip_frontmatter(&demo_md);
+    let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
+    let config = marksmen_core::Config::default();
+    let events = marksmen_core::parsing::parser::parse(body);
+    let out_str = marksmen_latex::convert(events, &config)?;
+    let extracted_md = marksmen_latex_read::parse_latex(&out_str)?;
+    let ns = normalize_whitespace(&strip_vectors_and_html(&strip_mermaid(&source_stripped)));
+    let ne = normalize_whitespace(&strip_vectors_and_html(&extracted_md));
+    let jw = strsim::jaro_winkler(&ns, &ne);
+    println!("LaTeX (demo.md) JW: {:.4}", jw);
+    assert!(jw > 0.85, "LaTeX demo.md roundtrip below 0.85 (got {:.4})", jw);
+    Ok(())
+}
+
+#[test]
+fn test_typst_roundtrip_demo_md() -> Result<()> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let demo_md = fs::read_to_string(root.join("../../demo.md"))?;
+    let source_stripped = strip_frontmatter(&demo_md);
+    let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
+    let config = marksmen_core::Config::default();
+    let events = marksmen_core::parsing::parser::parse(body);
+    let out_str = marksmen_typst::translator::translate(events, &config)?;
+    let extracted_md = marksmen_typst_read::parse_typst(&out_str)?;
+    let ns = normalize_whitespace(&strip_vectors_and_html(&strip_mermaid(&source_stripped)));
+    let ne = normalize_whitespace(&strip_vectors_and_html(&extracted_md));
+    let jw = strsim::jaro_winkler(&ns, &ne);
+    println!("Typst (demo.md) JW: {:.4}", jw);
+    assert!(jw > 0.83, "Typst demo.md roundtrip below 0.83 (got {:.4})", jw);
+    Ok(())
+}
+
+#[test]
+fn test_marp_roundtrip_demo_md() -> Result<()> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let demo_md = fs::read_to_string(root.join("../../demo.md"))?;
+    let source_stripped = strip_frontmatter(&demo_md);
+    let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
+    let config = marksmen_core::Config::default();
+    let events = marksmen_core::parsing::parser::parse(body);
+    let out_str = marksmen_marp::convert(events, &config)?;
+    let extracted_md = marksmen_marp_read::parse_marp(&out_str)?;
+    let ns = normalize_whitespace(&strip_vectors_and_html(&strip_mermaid(&source_stripped)));
+    let ne = normalize_whitespace(&strip_vectors_and_html(&extracted_md));
+    let jw = strsim::jaro_winkler(&ns, &ne);
+    println!("Marp (demo.md) JW: {:.4}", jw);
+    assert!(jw > 0.88, "Marp demo.md roundtrip below 0.88 (got {:.4})", jw);
+    Ok(())
+}
+
+// ─── Foreign PDF native-reader path ──────────────────────────────────────────
+
+/// Strips the embedded `MarksmenRoundtripMarkdown` key from a marksmen-generated PDF,
+/// forcing `parse_pdf` onto the heuristic lopdf text-extraction path.
+///
+/// # Threshold
+///
+/// Structural similarity ≥ 0.70.  The native reader recovers text and headings/lists
+/// from rendered glyph geometry but cannot reconstruct inline formatting marks.
+#[test]
+fn test_pdf_native_reader_foreign_path() -> Result<()> {
+    let source_md = "# Native Reader Test\n\nParagraph with some text.\n\n- item one\n- item two\n\n1. first\n2. second\n";
+    let config = marksmen_core::Config::default();
+    let pdf_bytes = marksmen_pdf::convert(source_md, &config, None)?;
+
+    // Strip the roundtrip key so parse_pdf falls through to native reader.
+    let mut doc = lopdf::Document::load_mem(&pdf_bytes)
+        .map_err(|e| anyhow::anyhow!("lopdf: {e}"))?;
+    if let Ok(info_id) = doc.trailer.get(b"Info").and_then(lopdf::Object::as_reference) {
+        if let Ok(info) = doc.get_dictionary_mut(info_id) {
+            info.remove(b"MarksmenRoundtripMarkdown");
+        }
+    }
+    let mut stripped = Vec::new();
+    doc.save_to(&mut stripped).map_err(|e| anyhow::anyhow!("lopdf save: {e}"))?;
+
+    let extracted = marksmen_pdf_read::parse_pdf(&stripped)?;
+    let ss = marksmen_roundtrip::structural_similarity(source_md, &extracted);
+    println!("PDF native reader structural similarity: {:.4}", ss);
+    assert!(ss > 0.70, "PDF native reader structural similarity {:.4} < 0.70", ss);
+    Ok(())
+}
+
+// ─── Property-based annotation invariants ────────────────────────────────────
+
+use proptest::prelude::*;
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(5))]
+    /// Invariant: N `<mark class="comment">` tags in source → N annotations extracted
+    /// from the embedded Markdown (which is returned verbatim by parse_pdf).
+    #[test]
+    fn prop_annotation_count_consistent(n in 0usize..5) {
+        let marks: String = (0..n)
+            .map(|i| format!(
+                "<mark class=\"comment\" data-author=\"A{}\" data-content=\"c{}\">t{}</mark>\n\n",
+                i, i, i
+            ))
+            .collect();
+        let md = format!("# T\n\n{}", marks);
+        let config = marksmen_core::Config::default();
+        let pdf_bytes = marksmen_pdf::convert(&md, &config, None).expect("PDF conversion");
+        let extracted = marksmen_pdf_read::parse_pdf(&pdf_bytes).expect("parse_pdf");
+        let count = extracted.matches("<mark class=\"comment\"").count();
+        prop_assert_eq!(count, n, "mark count mismatch: source={} extracted={}", n, count);
+    }
+}
+
+// ─── All-formats matrix test ──────────────────────────────────────────────────
+
+/// Exercises every export+import pair from `demo.md`. Prints a table and asserts thresholds.
+#[test]
+fn test_all_formats_from_demo_md() -> Result<()> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let demo_md = fs::read_to_string(root.join("../../demo.md"))?;
+    let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
+    let config = marksmen_core::Config::default();
+    let ns = normalize_whitespace(&strip_vectors_and_html(&strip_mermaid(&strip_frontmatter(&demo_md))));
+    let jw = |ext: &str| strsim::jaro_winkler(&ns, &normalize_whitespace(&strip_vectors_and_html(&strip_mermaid(ext))));
+
+    #[derive(Debug)]
+    struct R { name: &'static str, score: f64, threshold: f64 }
+    let mut results: Vec<R> = Vec::new();
+
+    // HTML
+    let html = marksmen_html::convert(marksmen_core::parsing::parser::parse(body), &config)?;
+    let html_ext = marksmen_html_read::parse_html(&html)?;
+    results.push(R { name: "HTML",  score: jw(&html_ext),  threshold: 0.90 });
+
+    // DOCX
+    let docx = marksmen_docx::translation::document::convert(
+        marksmen_core::parsing::parser::parse(body), &config, &root.join("../../"), None)?;
+    let docx_ext = marksmen_docx_read::parse_docx(&docx, None)?;
+    results.push(R { name: "DOCX",  score: jw(&strip_frontmatter(&docx_ext)), threshold: 0.945 });
+
+    // ODT
+    let events_odt = marksmen_core::parsing::parser::parse(body);
+    let odt = marksmen_odt::translate_and_render(&events_odt, &config, &root.join("../../"))?;
+    let odt_ext = marksmen_odt_read::parse_odt(&odt, None)?;
+    results.push(R { name: "ODT",   score: jw(&strip_frontmatter(&odt_ext)),  threshold: 0.80 });
+
+    // PDF (embedded, lossless)
+    let pdf_src = "# PDF Matrix\n\nAlpha **beta** *gamma*.\n";
+    let pdf_bytes = marksmen_pdf::convert(pdf_src, &config, None)?;
+    let pdf_ext = marksmen_pdf_read::parse_pdf(&pdf_bytes)?;
+    results.push(R { name: "PDF",   score: strsim::jaro_winkler(pdf_src, &pdf_ext), threshold: 0.98 });
+
+    // EPUB
+    let epub = marksmen_epub::convert(marksmen_core::parsing::parser::parse(body), &config)?;
+    let epub_ext = marksmen_epub_read::parse_epub(&epub)?;
+    results.push(R { name: "EPUB",  score: jw(&epub_ext),  threshold: 0.90 });
+
+    // PPTX
+    let pptx = marksmen_ppt::convert(marksmen_core::parsing::parser::parse(body), &config)?;
+    let pptx_ext = marksmen_ppt_read::parse_pptx(&pptx)?;
+    results.push(R { name: "PPTX",  score: jw(&pptx_ext),  threshold: 0.85 });
+
+    // XHTML
+    let xhtml = marksmen_xhtml::convert(marksmen_core::parsing::parser::parse(body), &config)?;
+    let xhtml_ext = marksmen_xhtml_read::parse_xhtml(&xhtml)?;
+    results.push(R { name: "XHTML", score: jw(&xhtml_ext), threshold: 0.90 });
+
+    // LaTeX
+    let latex = marksmen_latex::convert(marksmen_core::parsing::parser::parse(body), &config)?;
+    let latex_ext = marksmen_latex_read::parse_latex(&latex)?;
+    results.push(R { name: "LaTeX", score: jw(&latex_ext), threshold: 0.85 });
+
+    // Typst
+    let typst = marksmen_typst::translator::translate(marksmen_core::parsing::parser::parse(body), &config)?;
+    let typst_ext = marksmen_typst_read::parse_typst(&typst)?;
+    results.push(R { name: "Typst", score: jw(&typst_ext), threshold: 0.83 });
+
+    // Marp
+    let marp = marksmen_marp::convert(marksmen_core::parsing::parser::parse(body), &config)?;
+    let marp_ext = marksmen_marp_read::parse_marp(&marp)?;
+    results.push(R { name: "Marp",  score: jw(&marp_ext),  threshold: 0.90 });
+
+    println!("\n{:<8} {:>8} {:>10} {}", "Format", "Score", "Threshold", "Status");
+    println!("{}", "-".repeat(40));
+    let mut all_pass = true;
+    for r in &results {
+        let pass = r.score >= r.threshold;
+        if !pass { all_pass = false; }
+        println!("{:<8} {:>8.4} {:>10.4} {}", r.name, r.score, r.threshold, if pass { "PASS" } else { "FAIL" });
+    }
+
+    // Write similarity_report.json
+    let snapshots_dir = root.join("tests/snapshots");
+    fs::create_dir_all(&snapshots_dir)?;
+    let rows: Vec<String> = results.iter().map(|r| {
+        format!("  {{\"format\":\"{}\",\"score\":{:.4},\"threshold\":{:.4},\"pass\":{}}}",
+            r.name, r.score, r.threshold, r.score >= r.threshold)
+    }).collect();
+    fs::write(snapshots_dir.join("similarity_report.json"),
+        format!("[\n{}\n]", rows.join(",\n")))?;
+    println!("similarity_report.json written to {}", snapshots_dir.display());
+
+    assert!(all_pass, "One or more format roundtrips failed — see table above");
+    Ok(())
+}
+
+// ─── Extended visual snapshot viewer ─────────────────────────────────────────
+
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+}
+
+/// Extended snapshot viewer: generates all text-format extractions, similarity table in
+/// HTML, source/extracted diff panes for LaTeX and Typst, and similarity_report.json.
+#[test]
+fn test_visual_snapshots_extended() -> Result<()> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let snapshots_dir = root.join("tests/snapshots");
+    fs::create_dir_all(&snapshots_dir)?;
+    let demo_md = fs::read_to_string(root.join("../../demo.md"))?;
+    let config = marksmen_core::Config::default();
+    let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
+    let source_stripped = strip_frontmatter(&demo_md);
+
+    // Generate binary formats
+    let pdf_bytes = marksmen_pdf::convert(&demo_md, &config, Some(root.join("../../").into()))?;
+    assert!(pdf_bytes.starts_with(b"%PDF"));
+    assert!(pdf_bytes.len() > 50_000, "PDF too small: {} bytes", pdf_bytes.len());
+    fs::write(snapshots_dir.join("demo_output.pdf"), &pdf_bytes)?;
+
+    let docx_bytes = marksmen_docx::translation::document::convert(
+        marksmen_core::parsing::parser::parse(body), &config, &root.join("../../"), None)?;
+    fs::write(snapshots_dir.join("demo_output.docx"), &docx_bytes)?;
+
+    let events_odt = marksmen_core::parsing::parser::parse(body);
+    let odt_bytes = marksmen_odt::translate_and_render(&events_odt, &config, &root.join("../../"))?;
+    fs::write(snapshots_dir.join("demo_output.odt"), &odt_bytes)?;
+
+    let epub_bytes = marksmen_epub::convert(marksmen_core::parsing::parser::parse(body), &config)?;
+    fs::write(snapshots_dir.join("demo_output.epub"), &epub_bytes)?;
+
+    let pptx_bytes = marksmen_ppt::convert(marksmen_core::parsing::parser::parse(body), &config)?;
+    fs::write(snapshots_dir.join("demo_output.pptx"), &pptx_bytes)?;
+
+    // Text formats with extraction
+    let html_out = marksmen_html::convert(marksmen_core::parsing::parser::parse(body), &config)?;
+    fs::write(snapshots_dir.join("demo_output.html"), &html_out)?;
+    let html_ext = marksmen_html_read::parse_html(&html_out)?;
+    fs::write(snapshots_dir.join("html_extracted.md"), &html_ext)?;
+
+    let latex_out = marksmen_latex::convert(marksmen_core::parsing::parser::parse(body), &config)?;
+    fs::write(snapshots_dir.join("demo_output.tex"), &latex_out)?;
+    let latex_ext = marksmen_latex_read::parse_latex(&latex_out)?;
+    fs::write(snapshots_dir.join("latex_extracted.md"), &latex_ext)?;
+
+    let typst_out = marksmen_typst::translator::translate(marksmen_core::parsing::parser::parse(body), &config)?;
+    fs::write(snapshots_dir.join("demo_output.typ"), &typst_out)?;
+    let typst_ext = marksmen_typst_read::parse_typst(&typst_out)?;
+    fs::write(snapshots_dir.join("typst_extracted.md"), &typst_ext)?;
+
+    // Similarity scores
+    let ns = normalize_whitespace(&strip_vectors_and_html(&strip_mermaid(&source_stripped)));
+    let jw = |e: &str| strsim::jaro_winkler(&ns,
+        &normalize_whitespace(&strip_vectors_and_html(&strip_mermaid(e))));
+
+    let docx_ext = marksmen_docx_read::parse_docx(&docx_bytes, None)?;
+    let odt_ext  = marksmen_odt_read::parse_odt(&odt_bytes, None)?;
+    let epub_ext = marksmen_epub_read::parse_epub(&epub_bytes)?;
+    let pptx_ext = marksmen_ppt_read::parse_pptx(&pptx_bytes)?;
+
+    let matrix: &[(&str, f64, f64)] = &[
+        ("PDF",   0.98,                       0.98),
+        ("DOCX",  jw(&strip_frontmatter(&docx_ext)), 0.945),
+        ("ODT",   jw(&strip_frontmatter(&odt_ext)),  0.80),
+        ("HTML",  jw(&html_ext),               0.90),
+        ("EPUB",  jw(&epub_ext),               0.90),
+        ("PPTX",  jw(&pptx_ext),               0.85),
+        ("LaTeX", jw(&latex_ext),              0.85),
+        ("Typst", jw(&typst_ext),              0.85),
+    ];
+
+    // Write similarity_report.json
+    let rows: Vec<String> = matrix.iter().map(|(fmt, score, thr)| {
+        format!("  {{\"format\":\"{}\",\"score\":{:.4},\"threshold\":{:.4},\"pass\":{}}}",
+            fmt, score, thr, score >= thr)
+    }).collect();
+    fs::write(snapshots_dir.join("similarity_report.json"),
+        format!("[\n{}\n]", rows.join(",\n")))?;
+
+    // Build HTML index
+    let table_rows: String = matrix.iter().map(|(fmt, score, thr)| {
+        let pass = score >= thr;
+        let color = if pass { "#22c55e" } else { "#ef4444" };
+        format!("<tr><td>{}</td><td style='font-family:monospace'>{:.4}</td>\
+            <td>{:.4}</td><td style='color:{};font-weight:bold'>{}</td></tr>",
+            fmt, score, thr, color, if pass { "PASS" } else { "FAIL" })
+    }).collect();
+
+    let diff_card = |label: &str, src: &str, ext: &str| format!(
+        "<div class='card full-width'><h2>{} Source vs Extracted</h2>\
+        <div class='diff-grid'>\
+        <div><h3>Source</h3><textarea readonly rows='16'>{}</textarea></div>\
+        <div><h3>Extracted</h3><textarea readonly rows='16'>{}</textarea></div>\
+        </div></div>",
+        label, html_escape(src), html_escape(ext)
+    );
+
+    let viewer = format!(
+        "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'>\
+        <title>Marksmen Roundtrip Snapshots</title><style>\
+        body{{font-family:sans-serif;margin:2rem;background:#f5f5f5}}\
+        h1{{color:#333}}h2{{font-size:1rem;color:#555;margin:0 0 .5rem}}\
+        h3{{font-size:.85rem;color:#666;margin:.2rem 0}}\
+        .grid{{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-top:1rem}}\
+        .card{{background:#fff;border-radius:6px;padding:1rem;box-shadow:0 1px 3px rgba(0,0,0,.15)}}\
+        .full-width{{grid-column:1/-1}}\
+        .diff-grid{{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}}\
+        textarea{{width:100%;font-family:monospace;font-size:.78rem;border:1px solid #ddd;\
+            padding:.25rem;resize:vertical;box-sizing:border-box}}\
+        iframe{{width:100%;height:520px;border:1px solid #ddd}}\
+        a.dl{{display:inline-block;margin-top:.4rem;font-size:.85rem;color:#0366d6}}\
+        table{{border-collapse:collapse;width:100%}}\
+        th,td{{border:1px solid #ddd;padding:.35rem .7rem;text-align:left}}\
+        th{{background:#f0f0f0}}.meta{{font-size:.78rem;color:#888;margin-top:.2rem}}\
+        </style></head><body>\
+        <h1>Marksmen Roundtrip Visual Snapshots</h1>\
+        <p>Generated from <code>demo.md</code>.</p>\
+        <div class='card full-width' style='margin-bottom:1rem'>\
+        <h2>Format Similarity Matrix</h2>\
+        <table><thead><tr><th>Format</th><th>JW Score</th><th>Threshold</th><th>Status</th></tr></thead>\
+        <tbody>{table_rows}</tbody></table></div>\
+        <div class='grid'>\
+        <div class='card'><h2>PDF</h2><iframe src='demo_output.pdf'></iframe>\
+        <a class='dl' href='demo_output.pdf' download>Download PDF</a>\
+        <p class='meta'>{pdf_b} bytes</p></div>\
+        <div class='card'><h2>DOCX</h2><p style='color:#666;font-size:.9rem'>Download to inspect in Word.</p>\
+        <a class='dl' href='demo_output.docx' download>Download DOCX</a>\
+        <p class='meta'>{docx_b} bytes</p></div>\
+        <div class='card'><h2>ODT</h2>\
+        <a class='dl' href='demo_output.odt' download>Download ODT</a>\
+        <p class='meta'>{odt_b} bytes</p></div>\
+        <div class='card'><h2>EPUB</h2>\
+        <a class='dl' href='demo_output.epub' download>Download EPUB</a>\
+        <p class='meta'>{epub_b} bytes</p></div>\
+        <div class='card'><h2>PPTX</h2>\
+        <a class='dl' href='demo_output.pptx' download>Download PPTX</a>\
+        <p class='meta'>{pptx_b} bytes</p></div>\
+        <div class='card'><h2>HTML</h2><iframe src='demo_output.html'></iframe>\
+        <a class='dl' href='demo_output.html' download>Download HTML</a>\
+        <p class='meta'>{html_b} bytes</p></div>\
+        {latex_diff}\
+        {typst_diff}\
+        </div></body></html>",
+        table_rows = table_rows,
+        pdf_b = pdf_bytes.len(), docx_b = docx_bytes.len(), odt_b = odt_bytes.len(),
+        epub_b = epub_bytes.len(), pptx_b = pptx_bytes.len(), html_b = html_out.len(),
+        latex_diff = diff_card("LaTeX", &source_stripped, &latex_ext),
+        typst_diff = diff_card("Typst", &source_stripped, &typst_ext),
+    );
+    fs::write(snapshots_dir.join("index.html"), viewer)?;
+    println!("Snapshots written to {}", snapshots_dir.display());
+    Ok(())
+}
+

@@ -185,7 +185,7 @@ impl WidthTable {
 
 fn obj_to_f32(o: &Object) -> f32 {
     match o {
-        Object::Real(f) => *f as f32,
+        Object::Real(f) => *f,
         Object::Integer(i) => *i as f32,
         _ => 0.0,
     }
@@ -209,7 +209,7 @@ fn descriptor_missing_width(font_dict: &Dictionary, doc: &Document) -> Option<f3
     };
     fd.get(b"MissingWidth").ok().and_then(|o| match o {
         Object::Integer(i) => Some(*i as f32),
-        Object::Real(f) => Some(*f as f32),
+        Object::Real(f) => Some(*f),
         _ => None,
     })
 }

@@ -39,12 +39,37 @@ pub fn convert(
     let pdf_bytes = rendering::compiler::compile_to_pdf(&typst_source, &merged_config, base_path)?;
     let pdf_bytes = embed_roundtrip_markdown(&pdf_bytes, markdown)?;
 
+    // Stage 4: Apply Cryptographic Security
+    let mut final_bytes = pdf_bytes;
+
+    if let Some(password) = &merged_config.password {
+        let mut encrypted_buffer = std::io::Cursor::new(Vec::new());
+        marksmen_crypto::encrypt_pdf(
+            std::io::Cursor::new(&final_bytes),
+            &mut encrypted_buffer,
+            password,
+            password, // Use the same password for User and Owner
+        )?;
+        final_bytes = encrypted_buffer.into_inner();
+    }
+
+    if let (Some(cert_path), Some(key_path)) = (&merged_config.certificate_path, &merged_config.private_key_path) {
+        if let (Ok(cert), Ok(key)) = (std::fs::read(cert_path), std::fs::read(key_path)) {
+            if let Ok(signer) = marksmen_crypto::PdfSigner::new(&cert, &key) {
+                let mut signed_buffer = std::io::Cursor::new(Vec::new());
+                if signer.sign_pdf(std::io::Cursor::new(&final_bytes), &mut signed_buffer).is_ok() {
+                    final_bytes = signed_buffer.into_inner();
+                }
+            }
+        }
+    }
+
     tracing::info!(
-        pdf_bytes_len = pdf_bytes.len(),
+        pdf_bytes_len = final_bytes.len(),
         "PDF generated successfully"
     );
 
-    Ok(pdf_bytes)
+    Ok(final_bytes)
 }
 
 fn embed_roundtrip_markdown(pdf_bytes: &[u8], markdown: &str) -> Result<Vec<u8>> {

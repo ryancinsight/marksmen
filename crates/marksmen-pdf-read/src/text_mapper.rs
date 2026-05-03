@@ -58,8 +58,8 @@ pub fn extract_text_runs(document: &Document, page_id: ObjectId) -> Result<Vec<T
             Object::Reference(id) => document.get_dictionary(*id).ok(),
             _ => None,
         };
-        if let Some(res) = resources_dict {
-            if let Ok(fonts_obj) = res.get(b"Font") {
+        if let Some(res) = resources_dict
+            && let Ok(fonts_obj) = res.get(b"Font") {
                 let fonts_dict = match fonts_obj {
                     Object::Dictionary(d) => Some(d),
                     Object::Reference(id) => document.get_dictionary(*id).ok(),
@@ -72,8 +72,8 @@ pub fn extract_text_runs(document: &Document, page_id: ObjectId) -> Result<Vec<T
                             Object::Reference(id) => document.get_dictionary(*id),
                             _ => Err(lopdf::Error::DictKey),
                         };
-                        if let Ok(font_obj) = font_obj_res {
-                            if let Ok(base_font) =
+                        if let Ok(font_obj) = font_obj_res
+                            && let Ok(base_font) =
                                 font_obj.get(b"BaseFont").and_then(|o| o.as_name())
                             {
                                 font_map.insert(
@@ -81,11 +81,9 @@ pub fn extract_text_runs(document: &Document, page_id: ObjectId) -> Result<Vec<T
                                     String::from_utf8_lossy(base_font).into_owned(),
                                 );
                             }
-                        }
                     }
                 }
             }
-        }
     }
 
     let mut runs: Vec<TextRun> = Vec::new();
@@ -194,8 +192,8 @@ fn process_operations(
             }
             "Do" => {
                 // XObject Traversal
-                if let Some(name_obj) = operation.operands.first() {
-                    if let Ok(name) = name_obj.as_name() {
+                if let Some(name_obj) = operation.operands.first()
+                    && let Ok(name) = name_obj.as_name() {
                         println!(
                             "DEBUG: Found Do operator for XObject: {}",
                             String::from_utf8_lossy(name)
@@ -255,7 +253,6 @@ fn process_operations(
                             tracing::debug!("No XObject dictionary found in resources");
                         }
                     }
-                }
             }
             "Tm" => {
                 // Set text matrix (and text line matrix).
@@ -294,8 +291,8 @@ fn process_operations(
             }
             "Tf" => {
                 // Set font and size.
-                if let Some(font_name_obj) = operation.operands.first() {
-                    if let Ok(name) = font_name_obj.as_name() {
+                if let Some(font_name_obj) = operation.operands.first()
+                    && let Ok(name) = font_name_obj.as_name() {
                         let key = String::from_utf8_lossy(name).into_owned();
                         if let Some(base_font) = font_map.get(&key) {
                             state.font_name = base_font.clone();
@@ -303,7 +300,6 @@ fn process_operations(
                             state.font_name = key;
                         }
                     }
-                }
                 if let Some(size) = operand_f32(&operation.operands, 1) {
                     state.font_size = size;
                 }
@@ -336,7 +332,7 @@ fn process_operations(
                                 state.tm[4] += tx;
                             }
                             Object::Real(offset) => {
-                                let tx = -(*offset as f32) * state.font_size / 1000.0;
+                                let tx = -*offset * state.font_size / 1000.0;
                                 state.tm[4] += tx;
                             }
                             _ => {}
@@ -350,8 +346,7 @@ fn process_operations(
                     .operands
                     .first()
                     .and_then(|o| o.as_string().ok().map(|s| s.into_owned()))
-                {
-                    if !text.is_empty() {
+                    && !text.is_empty() {
                         if let Some(rect) = state.text_rect(&text, layout_bounds) {
                             let is_bold = state.font_name.to_lowercase().contains("bold");
                             runs.push(TextRun {
@@ -364,7 +359,6 @@ fn process_operations(
                         }
                         state.advance_tm(&text, layout_bounds);
                     }
-                }
             }
             _ => {}
         }
@@ -411,7 +405,7 @@ fn parse_matrix(ops: &[Object]) -> Option<Matrix> {
 
 fn operand_f32_obj(o: &Object) -> Option<f32> {
     match o {
-        Object::Real(f) => Some(*f as f32),
+        Object::Real(f) => Some(*f),
         Object::Integer(i) => Some(*i as f32),
         _ => None,
     }
