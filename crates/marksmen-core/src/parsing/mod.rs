@@ -11,3 +11,5 @@ pub mod parser;
 
 pub use attribute_pass::{intercept, AnnotatedEvent};
 pub use combine::*;
+
+pub mod mailmerge;

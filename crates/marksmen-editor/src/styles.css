@@ -29,9 +29,9 @@
     --sidebar-w:      280px;
 
     /* Ribbon dimensions — compact */
-    --titlebar-h:     40px;
-    --tabbar-h:       36px;
-    --panel-h:        68px;
+    --titlebar-h:     32px;
+    --tabbar-h:       28px;
+    --panel-h:        58px;
     --ribbon-h:       calc(var(--tabbar-h) + var(--panel-h));
 
     /* Page geometry */
@@ -286,12 +286,12 @@ body {
     color:          var(--text-secondary);
     cursor:         pointer;
     line-height:    1.2;
-    transition:     background .1s ease, border-color .1s ease, color .1s ease;
+    transition:     transform .15s cubic-bezier(0.4, 0, 0.2, 1), background .15s ease, border-color .15s ease, color .15s ease;
 }
 .rbtn svg { width: 18px; height: 18px; }
 .rbtn .rbtn-icon { font-size: 17px; line-height: 1; color: var(--text-primary); }
-.rbtn:hover  { background: var(--chrome-bg); color: var(--text-primary); border-color: var(--border-subtle); }
-.rbtn:active { background: var(--border-subtle); }
+.rbtn:hover  { background: var(--chrome-bg); color: var(--text-primary); border-color: var(--border-subtle); transform: translateY(-1px); }
+.rbtn:active { background: var(--border-subtle); transform: scale(0.96); }
 
 .rbtn--small  { flex-direction: row; font-size: 12px; min-width: auto; }
 .rbtn--icon   { flex-direction: row; min-width: 28px; padding: 4px 6px; font-size: 13px; }
@@ -346,10 +346,14 @@ body {
     top:        calc(var(--titlebar-h) + var(--tabbar-h));
     left:       0;
     width:      260px;
-    background: var(--ribbon-bg);
+    max-height: calc(100vh - var(--titlebar-h) - var(--tabbar-h));
+    overflow-y: auto;
+    background: color-mix(in srgb, var(--ribbon-bg) 85%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     border:     1px solid var(--border);
-    border-radius: 0 0 6px 0;
-    box-shadow: 0 8px 24px rgba(0,0,0,.16);
+    border-radius: 0 0 8px 0;
+    box-shadow: 0 12px 32px rgba(0,0,0,.12), 0 4px 8px rgba(0,0,0,.08);
     z-index:    500;
     padding:    8px 0;
 }
@@ -376,8 +380,10 @@ body {
     color:       var(--text-primary);
     cursor:      pointer;
     text-align:  left;
+    transition:  background 0.15s ease, transform 0.1s ease;
 }
-.fmenu-item:hover { background: var(--accent-light); }
+.fmenu-item:hover { background: var(--accent-light); transform: translateX(2px); }
+.fmenu-item:active { transform: scale(0.98); }
 .fmenu-icon { font-size: 20px; }
 .fmenu-item div { display: flex; flex-direction: column; gap: 1px; }
 .fmenu-item small { font-size: 11px; color: var(--text-secondary); }

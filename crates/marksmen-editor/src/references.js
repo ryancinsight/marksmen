@@ -6,7 +6,7 @@
 const SOURCES_KEY = 'marksmen_sources';
 window.marksmenSources = [];
 
-const { invoke } = window.__TAURI__.core;
+import { invoke } from './wasm_bridge.js';
 
 async function loadSourcesFromCite() {
     try {

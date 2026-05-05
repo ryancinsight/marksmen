@@ -26,3 +26,16 @@
 1. **Wasm Extensibility**: Implement `marksmen-plugin` for Pandoc-like WebAssembly AST filters.
 2. **Legal Compliance**: Implement destructive redaction (`<redact>`) in Typst and DOCX pipelines.
 3. **Memory Optimization**: Complete memory hygiene sweep, pre-allocating Assembly vectors and eliminating redundant AST allocations.
+
+## Phase 21: Enterprise Automation & Intelligence [NEXT]
+- Strategy: Resolve the remaining High-Severity workflow gaps (G-H42, G-H43, G-H56, G-H57) targeting Mail Merge, Document Comparison, and AI/Voice Input.
+- Target: Achieve parity with Word's advanced automated publishing and accessibility tools.
+
+### Tactical Workstreams:
+1. **Mail Merge Engine (G-H43, G-H44)**: Implement CSV/JSON data-source ingestion and template variable replacement (`{{field}}`) for batch document/envelope generation.
+2. **Document Comparison (G-H42)**: Extend `marksmen-diff` to ingest two distinct documents (DOCX or MD) and synthesize a unified Tracked Changes view.
+3. **Voice & AI Assistant (G-H56, G-H57)**: Integrate Web Speech API dictation and local LLM context-aware grammar/clarity suggestions.
+
+### Remaining Risks:
+- Sourcing a truly private, offline LLM runtime (e.g., ONNX / Llama.cpp) for the AI assistant without compromising the local-first zero-telemetry architecture.
+- Mail Merge templating may conflict with raw Markdown AST compilation bounds if not carefully isolated.

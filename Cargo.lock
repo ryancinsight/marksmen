@@ -4101,7 +4101,7 @@ dependencies = [
  "marksmen-render",
  "marksmen-xml",
  "pulldown-cmark",
- "regex",
+ "quick-xml 0.36.2",
  "serde_json",
  "tracing",
  "uuid",
@@ -4125,6 +4125,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
+ "csv",
  "font-kit",
  "marksmen-core",
  "marksmen-csl",
@@ -4436,6 +4437,19 @@ dependencies = [
  "marksmen-core",
  "pulldown-cmark",
  "typst",
+]
+
+[[package]]
+name = "marksmen-wasm"
+version = "0.1.0"
+dependencies = [
+ "js-sys",
+ "marksmen-core",
+ "marksmen-csl",
+ "marksmen-html",
+ "marksmen-html-read",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]

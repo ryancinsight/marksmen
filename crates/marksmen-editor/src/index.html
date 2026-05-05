@@ -434,6 +434,7 @@
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
     <script type="module" src="main.js" defer></script>
     <script type="module" src="references.js" defer></script>
+    <script type="module" src="mailings.js" defer></script>
 </head>
 <body>
 <div class="app-shell">
@@ -467,6 +468,7 @@
             <button class="rtab" data-panel="panel-design">Design</button>
             <button class="rtab" data-panel="panel-layout">Layout</button>
             <button class="rtab" data-panel="panel-references">References</button>
+            <button class="rtab" data-panel="panel-mailings">Mailings</button>
             <button class="rtab" data-panel="panel-review">Review</button>
             <button class="rtab" data-panel="panel-view">View</button>
         </div>
@@ -1315,6 +1317,55 @@
             </div>
         </div>
 
+        <!-- Mailings Panel -->
+        <div class="ribbon-panel" id="panel-mailings">
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <button class="rbtn" id="btn-mail-data" title="Select Data Source (CSV)">
+                        <span class="rbtn-icon">📁</span>
+                        <span>Select Data</span>
+                    </button>
+                    <button class="rbtn" id="btn-mail-insert" title="Insert Merge Field" aria-haspopup="true">
+                        <span class="rbtn-icon">{}</span>
+                        <span>Insert Field &#9660;</span>
+                    </button>
+                    <div class="table-picker" id="mail-field-picker" hidden style="width: 150px; padding: 4px; display: flex; flex-direction: column; gap: 2px;">
+                        <div style="font-size:10px; color:var(--text-hint); padding:2px;">No data source loaded</div>
+                    </div>
+                </div>
+                <span class="rgroup-label">Write & Insert Fields</span>
+            </div>
+            <div class="rsep"></div>
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <button class="rbtn" id="btn-mail-preview" title="Preview Results">
+                        <span class="rbtn-icon">👁</span>
+                        <span>Preview Results</span>
+                    </button>
+                    <div style="display:flex; align-items:center; gap:4px; padding:0 8px; border:1px solid var(--border); border-radius:3px; background:var(--bg-secondary);">
+                        <button id="btn-mail-prev" style="background:none; border:none; cursor:pointer;">◀</button>
+                        <span id="mail-record-count" style="font-size:11px; min-width:30px; text-align:center;">0</span>
+                        <button id="btn-mail-next" style="background:none; border:none; cursor:pointer;">▶</button>
+                    </div>
+                </div>
+                <span class="rgroup-label">Preview</span>
+            </div>
+            <div class="rsep"></div>
+            <div class="rgroup">
+                <div class="rinline-controls">
+                    <button class="rbtn" id="btn-mail-finish" title="Finish & Merge (Generate PDF/DOCX)" aria-haspopup="true">
+                        <span class="rbtn-icon">⚡</span>
+                        <span>Finish & Merge &#9660;</span>
+                    </button>
+                    <div class="table-picker" id="mail-finish-picker" hidden style="width: 150px; padding: 4px; display: flex; flex-direction: column; gap: 2px;">
+                        <button class="fmenu-item" data-export="pdf">Export to PDF</button>
+                        <button class="fmenu-item" data-export="docx">Export to DOCX</button>
+                    </div>
+                </div>
+                <span class="rgroup-label">Finish</span>
+            </div>
+        </div>
+
         <!-- Review Panel -->
         <div class="ribbon-panel" id="panel-review">
             <div class="rgroup">
@@ -1322,6 +1373,10 @@
                     <button class="rbtn rbtn--active-toggle" id="btn-track-changes" title="Track Changes (Ctrl+Shift+E)">
                         <span class="rbtn-icon">📝</span>
                         <span>Track Changes</span>
+                    </button>
+                    <button class="rbtn" id="btn-compare-docs" title="Compare Two Documents">
+                        <span class="rbtn-icon">⚖️</span>
+                        <span>Compare</span>
                     </button>
                     <button class="rbtn" id="btn-set-base" title="Set base snapshot for diff">
                         <span class="rbtn-icon">📍</span>

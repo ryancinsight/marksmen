@@ -90,11 +90,11 @@
 
 | ID | Gap | Domain | Layer |
 |----|-----|--------|-------|
-| G-C01 | **No multi-format save path** — Ctrl+S always writes `.md` only. DOCX-origin documents lose round-trip fidelity on every save cycle. | File I/O | Backend |
-| G-C02 | **No disk autosave** — Only localStorage; crash or site-data clear loses all unsaved work silently. | File I/O | Frontend + Backend |
+| ~~G-C01~~ | ~~**No multi-format save path** — Ctrl+S always writes `.md` only. DOCX-origin documents lose round-trip fidelity on every save cycle.~~ | ~~File I/O~~ | ~~Backend~~ |
+| ~~G-C02~~ | ~~**No disk autosave** — Only localStorage; crash or site-data clear loses all unsaved work silently.~~ | ~~File I/O~~ | ~~Frontend + Backend~~ |
 | ~~G-C03~~ | ~~**Image data loss on reload** — Base64 images are not persisted in the Markdown intermediate nor correctly embedded in DOCX/ODT exports.~~ | ~~Images~~ | ~~Frontend + Backend~~ |
-| G-C04 | **Shallow browser undo stack** — `execCommand` undo does not cover structural operations (table insert, heading shortcut, paste). Custom `MutationObserver` snapshot stack required. | Editor | Frontend |
-| G-C05 | **No unsaved-changes warning on window close** — Tauri `CloseRequested` event not intercepted to prompt save. | File I/O | Backend |
+| ~~G-C04~~ | ~~**Shallow browser undo stack** — `execCommand` undo does not cover structural operations (table insert, heading shortcut, paste). Custom `MutationObserver` snapshot stack required.~~ | ~~Editor~~ | ~~Frontend~~ |
+| ~~G-C05~~ | ~~**No unsaved-changes warning on window close** — Tauri `CloseRequested` event not intercepted to prompt save.~~ | ~~File I/O~~ | ~~Backend~~ |
 
 ---
 

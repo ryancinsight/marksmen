@@ -18,12 +18,18 @@ impl<'a> AstConcatenator<'a> {
     /// Adds a document's AST to the combined stream, namespacing its IDs.
     /// A page break is inserted before the document if it is not the first one.
     pub fn add_document(&mut self, namespace: &str, doc_events: impl IntoIterator<Item = Event<'a>>) -> &mut Self {
+        let iter = doc_events.into_iter();
+        let (lower, upper) = iter.size_hint();
+        let capacity_hint = upper.unwrap_or(lower);
+        
+        self.events.reserve(capacity_hint + 1);
+
         if !self.events.is_empty() {
             // Insert a page break
             self.events.push(Event::Html(CowStr::Borrowed("<div style=\"page-break-after: always;\"></div>\n")));
         }
 
-        for event in doc_events {
+        for event in iter {
             let namespaced_event = match event {
                 // Namespace Heading IDs (e.g. {#my-heading} -> {#namespace-my-heading})
                 Event::Start(Tag::Heading { level, id, classes, attrs }) => {

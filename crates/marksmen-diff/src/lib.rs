@@ -57,20 +57,44 @@ pub fn diff_markdown(old: &str, new: &str) -> String {
                 new_index,
                 new_len,
             } => {
-                // If a single block is replaced, we can do word-diff on the raw string and then render.
-                // However, inserting <ins> into raw Markdown breaks the AST.
-                // For safety, we render structural block replacements as explicit Delete/Insert pairs.
-                for i in 0..*old_len {
-                    out.push_str(&format!(
-                        "<div class=\"diff-del\">\n{}\n</div>",
-                        render_block(old_blocks[*old_index + i], &config)
-                    ));
-                }
-                for i in 0..*new_len {
-                    out.push_str(&format!(
-                        "<div class=\"diff-ins\">\n{}\n</div>",
-                        render_block(new_blocks[*new_index + i], &config)
-                    ));
+                if *old_len == 1 && *new_len == 1 {
+                    let old_block = old_blocks[*old_index];
+                    let new_block = new_blocks[*new_index];
+                    let inline_diff = TextDiff::from_words(old_block, new_block);
+                    let mut diffed_md = String::new();
+                    
+                    for change in inline_diff.iter_all_changes() {
+                        match change.tag() {
+                            similar::ChangeTag::Delete => {
+                                diffed_md.push_str("<del>");
+                                diffed_md.push_str(&change.to_string_lossy());
+                                diffed_md.push_str("</del>");
+                            }
+                            similar::ChangeTag::Insert => {
+                                diffed_md.push_str("<ins>");
+                                diffed_md.push_str(&change.to_string_lossy());
+                                diffed_md.push_str("</ins>");
+                            }
+                            similar::ChangeTag::Equal => {
+                                diffed_md.push_str(&change.to_string_lossy());
+                            }
+                        }
+                    }
+                    
+                    out.push_str(&render_block(&diffed_md, &config));
+                } else {
+                    for i in 0..*old_len {
+                        out.push_str(&format!(
+                            "<div class=\"diff-del\">\n{}\n</div>",
+                            render_block(old_blocks[*old_index + i], &config)
+                        ));
+                    }
+                    for i in 0..*new_len {
+                        out.push_str(&format!(
+                            "<div class=\"diff-ins\">\n{}\n</div>",
+                            render_block(new_blocks[*new_index + i], &config)
+                        ));
+                    }
                 }
             }
         }
@@ -101,13 +125,13 @@ mod tests {
 
     #[test]
     fn test_diff_structural_blocks() {
-        let old = "# Header\n\nParagraph 1.";
-        let new = "# Header\n\nParagraph 2.";
+        let old = "# Header\n\nParagraph 1.\n\nAnother block.";
+        let new = "# Header\n\nParagraph 2.\n\nAnother new block.";
         let result = diff_markdown(old, new);
         assert!(result.contains("<h1>Header</h1>"));
-        assert!(result.contains("diff-del"));
-        assert!(result.contains("Paragraph 1."));
-        assert!(result.contains("diff-ins"));
-        assert!(result.contains("Paragraph 2."));
+        // The inline word diff should create <del> and <ins> within the paragraph block
+        assert!(result.contains("<p>Paragraph <del>1.</del><ins>2.</ins></p>"));
+        // The last block is completely different words
+        assert!(result.contains("<p>Another <ins>new</ins><ins> </ins>block.</p>"));
     }
 }

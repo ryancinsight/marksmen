@@ -21,7 +21,7 @@ if (!window.__TAURI__) {
         }
     };
 }
-const { invoke } = window.__TAURI__.core;
+import { invoke } from './wasm_bridge.js';
 
 // ── Window-size lock ─────────────────────────────────────────────────────────
 // .app-shell uses position:fixed; inset:0 so it is always anchored directly
@@ -1933,6 +1933,55 @@ document.getElementById('btn-diff-toggle').addEventListener('click', async () =>
     }
 });
 
+document.getElementById('btn-compare-docs')?.addEventListener('click', async () => {
+    try {
+        // We use a short timeout so the UI can update before the blocking native dialog
+        setTimeout(() => setStatus('Select Original Document', 'syncing'), 10);
+        alert('Select the ORIGINAL document for comparison.');
+        const [old_md, old_name] = await invoke('import_file');
+        
+        setTimeout(() => setStatus('Select Revised Document', 'syncing'), 10);
+        alert('Select the REVISED document for comparison.');
+        const [new_md, new_name] = await invoke('import_file');
+        
+        setStatus('Comparing...', 'syncing');
+        const diffHtml = await invoke('generate_diff', {
+            old_md: old_md,
+            new_md: new_md
+        });
+        
+        baseMarkdown = old_md;
+        currentMarkdown = new_md;
+        
+        // Strip extensions for display
+        const name1 = old_name.split('.').slice(0, -1).join('.') || old_name;
+        const name2 = new_name.split('.').slice(0, -1).join('.') || new_name;
+        currentDocName = `${name1} vs ${name2}`;
+        document.getElementById('doc-name').textContent = currentDocName;
+        document.title = currentDocName + ' – Marksmen';
+        
+        isDiffMode = true;
+        editor.contentEditable = 'false';
+        setEditorContent(diffHtml);
+        drawArrows();
+        
+        const btn = document.getElementById('btn-diff-toggle');
+        if (btn) btn.querySelector('span:last-child').textContent = 'Hide Changes';
+        
+        setStatus('Comparison complete');
+        
+        // Switch to Review tab to ensure the user sees the Track Changes tools
+        document.querySelector('.rtab[data-panel="panel-review"]')?.click();
+        
+    } catch(e) {
+        if (e !== 'No file selected') {
+            console.error('Compare failed:', e);
+            alert('Failed to compare documents: ' + e);
+        }
+        setStatus('● Saved');
+    }
+});
+
 // ── Page Count & Print Rulers ─────────────────────────────────────────────────
 function updatePageCount() {
     const canvas = document.getElementById('page-canvas');
@@ -2452,8 +2501,8 @@ document.getElementById('btn-save-as')?.addEventListener('click', async () => {
     await saveDocumentAs();
 });
 document.getElementById('btn-file-exit')?.addEventListener('click', async () => {
-    if (window.__TAURI__) {
-        await window.__TAURI__.process.exit(0);
+    if (window.__TAURI__ && window.__TAURI__.window) {
+        await window.__TAURI__.window.getCurrentWindow().close();
     } else {
         window.close();
     }
@@ -4416,12 +4465,12 @@ if (window.__TAURI__ && window.__TAURI__.window) {
                     if (confirmed) {
                         isDirty = false;
                         isClosing = true;
-                        await getCurrentWindow().destroy();
+                        await getCurrentWindow().close();
                     }
                 } catch(e) {
                     // Fallback force-close if dialog API fails
                     isClosing = true;
-                    await getCurrentWindow().destroy();
+                    await getCurrentWindow().close();
                 }
             }
         });

@@ -450,6 +450,85 @@ async fn export_binder(
     std::fs::write(&save_path, &bytes).map_err(|e| e.to_string())
 }
 
+/// Execute a Mail Merge operation, generating a single concatenated output document.
+#[tauri::command]
+async fn execute_mail_merge(
+    app: tauri::AppHandle,
+    template_markdown: String,
+    csv_data: String,
+    format: String,
+    doc_name: String,
+) -> Result<(), String> {
+    use tauri_plugin_dialog::DialogExt;
+    use marksmen_core::parsing::combine::AstConcatenator;
+    use marksmen_core::parsing::mailmerge::process_ast;
+    use std::collections::HashMap;
+
+    let config = Config::default();
+    
+    let mut reader = csv::ReaderBuilder::new()
+        .trim(csv::Trim::All)
+        .from_reader(csv_data.as_bytes());
+        
+    let headers = reader.headers().map_err(|e| e.to_string())?.clone();
+
+    // Parse the template ONCE to eliminate O(N) re-parsing
+    let template_events: Vec<pulldown_cmark::Event> = parser::parse(&template_markdown).collect();
+
+    let mut concat = AstConcatenator::new();
+    let mut num_records = 0;
+
+    // Stream AST transformations directly into the concatenator
+    for (idx, result) in reader.records().enumerate() {
+        let record = result.map_err(|e| e.to_string())?;
+        let mut map = HashMap::new();
+        for (i, field) in record.iter().enumerate() {
+            if let Some(header) = headers.get(i) {
+                map.insert(header.to_string(), field.to_string());
+            }
+        }
+        
+        let processed_events = process_ast(&template_events, &map);
+        let namespace = format!("merge-{}", idx);
+        concat.add_document(&namespace, processed_events);
+        num_records += 1;
+    }
+
+    if num_records == 0 {
+        return Err("No data records found in CSV.".to_string());
+    }
+
+    let unified_events = concat.build();
+
+    let (bytes, ext): (Vec<u8>, &str) = match format.as_str() {
+        "docx" => (
+            marksmen_docx::translation::document::convert(unified_events, &config, std::path::Path::new("."), None)
+                .map_err(|e| e.to_string())?,
+            "docx",
+        ),
+        "pdf" => {
+            let typst = marksmen_typst::translator::translate(unified_events, &config).map_err(|e| e.to_string())?;
+            (
+                marksmen_pdf::rendering::compiler::compile_to_pdf(&typst, &config, Some(std::path::PathBuf::from("."))).map_err(|e| e.to_string())?,
+                "pdf"
+            )
+        },
+        _ => return Err(format!("Unsupported mail merge format: {format}")),
+    };
+
+    let save_path = app
+        .dialog()
+        .file()
+        .add_filter(&format.to_uppercase(), &[ext])
+        .set_file_name(&format!("{doc_name}.{ext}"))
+        .blocking_save_file()
+        .ok_or_else(|| "No file selected".to_string())?
+        .into_path()
+        .map_err(|e| e.to_string())?;
+
+    std::fs::write(&save_path, &bytes).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn get_system_fonts() -> Vec<String> {
     let source = font_kit::source::SystemSource::new();
@@ -532,6 +611,7 @@ pub fn run() {
             format_csl_citation,
             format_csl_bibliography,
             export_binder,
+            execute_mail_merge,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

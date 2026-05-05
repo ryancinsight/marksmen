@@ -1,4 +1,4 @@
-use crate::translation::elements::{handle_event, Container, TextState};
+﻿use crate::translation::elements::{handle_event, Container, TextState};
 use anyhow::Result;
 use docx_rs::*;
 use marksmen_core::Config;
@@ -265,51 +265,18 @@ pub fn convert(
             if let Ok(mut cf) = src_zip.by_name("word/comments.xml") {
                 let mut cxml = String::new();
                 let _ = std::io::Read::read_to_string(&mut cf, &mut cxml);
-                let mut reader = quick_xml::Reader::from_str(&cxml);
-                reader.config_mut().trim_text(true);
-                let mut buf = Vec::new();
-                
-                let mut current_id = None;
-                let mut in_comment = false;
-                let mut in_t = false;
-                let mut current_text = String::new();
-
-                loop {
-                    match reader.read_event_into(&mut buf) {
-                        Ok(quick_xml::events::Event::Start(ref e)) if e.name().as_ref() == b"w:comment" => {
-                            in_comment = true;
-                            current_text.clear();
-                            current_id = e.attributes()
-                                .filter_map(|a| a.ok())
-                                .find(|a| a.key.as_ref() == b"w:id")
-                                .and_then(|a| String::from_utf8(a.value.into_owned()).ok());
-                        }
-                        Ok(quick_xml::events::Event::End(ref e)) if e.name().as_ref() == b"w:comment" => {
-                            if let Some(id_str) = current_id.take() {
-                                let text_norm = current_text.trim().to_ascii_lowercase();
-                                if let Ok(id_num) = id_str.parse::<usize>() {
-                                    if !text_norm.is_empty() {
-                                        text_state.source_comment_ids.insert(text_norm, id_num);
-                                    }
-                                }
-                            }
-                            in_comment = false;
-                        }
-                        Ok(quick_xml::events::Event::Start(ref e)) if e.name().as_ref() == b"w:t" && in_comment => {
-                            in_t = true;
-                        }
-                        Ok(quick_xml::events::Event::End(ref e)) if e.name().as_ref() == b"w:t" => {
-                            in_t = false;
-                        }
-                        Ok(quick_xml::events::Event::Text(ref e)) if in_t => {
-                            if let Ok(t) = e.unescape() {
-                                current_text.push_str(&t);
-                            }
-                        }
-                        Ok(quick_xml::events::Event::Eof) | Err(_) => break,
-                        _ => ()
+                // Match <w:comment ...> opening tag + first <w:t>...</w:t> in the block.
+                // Attribute order in source comments.xml is w:id then w:author then w:date.
+                let cmeta_re = regex::Regex::new(
+                    r#"(?s)<w:comment\s[^>]*?w:id="([^"]+)"[^>]*?>.*?<w:t[^>]*>([^<]*)</w:t>"#,
+                )
+                .unwrap();
+                for cap in cmeta_re.captures_iter(&cxml) {
+                    let id: usize = cap[1].trim().parse().unwrap_or(0);
+                    let text_norm = cap[2].trim().to_ascii_lowercase();
+                    if !text_norm.is_empty() {
+                        text_state.source_comment_ids.insert(text_norm, id);
                     }
-                    buf.clear();
                 }
             }
         }
@@ -345,7 +312,7 @@ pub fn convert(
     }
 
     // Two-pass footnote resolution:
-    // Pass 1 – scan the event slice, collect paragraph content for each
+    // Pass 1 ΓÇô scan the event slice, collect paragraph content for each
     //          FootnoteDefinition keyed by the numeric id from footnote_map.
     //          This must run before the consuming main loop.
     let mut footnote_content: std::collections::HashMap<usize, Vec<Paragraph>> =
@@ -1122,7 +1089,7 @@ pub fn convert(
     let mut docx_buffer = Cursor::new(Vec::new());
     doc.build().pack(&mut docx_buffer)?;
 
-    // ─── Source-DOCX structural passthrough ──────────────────────────────────
+    // ΓöÇΓöÇΓöÇ Source-DOCX structural passthrough ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
     // When the caller supplies the original DOCX bytes, critical XML artifacts
     // that Markdown cannot represent (styles, numbering, settings, theme,
     // header/footer, comment metadata) are reinstated verbatim from the source.
@@ -1148,7 +1115,7 @@ pub fn convert(
     let mut source_sect_pr: Option<String> = None;
 
     // Comment metadata from source for ID reconstruction:
-    // normalized-content → (id, author, date, initials)
+    // normalized-content ΓåÆ (id, author, date, initials)
     let mut src_comment_meta: std::collections::HashMap<String, (String, String, String, String)> =
         std::collections::HashMap::new();
 
@@ -1167,7 +1134,7 @@ pub fn convert(
                 (nm, compression, buf)
             };
 
-            // ── Comprehensive Passthrough ──────────────────────────────────────────────
+            // ΓöÇΓöÇ Comprehensive Passthrough ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
             let is_core_file = name == "word/document.xml"
                 || name == "[Content_Types].xml"
                 || name == "_rels/.rels"
@@ -1181,156 +1148,70 @@ pub fn convert(
                 passthrough_map.insert(name.clone(), raw.clone());
             }
 
-            // ── Track source section formatting (margins, header/footer refs) ─
+            // ΓöÇΓöÇ Track source section formatting (margins, header/footer refs) ΓöÇ
             if name == "word/document.xml" {
                 if let Ok(doc_xml) = String::from_utf8(raw.clone()) {
-                    let mut reader = quick_xml::Reader::from_str(&doc_xml);
-                    reader.config_mut().trim_text(true);
-                    let mut buf = Vec::new();
-                    let mut in_sect = false;
-                    let mut sect_events = Vec::new();
-                    loop {
-                        match reader.read_event_into(&mut buf) {
-                            Ok(quick_xml::events::Event::Start(ref e)) if e.name().as_ref() == b"w:sectPr" => {
-                                in_sect = true;
-                                sect_events.push(quick_xml::events::Event::Start(e.clone().into_owned()));
-                            }
-                            Ok(quick_xml::events::Event::End(ref e)) if e.name().as_ref() == b"w:sectPr" && in_sect => {
-                                sect_events.push(quick_xml::events::Event::End(e.clone().into_owned()));
-                                break;
-                            }
-                            Ok(quick_xml::events::Event::Empty(ref e)) if e.name().as_ref() == b"w:sectPr" => {
-                                sect_events.push(quick_xml::events::Event::Empty(e.clone().into_owned()));
-                                break;
-                            }
-                            Ok(e) if in_sect => sect_events.push(e.into_owned()),
-                            Ok(quick_xml::events::Event::Eof) | Err(_) => break,
-                            _ => ()
-                        }
-                        buf.clear();
-                    }
-                    if !sect_events.is_empty() {
-                        let mut out = Vec::new();
-                        let mut writer = quick_xml::Writer::new(&mut out);
-                        for e in sect_events {
-                            let _ = writer.write_event(e);
-                        }
-                        if let Ok(s) = String::from_utf8(out) {
-                            source_sect_pr = Some(s);
-                        }
+                    let sect_re =
+                        regex::Regex::new(r#"(?s)<w:sectPr\b[^>]*>.*?</w:sectPr>"#).unwrap();
+                    if let Some(mat) = sect_re.find(&doc_xml) {
+                        source_sect_pr = Some(mat.as_str().to_string());
                     }
                 }
             }
 
-            // ── Content-type Override harvest ─────────────────────────────────
+            // ΓöÇΓöÇ Content-type Override harvest ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
             if name == "[Content_Types].xml" {
                 if let Ok(ct_xml) = String::from_utf8(raw.clone()) {
-                    let mut reader = quick_xml::Reader::from_str(&ct_xml);
-                    reader.config_mut().trim_text(true);
-                    let mut buf = Vec::new();
-                    loop {
-                        match reader.read_event_into(&mut buf) {
-                            Ok(quick_xml::events::Event::Empty(ref e)) | Ok(quick_xml::events::Event::Start(ref e)) => {
-                                if e.name().as_ref() == b"Override" {
-                                    let mut out = Vec::new();
-                                    let mut writer = quick_xml::Writer::new(&mut out);
-                                    let _ = writer.write_event(quick_xml::events::Event::Empty(e.clone()));
-                                    if let Ok(s) = String::from_utf8(out) {
-                                        source_ct_overrides.push(s);
-                                    }
-                                }
-                            }
-                            Ok(quick_xml::events::Event::Eof) | Err(_) => break,
-                            _ => ()
-                        }
-                        buf.clear();
+                    let ct_re = regex::Regex::new(r#"(?s)<Override\b[^>]*/>"#).unwrap();
+                    for cap in ct_re.find_iter(&ct_xml) {
+                        source_ct_overrides.push(cap.as_str().to_string());
                     }
                 }
             }
 
-            // ── Relationship harvest for header/footer/theme/commentsIds ──────
+            // ΓöÇΓöÇ Relationship harvest for header/footer/theme/commentsIds ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
             if name == "word/_rels/document.xml.rels" {
                 if let Ok(rels_xml) = String::from_utf8(raw.clone()) {
-                    let mut reader = quick_xml::Reader::from_str(&rels_xml);
-                    reader.config_mut().trim_text(true);
-                    let mut buf = Vec::new();
-                    loop {
-                        match reader.read_event_into(&mut buf) {
-                            Ok(quick_xml::events::Event::Empty(ref e)) if e.name().as_ref() == b"Relationship" => {
-                                let mut out = Vec::new();
-                                let mut writer = quick_xml::Writer::new(&mut out);
-                                let _ = writer.write_event(quick_xml::events::Event::Empty(e.clone()));
-                                if let Ok(entry) = String::from_utf8(out) {
-                                    if !entry.contains("Target=\"styles.xml\"")
-                                        && !entry.contains("Target=\"numbering.xml\"")
-                                        && !entry.contains("Target=\"fontTable.xml\"")
-                                        && !entry.contains("Target=\"settings.xml\"")
-                                        && !entry.contains("Target=\"webSettings.xml\"")
-                                        && !entry.contains("Target=\"media/")
-                                        && !entry.contains("Target=\"comments.xml\"")
-                                        && !entry.contains("Target=\"commentsExtended.xml\"")
-                                    {
-                                        source_rels_entries.push(entry);
-                                    }
-                                }
-                            }
-                            Ok(quick_xml::events::Event::Eof) | Err(_) => break,
-                            _ => ()
+                    let rel_re = regex::Regex::new(r#"(?s)<Relationship\b[^>]*/>"#).unwrap();
+                    for cap in rel_re.find_iter(&rels_xml) {
+                        let entry = cap.as_str();
+                        // Omit the core structural relations minted cleanly by docx-rs,
+                        // harvest everything else (headers, footers, glossaries, notes).
+                        if !entry.contains("Target=\"styles.xml\"")
+                            && !entry.contains("Target=\"numbering.xml\"")
+                            && !entry.contains("Target=\"fontTable.xml\"")
+                            && !entry.contains("Target=\"settings.xml\"")
+                            && !entry.contains("Target=\"webSettings.xml\"")
+                            && !entry.contains("Target=\"media/")
+                            && !entry.contains("Target=\"comments.xml\"")
+                            && !entry.contains("Target=\"commentsExtended.xml\"")
+                        {
+                            source_rels_entries.push(entry.to_string());
                         }
-                        buf.clear();
                     }
                 }
             }
 
-            // ── Comment ID lookup harvest from source comments.xml ────────────
+            // ΓöÇΓöÇ Comment ID lookup harvest from source comments.xml ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
             if name == "word/comments.xml" {
                 if let Ok(cxml) = String::from_utf8(raw) {
-                    let mut reader = quick_xml::Reader::from_str(&cxml);
-                    reader.config_mut().trim_text(true);
-                    let mut buf = Vec::new();
-                    
-                    let mut current_id = None;
-                    let mut in_comment = false;
-                    let mut in_t = false;
-                    let mut current_text = String::new();
-
-                    loop {
-                        match reader.read_event_into(&mut buf) {
-                            Ok(quick_xml::events::Event::Start(ref e)) if e.name().as_ref() == b"w:comment" => {
-                                in_comment = true;
-                                current_text.clear();
-                                current_id = e.attributes()
-                                    .filter_map(|a| a.ok())
-                                    .find(|a| a.key.as_ref() == b"w:id")
-                                    .and_then(|a| String::from_utf8(a.value.into_owned()).ok());
+                    let cmeta_re = regex::Regex::new(
+                        r#"(?s)<w:comment\s[^>]*?w:id="([^"]+)"[^>]*?>.*?<w:t[^>]*>([^<]*)</w:t>"#,
+                    )
+                    .unwrap();
+                    for cap in cmeta_re.captures_iter(&cxml) {
+                        let id_str = cap[1].trim().to_string();
+                        let text_norm = cap[2].trim().to_ascii_lowercase();
+                        if let Ok(id_num) = id_str.parse::<usize>() {
+                            if !text_norm.is_empty() {
+                                src_comment_meta.insert(
+                                    text_norm,
+                                    (id_str, String::new(), String::new(), String::new()),
+                                );
+                                // Also update the per-usize map used in text_state (already built before event loop)
+                                let _ = id_num;
                             }
-                            Ok(quick_xml::events::Event::End(ref e)) if e.name().as_ref() == b"w:comment" => {
-                                if let Some(id_str) = current_id.take() {
-                                    let text_norm = current_text.trim().to_ascii_lowercase();
-                                    if let Ok(id_num) = id_str.parse::<usize>() {
-                                        if !text_norm.is_empty() {
-                                            src_comment_meta.insert(text_norm, (id_str, String::new(), String::new(), String::new()));
-                                            let _ = id_num;
-                                        }
-                                    }
-                                }
-                                in_comment = false;
-                            }
-                            Ok(quick_xml::events::Event::Start(ref e)) if e.name().as_ref() == b"w:t" && in_comment => {
-                                in_t = true;
-                            }
-                            Ok(quick_xml::events::Event::End(ref e)) if e.name().as_ref() == b"w:t" => {
-                                in_t = false;
-                            }
-                            Ok(quick_xml::events::Event::Text(ref e)) if in_t => {
-                                if let Ok(t) = e.unescape() {
-                                    current_text.push_str(&t);
-                                }
-                            }
-                            Ok(quick_xml::events::Event::Eof) | Err(_) => break,
-                            _ => ()
                         }
-                        buf.clear();
                     }
                 }
             }
@@ -1358,7 +1239,7 @@ pub fn convert(
         let path = file.name().to_string();
         written_paths.insert(path.clone());
 
-        // ── Verbatim passthrough: replace generated content with source ──────
+        // ΓöÇΓöÇ Verbatim passthrough: replace generated content with source ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
         if let Some(src_bytes) = passthrough_map.get(&path) {
             zip_writer.start_file(&path, options)?;
             std::io::Write::write_all(&mut zip_writer, src_bytes)?;
@@ -1366,63 +1247,29 @@ pub fn convert(
         }
 
         if path == "word/_rels/document.xml.rels" {
-            if let Ok(rels_str) = String::from_utf8(content.clone()) {
-                let mut reader = quick_xml::Reader::from_str(&rels_str);
-                reader.config_mut().trim_text(false);
-                let mut buf = Vec::new();
-                let mut out = Vec::new();
-                let mut writer = quick_xml::Writer::new(&mut out);
-
-                loop {
-                    match reader.read_event_into(&mut buf) {
-                        Ok(quick_xml::events::Event::Empty(mut e)) => {
-                            let mut new_attrs = Vec::new();
-                            for attr in e.attributes() {
-                                if let Ok(a) = attr {
-                                    let k = a.key.as_ref().to_vec();
-                                    let mut v = a.value.into_owned();
-                                    if k == b"Id" {
-                                        let val_str = String::from_utf8_lossy(&v);
-                                        if let Some(num_str) = val_str.strip_prefix("rId") {
-                                            if let Ok(num) = num_str.parse::<u32>() {
-                                                let new_val = format!("rId{}", num + 1000);
-                                                v = new_val.into_bytes();
-                                            }
-                                        }
-                                    }
-                                    new_attrs.push((k, v));
-                                }
-                            }
-                            e.clear_attributes();
-                            for (k, v) in new_attrs {
-                                e.push_attribute((k.as_slice(), v.as_slice()));
-                            }
-                            let _ = writer.write_event(quick_xml::events::Event::Empty(e));
-                        }
-                        Ok(quick_xml::events::Event::Start(e)) => {
-                            let _ = writer.write_event(quick_xml::events::Event::Start(e));
-                        }
-                        Ok(quick_xml::events::Event::End(e)) => {
-                            if e.name().as_ref() == b"Relationships" {
-                                for entry in &source_rels_entries {
-                                    let mut temp_reader = quick_xml::Reader::from_str(entry);
-                                    let mut temp_buf = Vec::new();
-                                    if let Ok(quick_xml::events::Event::Empty(te)) = temp_reader.read_event_into(&mut temp_buf) {
-                                        let _ = writer.write_event(quick_xml::events::Event::Empty(te));
-                                    }
-                                }
-                            }
-                            let _ = writer.write_event(quick_xml::events::Event::End(e));
-                        }
-                        Ok(quick_xml::events::Event::Eof) => break,
-                        Ok(e) => { let _ = writer.write_event(e); },
-                        Err(_) => break,
-                    }
-                    buf.clear();
+            if let Ok(mut rels_str) = String::from_utf8(content.clone()) {
+                // Offset docx-rs generated Id="rIdX" by 1000 to prevent collisions
+                let rid_re = regex::Regex::new(r#"Id="rId(\d+)""#).unwrap();
+                let mut offset_rels = String::new();
+                let mut last = 0;
+                for mat in rid_re.captures_iter(&rels_str) {
+                    let m = mat.get(0).unwrap();
+                    offset_rels.push_str(&rels_str[last..m.start()]);
+                    let old_num: u32 = mat.get(1).unwrap().as_str().parse().unwrap_or(0);
+                    offset_rels.push_str(&format!("Id=\"rId{}\"", old_num + 1000));
+                    last = m.end();
                 }
-                
+                offset_rels.push_str(&rels_str[last..]);
+                rels_str = offset_rels;
+
+                if !source_rels_entries.is_empty() {
+                    let end_tag = "</Relationships>";
+                    for entry in &source_rels_entries {
+                        rels_str = rels_str.replace(end_tag, &format!("{}\n{}", entry, end_tag));
+                    }
+                }
                 zip_writer.start_file(&path, options)?;
-                std::io::Write::write_all(&mut zip_writer, &out)?;
+                std::io::Write::write_all(&mut zip_writer, rels_str.as_bytes())?;
             } else {
                 zip_writer.start_file(&path, options)?;
                 std::io::Write::write_all(&mut zip_writer, &content)?;
@@ -1430,53 +1277,22 @@ pub fn convert(
             continue;
         }
 
-        // ── [Content_Types].xml: merge source Override entries ────────────────
+        // ΓöÇΓöÇ [Content_Types].xml: merge source Override entries ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
         if path == "[Content_Types].xml" && !source_ct_overrides.is_empty() {
-            if let Ok(ct_str) = String::from_utf8(content.clone()) {
-                let mut reader = quick_xml::Reader::from_str(&ct_str);
-                reader.config_mut().trim_text(false);
-                let mut buf = Vec::new();
-                let mut out = Vec::new();
-                let mut writer = quick_xml::Writer::new(&mut out);
-
-                let mut existing_parts = std::collections::HashSet::new();
-
-                loop {
-                    match reader.read_event_into(&mut buf) {
-                        Ok(quick_xml::events::Event::Empty(e)) => {
-                            if e.name().as_ref() == b"Override" {
-                                if let Some(attr) = e.attributes().filter_map(|a| a.ok()).find(|a| a.key.as_ref() == b"PartName") {
-                                    existing_parts.insert(String::from_utf8_lossy(&attr.value).into_owned());
-                                }
+            if let Ok(mut ct_str) = String::from_utf8(content.clone()) {
+                for entry in &source_ct_overrides {
+                    if let Some(pn_start) = entry.find("PartName=\"") {
+                        let pn_rest = &entry[pn_start + 10..];
+                        if let Some(pn_end) = pn_rest.find('"') {
+                            let part = &pn_rest[..pn_end];
+                            if !ct_str.contains(&format!("PartName=\"{}\"", part)) {
+                                ct_str = ct_str.replace("</Types>", &format!("{}</Types>", entry));
                             }
-                            let _ = writer.write_event(quick_xml::events::Event::Empty(e));
                         }
-                        Ok(quick_xml::events::Event::End(e)) => {
-                            if e.name().as_ref() == b"Types" {
-                                for entry in &source_ct_overrides {
-                                    let mut temp_reader = quick_xml::Reader::from_str(entry);
-                                    let mut temp_buf = Vec::new();
-                                    if let Ok(quick_xml::events::Event::Empty(te)) = temp_reader.read_event_into(&mut temp_buf) {
-                                        if let Some(attr) = te.attributes().filter_map(|a| a.ok()).find(|a| a.key.as_ref() == b"PartName") {
-                                            let pn = String::from_utf8_lossy(&attr.value).into_owned();
-                                            if !existing_parts.contains(&pn) {
-                                                let _ = writer.write_event(quick_xml::events::Event::Empty(te));
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            let _ = writer.write_event(quick_xml::events::Event::End(e));
-                        }
-                        Ok(quick_xml::events::Event::Eof) => break,
-                        Ok(e) => { let _ = writer.write_event(e); },
-                        Err(_) => break,
                     }
-                    buf.clear();
                 }
-                
                 zip_writer.start_file(&path, options)?;
-                std::io::Write::write_all(&mut zip_writer, &out)?;
+                std::io::Write::write_all(&mut zip_writer, ct_str.as_bytes())?;
             } else {
                 zip_writer.start_file(&path, options)?;
                 std::io::Write::write_all(&mut zip_writer, &content)?;
@@ -1484,136 +1300,51 @@ pub fn convert(
             continue;
         }
 
-        // ── word/document.xml: fix docx-rs <w:del> tag rendering ──────────────
+        // ΓöÇΓöÇ word/document.xml: fix docx-rs <w:del> tag rendering ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
         if path == "word/document.xml" {
             if let Ok(doc_str) = String::from_utf8(content.clone()) {
-                let mut reader = quick_xml::Reader::from_str(&doc_str);
-                reader.config_mut().trim_text(false);
-                let mut buf = Vec::new();
-                let mut out = Vec::new();
-                let mut writer = quick_xml::Writer::new(&mut out);
-
-                let mut in_del = false;
-                let mut skip_sect = false;
-
-                loop {
-                    match reader.read_event_into(&mut buf) {
-                        Ok(quick_xml::events::Event::Start(mut e)) => {
-                            if e.name().as_ref() == b"w:del" {
-                                in_del = true;
-                            } else if in_del && e.name().as_ref() == b"w:t" {
-                                let mut new_e = quick_xml::events::BytesStart::new("w:delText");
-                                new_e.push_attribute(("xml:space", "preserve"));
-                                e = new_e;
-                            } else if e.name().as_ref() == b"w:sectPr" && source_sect_pr.is_some() {
-                                skip_sect = true;
-                            }
-                            
-                            if !skip_sect {
-                                let mut new_attrs = Vec::new();
-                                for attr in e.attributes() {
-                                    if let Ok(a) = attr {
-                                        let k = a.key.as_ref().to_vec();
-                                        let mut v = a.value.into_owned();
-                                        if k == b"r:id" || k == b"r:embed" || k == b"r:link" {
-                                            let val_str = String::from_utf8_lossy(&v);
-                                            if let Some(num_str) = val_str.strip_prefix("rId") {
-                                                if let Ok(num) = num_str.parse::<u32>() {
-                                                    let new_val = format!("rId{}", num + 1000);
-                                                    v = new_val.into_bytes();
-                                                }
-                                            }
-                                        }
-                                        new_attrs.push((k, v));
-                                    }
-                                }
-                                e.clear_attributes();
-                                for (k, v) in new_attrs {
-                                    e.push_attribute((k.as_slice(), v.as_slice()));
-                                }
-                                let _ = writer.write_event(quick_xml::events::Event::Start(e));
-                            }
-                        }
-                        Ok(quick_xml::events::Event::End(mut e)) => {
-                            if e.name().as_ref() == b"w:del" {
-                                in_del = false;
-                            } else if in_del && e.name().as_ref() == b"w:t" {
-                                e = quick_xml::events::BytesEnd::new("w:delText");
-                            } else if skip_sect && e.name().as_ref() == b"w:sectPr" {
-                                skip_sect = false;
-                                if let Some(src_sect) = &source_sect_pr {
-                                    let mut temp_reader = quick_xml::Reader::from_str(src_sect);
-                                    let mut temp_buf = Vec::new();
-                                    loop {
-                                        match temp_reader.read_event_into(&mut temp_buf) {
-                                            Ok(quick_xml::events::Event::Eof) | Err(_) => break,
-                                            Ok(ev) => { let _ = writer.write_event(ev); }
-                                        }
-                                        temp_buf.clear();
-                                    }
-                                }
-                                continue;
-                            }
-                            
-                            if !skip_sect {
-                                let _ = writer.write_event(quick_xml::events::Event::End(e));
-                            }
-                        }
-                        Ok(quick_xml::events::Event::Empty(mut e)) => {
-                            if skip_sect && e.name().as_ref() == b"w:sectPr" {
-                                skip_sect = false;
-                                if let Some(src_sect) = &source_sect_pr {
-                                    let mut temp_reader = quick_xml::Reader::from_str(src_sect);
-                                    let mut temp_buf = Vec::new();
-                                    loop {
-                                        match temp_reader.read_event_into(&mut temp_buf) {
-                                            Ok(quick_xml::events::Event::Eof) | Err(_) => break,
-                                            Ok(ev) => { let _ = writer.write_event(ev); }
-                                        }
-                                        temp_buf.clear();
-                                    }
-                                }
-                                continue;
-                            }
-                            
-                            if !skip_sect {
-                                let mut new_attrs = Vec::new();
-                                for attr in e.attributes() {
-                                    if let Ok(a) = attr {
-                                        let k = a.key.as_ref().to_vec();
-                                        let mut v = a.value.into_owned();
-                                        if k == b"r:id" || k == b"r:embed" || k == b"r:link" {
-                                            let val_str = String::from_utf8_lossy(&v);
-                                            if let Some(num_str) = val_str.strip_prefix("rId") {
-                                                if let Ok(num) = num_str.parse::<u32>() {
-                                                    let new_val = format!("rId{}", num + 1000);
-                                                    v = new_val.into_bytes();
-                                                }
-                                            }
-                                        }
-                                        new_attrs.push((k, v));
-                                    }
-                                }
-                                e.clear_attributes();
-                                for (k, v) in new_attrs {
-                                    e.push_attribute((k.as_slice(), v.as_slice()));
-                                }
-                                let _ = writer.write_event(quick_xml::events::Event::Empty(e));
-                            }
-                        }
-                        Ok(quick_xml::events::Event::Eof) => break,
-                        Ok(e) => {
-                            if !skip_sect {
-                                let _ = writer.write_event(e);
-                            }
-                        }
-                        Err(_) => break,
-                    }
-                    buf.clear();
+                // docx-rs incorrectly outputs `<w:t>` inside `<w:del>` for deleted tracked changes.
+                // Microsoft Word considers `<w:t>` inside a deletion to be a corruption and drops the changes.
+                // We must rewrite those tags to `<w:delText>` so the document remains valid XML.
+                let del_re = regex::Regex::new(r#"(?s)<w:del\b[^>]*>.*?</w:del>"#).unwrap();
+                let mut rebuilt = String::new();
+                let mut last = 0;
+                for mat in del_re.find_iter(&doc_str) {
+                    rebuilt.push_str(&doc_str[last..mat.start()]);
+                    let fixed_del = mat
+                        .as_str()
+                        .replace("<w:t>", "<w:delText xml:space=\"preserve\">")
+                        .replace("<w:t ", "<w:delText ")
+                        .replace("</w:t>", "</w:delText>");
+                    rebuilt.push_str(&fixed_del);
+                    last = mat.end();
                 }
-                
+                rebuilt.push_str(&doc_str[last..]);
+
+                // Offset docx-rs generated r:id values to prevent collisions with source r:id values
+                let rid_re = regex::Regex::new(r#"r:(id|embed|link)="rId(\d+)""#).unwrap();
+                let mut offset_doc = String::new();
+                let mut d_last = 0;
+                for mat in rid_re.captures_iter(&rebuilt) {
+                    let m = mat.get(0).unwrap();
+                    offset_doc.push_str(&rebuilt[d_last..m.start()]);
+                    let attr_name = mat.get(1).unwrap().as_str();
+                    let old_num: u32 = mat.get(2).unwrap().as_str().parse().unwrap_or(0);
+                    offset_doc.push_str(&format!("r:{}=\"rId{}\"", attr_name, old_num + 1000));
+                    d_last = m.end();
+                }
+                offset_doc.push_str(&rebuilt[d_last..]);
+                rebuilt = offset_doc;
+
+                // ΓöÇΓöÇ Inject source <w:sectPr> to preserve header/footer refs and margins ΓöÇΓöÇ
+                if let Some(src_sect) = &source_sect_pr {
+                    let sect_re =
+                        regex::Regex::new(r#"(?s)<w:sectPr\b[^>]*>.*?</w:sectPr>"#).unwrap();
+                    rebuilt = sect_re.replace(&rebuilt, src_sect.as_str()).to_string();
+                }
+
                 zip_writer.start_file(&path, options)?;
-                std::io::Write::write_all(&mut zip_writer, &out)?;
+                std::io::Write::write_all(&mut zip_writer, rebuilt.as_bytes())?;
             } else {
                 zip_writer.start_file(&path, options)?;
                 std::io::Write::write_all(&mut zip_writer, &content)?;
@@ -1621,12 +1352,12 @@ pub fn convert(
             continue;
         }
 
-        // ── Default: emit generated content unchanged ─────────────────────────
+        // ΓöÇΓöÇ Default: emit generated content unchanged ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
         zip_writer.start_file(&path, options)?;
         std::io::Write::write_all(&mut zip_writer, &content)?;
     }
 
-    // ── Inject passthrough files not present in the generated ZIP ─────────────
+    // ΓöÇΓöÇ Inject passthrough files not present in the generated ZIP ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
     // Since we aggressively collect everything except core files, this covers
     // docProps, customXml, headers, footers, themes, and extensions.
     let deflate_opts = zip::write::FileOptions::<()>::default()
@@ -1672,7 +1403,7 @@ pub fn convert(
     zip_writer.finish()?;
     let generated_bytes = out_buffer.into_inner();
 
-    // ─── Template swapping (M26) ──────────────────────────────────────────────
+    // ΓöÇΓöÇΓöÇ Template swapping (M26) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
     // When config.template_path is present, inject our generated word/document.xml
     // into a copy of the template archive, preserving all template styling assets.
     if let Some(ref tpl_path) = config.template_path {
