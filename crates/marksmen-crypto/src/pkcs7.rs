@@ -5,6 +5,7 @@ use std::io::{Read, Write};
 
 /// Signs a PDF document by calculating the `/ByteRange`, hashing the content,
 /// and injecting a CMS (PKCS#7) signature hex string.
+#[allow(dead_code)] // Fields read by sign_pdf/sign_docx once CMS scaffolding is complete.
 pub struct PdfSigner {
     cert: Certificate,
     key: RsaPrivateKey,

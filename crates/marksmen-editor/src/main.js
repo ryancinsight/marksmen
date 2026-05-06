@@ -2526,12 +2526,7 @@ async function printDocument() {
 // ── Paste Plain Text ─────────────────────────────────────────────────────────
 async function pastePlain() {
     try {
-        let text = '';
-        if (window.__TAURI__ && window.__TAURI__.clipboard) {
-            text = await window.__TAURI__.clipboard.readText();
-        } else {
-            text = await navigator.clipboard.readText();
-        }
+        let text = await navigator.clipboard.readText();
         document.execCommand('insertText', false, text);
     } catch(e) {
         console.warn('Clipboard read failed', e);
@@ -5581,11 +5576,8 @@ document.getElementById('btn-ruler')?.addEventListener('click', function() {
         if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'v') {
             e.preventDefault();
             let readPromise;
-            if (window.__TAURI__ && window.__TAURI__.clipboard) {
-                readPromise = window.__TAURI__.clipboard.readText();
-            } else {
-                readPromise = navigator.clipboard.readText();
-            }
+            // navigator.clipboard works inside both browser and Tauri v2 WebView.
+            readPromise = navigator.clipboard.readText();
             readPromise.then(text => {
                 pendingPasteData = text;
                 pasteScrim.hidden = false;
@@ -5613,12 +5605,10 @@ document.getElementById('btn-ruler')?.addEventListener('click', function() {
             // Default paste behavior for rich text - we trigger a standard paste event
             document.execCommand('paste');
         } else if (type === 'markdown') {
-            if (window.__TAURI_INVOKE__) {
-                const { invoke } = window.__TAURI__.tauri;
-                invoke('md_to_html', { markdown: pendingPasteData }).then(html => {
-                    document.execCommand('insertHTML', false, html);
-                });
-            }
+            // Route through the unified bridge (Tauri or WASM)
+            invoke('md_to_html', { markdown: pendingPasteData }).then(html => {
+                document.execCommand('insertHTML', false, html);
+            }).catch(e => console.error('[paste/md] md_to_html failed:', e));
         }
         pendingPasteData = null;
     });

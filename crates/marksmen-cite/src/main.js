@@ -1,6 +1,9 @@
 // marksmen-cite main.js — Phase 20
-const { invoke } = window.__TAURI__.core;
-const { listen } = window.__TAURI__.event;
+import { invoke } from './wasm_bridge.js';
+// We don't import window.__TAURI__.event listen since event listeners need conditional logic if in browser.
+// The browser bridge doesn't support 'listen' right now, but cite doesn't heavily rely on it.
+// If it does, we can add a dummy listen to bridge.
+const listen = window.__TAURI__ ? window.__TAURI__.event.listen : () => Promise.resolve(() => {});
 // ── State ──────────────────────────────────────────────────
 let references   = [];
 let collections  = [];

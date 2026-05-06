@@ -26,6 +26,7 @@ pub struct TextState {
     pub in_footer: bool,
     pub is_redact: bool,
     pub font_size: Option<f32>,
+    pub text_color: Option<String>,
     /// Optional lookup table built from the source DOCX `comments.xml`.
     /// Maps normalized comment content → original `w:id` value (numeric).
     /// When populated, the comment handler uses the original ID instead of
@@ -209,18 +210,39 @@ pub fn handle_event<'a>(
                     .add_run(run_disp)
                     .add_run(run_end);
                 text_state.has_runs = true;
-            } else if tag.starts_with("<span") && tag.contains("font-size") {
+            } else if tag.starts_with("<font") {
+                if let Some(color) = extract_attr(original_tag, "color") {
+                    let cleaned = color.replace("#", "");
+                    text_state.text_color = Some(cleaned);
+                }
+            } else if tag.starts_with("</font") {
+                text_state.text_color = None;
+            } else if tag.starts_with("<span") {
                 let style = extract_attr(original_tag, "style").unwrap_or_default();
-                if let Some(fs_val) = style
-                    .split("font-size:")
-                    .nth(1)
-                    .and_then(|s| s.split(';').next())
-                    .map(|s| s.replace("pt", "").trim().parse::<f32>().unwrap_or(12.0))
-                {
-                    text_state.font_size = Some(fs_val);
+                if style.contains("font-size") {
+                    if let Some(fs_val) = style
+                        .split("font-size:")
+                        .nth(1)
+                        .and_then(|s| s.split(';').next())
+                        .map(|s| s.replace("pt", "").trim().parse::<f32>().unwrap_or(12.0))
+                    {
+                        text_state.font_size = Some(fs_val);
+                    }
+                }
+                if style.contains("color:") && !style.contains("background-color") {
+                    if let Some(color_val) = style
+                        .split("color:")
+                        .nth(1)
+                        .and_then(|s| s.split(';').next())
+                        .map(|s| s.trim().to_string())
+                    {
+                        let cleaned = color_val.replace("#", "");
+                        text_state.text_color = Some(cleaned);
+                    }
                 }
             } else if tag.starts_with("</span") {
                 text_state.font_size = None;
+                text_state.text_color = None;
             } else if tag.starts_with("<mark") && tag.contains("comment") {
                 let author = extract_attr(original_tag, "data-author")
                     .unwrap_or_else(|| "Author".to_string());
@@ -349,6 +371,9 @@ pub fn handle_event<'a>(
             if let Some(fs) = text_state.font_size {
                 run = run.size((fs * 2.0).round() as usize);
             }
+            if let Some(ref color) = text_state.text_color {
+                run = run.color(color.clone());
+            }
             if text_state.is_code {
                 // Approximate inline code style (DOCX typically uses a monospaced font run)
                 run = run.fonts(RunFonts::new().ascii("Consolas"));
@@ -428,6 +453,9 @@ pub fn handle_event<'a>(
             }
             if text_state.is_italic {
                 run = run.italic();
+            }
+            if let Some(ref color) = text_state.text_color {
+                run = run.color(color.clone());
             }
             if text_state.is_underline {
                 run = run.underline("single");

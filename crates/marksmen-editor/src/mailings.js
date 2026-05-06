@@ -22,10 +22,7 @@ const editor = document.getElementById('editor');
 // ── Load CSV Data ────────────────────────────────────────────────────────────
 btnData.addEventListener('click', async () => {
     try {
-        // Use native dialog to load CSV
-        const file_path = await window.__TAURI__.core.invoke('import_file');
-        // Actually import_file is designed for standard docs. We need a way to load CSV.
-        // Let's use the file picker via standard HTML input since tauri allows input[type=file]
+        // Use an <input type="file"> that works in both Tauri and browser contexts.
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = '.csv,.json';

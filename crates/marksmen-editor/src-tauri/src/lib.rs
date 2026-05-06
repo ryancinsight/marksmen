@@ -472,8 +472,8 @@ async fn execute_mail_merge(
         
     let headers = reader.headers().map_err(|e| e.to_string())?.clone();
 
-    // Parse the template ONCE to eliminate O(N) re-parsing
-    let template_events: Vec<pulldown_cmark::Event> = parser::parse(&template_markdown).collect();
+    // Parse the template ONCE; parser::parse returns Vec<Event<'static>> directly.
+    let template_events = parser::parse(&template_markdown);
 
     let mut concat = AstConcatenator::new();
     let mut num_records = 0;

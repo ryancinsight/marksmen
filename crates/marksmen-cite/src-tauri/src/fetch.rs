@@ -2,6 +2,27 @@
 
 use crate::model::Reference;
 use regex::Regex;
+use std::sync::OnceLock;
+
+// ── Compiled regex statics ────────────────────────────────────────────────────
+// All patterns are compile-time string literals. A panic here at first use is
+// equivalent to a compile error and indicates a programming error, not a runtime
+// condition — the OnceLock ensures each pattern is compiled exactly once.
+
+fn re_xml_tags() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| Regex::new(r"<[^>]+>").expect("re_xml_tags: invalid pattern"))
+}
+
+fn re_arxiv_title() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| Regex::new(r"<title>([^<]+)</title>").expect("re_arxiv_title: invalid pattern"))
+}
+
+fn re_arxiv_author() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| Regex::new(r"<name>([^<]+)</name>").expect("re_arxiv_author: invalid pattern"))
+}
 
 fn http_client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
@@ -12,8 +33,7 @@ fn http_client() -> Result<reqwest::Client, String> {
 
 /// Strip JATS/XML tags from Crossref abstract strings.
 fn strip_jats(s: &str) -> String {
-    let re = Regex::new(r"<[^>]+>").unwrap();
-    re.replace_all(s, "").trim().to_string()
+    re_xml_tags().replace_all(s, "").trim().to_string()
 }
 
 // ── Crossref DOI ─────────────────────────────────────────────────────────────
@@ -149,17 +169,21 @@ pub async fn fetch_pmid(pmid: String) -> Result<Reference, String> {
 }
 
 async fn fetch_pubmed_abstract(client: &reqwest::Client, pmid: &str) -> Option<String> {
+    static RE_ABSTRACT: OnceLock<Regex> = OnceLock::new();
+    let re_abstract = RE_ABSTRACT.get_or_init(|| {
+        Regex::new(r"<AbstractText[^>]*>([\s\S]*?)</AbstractText>")
+            .expect("re_abstract: invalid pattern")
+    });
+
     let url = format!(
         "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id={}&rettype=xml&retmode=xml",
         pmid
     );
     let text = client.get(&url).send().await.ok()?.text().await.ok()?;
-    let re = Regex::new(r"<AbstractText[^>]*>([\s\S]*?)</AbstractText>").ok()?;
-    let caps = re.captures(&text)?;
+    let caps = re_abstract.captures(&text)?;
     let raw = caps.get(1)?.as_str();
-    // Strip any remaining XML tags within abstract sections
-    let clean = Regex::new(r"<[^>]+>").ok()?;
-    Some(clean.replace_all(raw, "").trim().to_string())
+    // Strip any remaining XML tags within abstract sections using the shared static.
+    Some(re_xml_tags().replace_all(raw, "").trim().to_string())
 }
 
 // ── arXiv ────────────────────────────────────────────────────────────────────
@@ -177,35 +201,55 @@ pub async fn fetch_arxiv(arxiv_id: String) -> Result<Reference, String> {
     let xml = client.get(&url).send().await.map_err(|e| e.to_string())?
         .text().await.map_err(|e| e.to_string())?;
 
-    // Regex extraction from Atom feed
-    let extract = |pattern: &str| -> String {
-        Regex::new(pattern).ok()
-            .and_then(|re| re.captures(&xml))
+    // Regex extraction from Atom feed using OnceLock statics.
+    let extract = |re: &Regex| -> String {
+        re.captures(&xml)
             .and_then(|c| c.get(1))
             .map(|m| m.as_str().trim().to_string())
             .unwrap_or_default()
     };
 
-    let title = extract(r"<title>([^<]+)</title>");
-    // Skip feed-level title (first match); use the entry title
-    let titles: Vec<&str> = {
-        let re = Regex::new(r"<title>([^<]+)</title>").unwrap();
-        re.captures_iter(&xml).filter_map(|c| c.get(1).map(|m| m.as_str())).collect()
-    };
+    // The feed-level <title> appears first; the entry title is the second match.
+    let titles: Vec<&str> = re_arxiv_title()
+        .captures_iter(&xml)
+        .filter_map(|c| c.get(1).map(|m| m.as_str()))
+        .collect();
     let title = titles.get(1).map(|s| s.trim().to_string())
-        .unwrap_or(title).replace('\n', " ");
+        .unwrap_or_else(|| extract(re_arxiv_title()))
+        .replace('\n', " ");
 
-    let abstract_text = extract(r"<summary[^>]*>([\s\S]*?)</summary>")
-        .replace('\n', " ").trim().to_string();
+    // summary and year use locally constructed (one-shot) patterns — these are
+    // not shared across hot loops so inline Regex::new with .ok() is appropriate.
+    let abstract_text = {
+        static RE: OnceLock<Regex> = OnceLock::new();
+        let re = RE.get_or_init(|| {
+            Regex::new(r"<summary[^>]*>([\s\S]*?)</summary>")
+                .expect("re_summary: invalid pattern")
+        });
+        extract(re).replace('\n', " ").trim().to_string()
+    };
 
-    let year = extract(r"<published>(\d{4})");
+    let year = {
+        static RE: OnceLock<Regex> = OnceLock::new();
+        let re = RE.get_or_init(|| {
+            Regex::new(r"<published>(\d{4})").expect("re_published: invalid pattern")
+        });
+        extract(re)
+    };
 
-    let arxiv_doi = extract(r#"<arxiv:doi[^>]*>([^<]+)</arxiv:doi>"#);
+    let arxiv_doi = {
+        static RE: OnceLock<Regex> = OnceLock::new();
+        let re = RE.get_or_init(|| {
+            Regex::new(r#"<arxiv:doi[^>]*>([^<]+)</arxiv:doi>"#)
+                .expect("re_arxiv_doi: invalid pattern")
+        });
+        extract(re)
+    };
+
     let url_str = format!("https://arxiv.org/abs/{}", id);
 
     let mut authors = Vec::new();
-    let author_re = Regex::new(r"<name>([^<]+)</name>").unwrap();
-    for cap in author_re.captures_iter(&xml) {
+    for cap in re_arxiv_author().captures_iter(&xml) {
         if let Some(m) = cap.get(1) {
             authors.push(m.as_str().trim().to_string());
         }

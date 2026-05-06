@@ -117,6 +117,19 @@ fn render_node(handle: ego_tree::NodeRef<'_, Node>, out: &mut String, in_pre: bo
                         out.push('$');
                         render_children(&el, out, true);
                         out.push('$');
+                    } else if let Some(style) = element.attr("style") {
+                        out.push_str(&format!("<span style=\"{}\">", style));
+                        render_children(&el, out, false);
+                        out.push_str("</span>");
+                    } else {
+                        render_children(&el, out, false);
+                    }
+                }
+                "font" => {
+                    if let Some(color) = element.attr("color") {
+                        out.push_str(&format!("<font color=\"{}\">", color));
+                        render_children(&el, out, false);
+                        out.push_str("</font>");
                     } else {
                         render_children(&el, out, false);
                     }

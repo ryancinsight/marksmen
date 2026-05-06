@@ -524,7 +524,6 @@ fn render_slide_xml(slide: &Slide) -> String {
 
     // Partition body items: paragraphs go into the text body shape;
     // tables and other graphic elements go after as separate spTree children.
-    let mut body_paras: Vec<&BodyParagraph> = Vec::new();
     let mut extra_shapes = String::new();
     let mut table_shape_id = 4u32;
 
@@ -533,7 +532,6 @@ fn render_slide_xml(slide: &Slide) -> String {
     for item in &slide.body {
         match item {
             SlideContent::Para(p) => {
-                body_paras.push(p);
                 paras_xml.push_str(&render_paragraph(p));
             }
             SlideContent::Math(m) => {
@@ -563,7 +561,6 @@ fn render_slide_xml(slide: &Slide) -> String {
             }
         }
     }
-    let _ = body_paras; // consumed into paras_xml
 
     let body_xml = format!(
         r#"      <p:sp>
@@ -582,6 +579,7 @@ fn render_slide_xml(slide: &Slide) -> String {
         </p:txBody>
       </p:sp>"#,
     );
+
 
     format!(
         r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
