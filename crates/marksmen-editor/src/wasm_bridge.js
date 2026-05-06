@@ -12,7 +12,7 @@
  * editor, references, and mailings modules remain environment-agnostic.
  */
 
-import init, { md_to_html, html_to_md, export_document, format_csl_citation, format_csl_bibliography, execute_mail_merge as wasm_execute_mail_merge } from './wasm/marksmen_wasm.js';
+import init, { md_to_html, html_to_md, export_document, format_csl_citation, format_csl_bibliography, execute_mail_merge as wasm_execute_mail_merge, generate_diff as wasm_generate_diff } from './wasm/marksmen_wasm.js';
 
 let wasmReady = false;
 
@@ -163,12 +163,12 @@ export async function invoke(cmd, args = {}) {
 
         // ── Diff ──────────────────────────────────────────────────────────
         case 'generate_diff': {
-            // Inline diff not available in WASM build (tree-sitter C bindings omitted).
-            // Return a simple placeholder showing both versions.
-            const oldHtml = md_to_html(args.old_md ?? '');
-            const newHtml = md_to_html(args.new_md ?? '');
-            return `<p><em>[Browser diff unavailable — WASM build omits tree-sitter C bindings]</em></p>
-<h3>Original</h3>${oldHtml}<h3>Revised</h3>${newHtml}`;
+            try {
+                return wasm_generate_diff(args.old_md ?? '', args.new_md ?? '');
+            } catch (e) {
+                console.error("WASM diff failed", e);
+                return `<p style="color: red;">[Diff Generation Error: ${e}]</p>`;
+            }
         }
 
         // ── marksmen-cite integration ─────────────────────────────────────

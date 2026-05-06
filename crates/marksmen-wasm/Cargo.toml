@@ -22,6 +22,7 @@ marksmen-docx = { version = "0.1.0", path = "../marksmen-docx" }
 marksmen-ppt = { version = "0.1.0", path = "../marksmen-ppt" }
 marksmen-epub = { version = "0.1.0", path = "../marksmen-epub" }
 marksmen-typst = { version = "0.1.0", path = "../marksmen-typst" }
+marksmen-diff = { version = "0.1.0", path = "../marksmen-diff" }
 getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }
 getrandom_03 = { package = "getrandom", version = "0.3", features = ["wasm_js"] }
 getrandom_04 = { package = "getrandom", version = "0.4", features = ["wasm_js"] }

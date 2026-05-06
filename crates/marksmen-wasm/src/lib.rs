@@ -174,3 +174,10 @@ pub fn execute_mail_merge(template_markdown: &str, csv_data: &str, format: &str)
 
     Ok(js_sys::Uint8Array::from(bytes.as_slice()))
 }
+
+/// Generates a structural diff payload between two Markdown documents.
+#[wasm_bindgen]
+pub fn generate_diff(old_md: &str, new_md: &str) -> Result<String, JsValue> {
+    let html = marksmen_diff::diff_markdown(old_md, new_md);
+    Ok(html)
+}
