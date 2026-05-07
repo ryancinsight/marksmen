@@ -28,7 +28,7 @@ pub fn convert(
     let events = marksmen_core::parsing::parser::parse(body);
 
     // Step 3: Translate events to Typst markup.
-    let typst_source = marksmen_typst::translator::translate(events, &merged_config)?;
+    let typst_source = marksmen_typst::translator::translate(&events, &merged_config)?;
 
     tracing::debug!(
         typst_source_len = typst_source.len(),

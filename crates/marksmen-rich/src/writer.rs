@@ -18,12 +18,12 @@ use std::collections::HashMap;
 /// US-Letter body width in twips (8.5 in − 2×1 in margins = 6.5 in × 1440).
 const BODY_W: u32 = 9360;
 
-pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<Vec<u8>> {
+pub fn convert(events: &[Event<'_>], config: &Config) -> Result<Vec<u8>> {
     let footnotes = collect_footnotes(&events);
     let mut buf = String::with_capacity(32768);
     emit_header(&mut buf, config);
     let mut s = WriterState::new(footnotes);
-    for ev in &events {
+    for ev in events {
         write_event(&mut buf, ev, &mut s);
     }
     if s.in_table {

@@ -4,7 +4,7 @@ use anyhow::Result;
 use marksmen_core::Config;
 use pulldown_cmark::{Alignment, CodeBlockKind, Event, Tag, TagEnd};
 
-pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
+pub fn convert(events: &[Event<'_>], config: &Config) -> Result<String> {
     let mut out = String::with_capacity(events.len() * 100);
 
     // Preamble
@@ -53,7 +53,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
 
     let mut state = LatexState::default();
 
-    for event in events {
+    for event in events.iter().cloned() {
         match event {
             Event::Start(Tag::Paragraph)
                 if !state.in_table => {
@@ -232,8 +232,7 @@ mod tests {
     fn test_conversion_runtime() {
         let md = "# Hello\nTest paragraph with *italic* and **bold**.\n\n- item 1\n- item 2\n\n```python\nprint(1)\n```";
         let events = parser::parse(md);
-        let config = Config::default();
-        let latex = convert(events, &config).unwrap();
+        let latex = convert(&events, &Config::default()).unwrap();
         assert!(latex.contains("Hello"));
     }
 }

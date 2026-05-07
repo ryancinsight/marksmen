@@ -22,7 +22,8 @@ if (!window.__TAURI__) {
     };
 }
 import { invoke } from './wasm_bridge.js';
-
+import { DictationEngine } from './dictation.js';
+import { AssistantEngine } from './assistant.js';
 // ── Window-size lock ─────────────────────────────────────────────────────────
 // .app-shell uses position:fixed; inset:0 so it is always anchored directly
 // to the WebView2 viewport — no document-height influence possible.
@@ -106,6 +107,12 @@ const sidebar     = document.getElementById('sidebar');
 const fileMenu    = document.getElementById('file-menu');
 const fileScrim   = document.getElementById('file-menu-scrim');
 const findBar     = document.getElementById('find-bar');
+
+const dictationEngine = new DictationEngine(editor);
+dictationEngine.attachButton('btn-dictate');
+
+const assistantEngine = new AssistantEngine(editor);
+assistantEngine.attachButton('btn-toggle-ai');
 
 // ── State ────────────────────────────────────────────────────────────────────
 let currentMarkdown = '';

@@ -32,8 +32,8 @@
 - Target: Achieve parity with Word's advanced automated publishing and accessibility tools.
 
 ### Tactical Workstreams:
-1. **Mail Merge Engine (G-H43, G-H44)**: Implement CSV/JSON data-source ingestion and template variable replacement (`{{field}}`) for batch document/envelope generation.
-2. **Document Comparison (G-H42)**: Extend `marksmen-diff` to ingest two distinct documents (DOCX or MD) and synthesize a unified Tracked Changes view.
+1. **Mail Merge Engine (G-H43, G-H44)** [COMPLETE]: Implement CSV/JSON data-source ingestion and template variable replacement (`{{field}}`) for batch document/envelope generation.
+2. **Document Comparison (G-H42)** [COMPLETE]: Extend `marksmen-diff` to ingest two distinct documents (DOCX or MD) and synthesize a unified Tracked Changes view.
 3. **Voice & AI Assistant (G-H56, G-H57)**: Integrate Web Speech API dictation and local LLM context-aware grammar/clarity suggestions.
 
 ### Remaining Risks:

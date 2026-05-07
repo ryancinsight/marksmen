@@ -133,7 +133,7 @@ fn test_docx_roundtrip_similarity() -> Result<()> {
 
     // Provide a dummy path for image resolution
     let docx_bytes = marksmen_docx::translation::document::convert(
-        events,
+        &events,
         &config,
         &get_workspace_root(),
         None,
@@ -218,7 +218,7 @@ fn test_html_roundtrip_similarity() -> Result<()> {
     let config = marksmen_core::Config::default();
     let events = marksmen_core::parsing::parser::parse(body);
 
-    let html = marksmen_html::convert(events, &config)?;
+    let html = marksmen_html::convert(&events, &config)?;
     let extracted_md = marksmen_html_read::parse_html(&html)?;
 
     let normalized_source = normalize_whitespace(&strip_vectors_and_html(&source_md_stripped));
@@ -249,7 +249,7 @@ fn test_pptx_roundtrip_similarity() -> Result<()> {
     let config = marksmen_core::Config::default();
     let events = marksmen_core::parsing::parser::parse(body);
 
-    let pptx_bytes = marksmen_ppt::convert(events, &config)?;
+    let pptx_bytes = marksmen_ppt::convert(&events, &config)?;
     let extracted_md = marksmen_ppt_read::parse_pptx(&pptx_bytes)?;
 
     let normalized_source = normalize_whitespace(&strip_vectors_and_html(&source_md_stripped));
@@ -280,7 +280,7 @@ fn test_epub_roundtrip_similarity() -> Result<()> {
     let config = marksmen_core::Config::default();
     let events = marksmen_core::parsing::parser::parse(body);
 
-    let epub_bytes = marksmen_epub::convert(events, &config)?;
+    let epub_bytes = marksmen_epub::convert(&events, &config)?;
     let extracted_md = marksmen_epub_read::parse_epub(&epub_bytes)?;
 
     let normalized_source = normalize_whitespace(&strip_vectors_and_html(&source_md_stripped));
@@ -377,7 +377,7 @@ fn test_visual_snapshots() -> Result<()> {
     let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
     let events = marksmen_core::parsing::parser::parse(body);
     let docx_bytes =
-        marksmen_docx::translation::document::convert(events, &config, &root.join("../../"), None)?;
+        marksmen_docx::translation::document::convert(&events, &config, &root.join("../../"), None)?;
     // DOCX is a ZIP archive; magic bytes are PK (0x50 0x4B).
     assert!(
         docx_bytes.starts_with(&[0x50, 0x4B]),
@@ -463,7 +463,7 @@ fn test_visual_snapshots() -> Result<()> {
     // ── EPUB ─────────────────────────────────────────────────────────────────
     let (body3, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
     let events3 = marksmen_core::parsing::parser::parse(body3);
-    let epub_bytes = marksmen_epub::convert(events3, &config)?;
+    let epub_bytes = marksmen_epub::convert(&events3, &config)?;
     let epub_path = snapshots_dir.join("demo_output.epub");
     fs::write(&epub_path, &epub_bytes)?;
     println!(
@@ -475,7 +475,7 @@ fn test_visual_snapshots() -> Result<()> {
     // ── PPTX ─────────────────────────────────────────────────────────────────
     let (body4, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
     let events4 = marksmen_core::parsing::parser::parse(body4);
-    let pptx_bytes = marksmen_ppt::convert(events4, &config)?;
+    let pptx_bytes = marksmen_ppt::convert(&events4, &config)?;
     let pptx_path = snapshots_dir.join("demo_output.pptx");
     fs::write(&pptx_path, &pptx_bytes)?;
     println!(
@@ -574,7 +574,7 @@ fn evaluate_prd_docx_roundtrip() -> Result<()> {
     let config = marksmen_core::Config::default();
     let events = marksmen_core::parsing::parser::parse(body);
     let docx_bytes =
-        marksmen_docx::translation::document::convert(events, &config, &root.join("PRD"), None)?;
+        marksmen_docx::translation::document::convert(&events, &config, &root.join("PRD"), None)?;
 
     // 2. Dump DOCX for manual reference
     let docx_out = root.join("PRD/prd.docx");
@@ -610,7 +610,7 @@ fn test_html_conversion() -> Result<()> {
     let config = marksmen_core::Config::default();
     let events = marksmen_core::parsing::parser::parse(body);
 
-    let html_string = marksmen_html::convert(events, &config)?;
+    let html_string = marksmen_html::convert(&events, &config)?;
 
     // Validate output bounds
     assert!(
@@ -677,7 +677,7 @@ fn test_qsr_lossless_roundtrip() -> Result<()> {
 
     // ── 3. Write DOCX with source-passthrough active ──────────────────────────
     let out_bytes = marksmen_docx::translation::document::convert(
-        events,
+        &events,
         &config,
         &prd_dir,
         Some(&source_bytes),
@@ -873,7 +873,7 @@ fn test_qsr_pdf_roundtrip() -> Result<()> {
 
     // ── 5. Write DOCX from AST ────────────────────────────────────────────────
     let out_bytes = marksmen_docx::translation::document::convert(
-        events,
+        &events,
         &config,
         &prd_dir,
         Some(&source_bytes),
@@ -959,7 +959,7 @@ fn test_xhtml_roundtrip_similarity() -> Result<()> {
     let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
     let config = marksmen_core::Config::default();
     let events = marksmen_core::parsing::parser::parse(body);
-    let out = marksmen_xhtml::convert(events, &config)?;
+    let out = marksmen_xhtml::convert(&events, &config)?;
     let extracted_md = marksmen_xhtml_read::parse_xhtml(&out)?;
     let normalized_source = normalize_whitespace(&strip_vectors_and_html(&source_md_stripped));
     let normalized_extracted = normalize_whitespace(&strip_vectors_and_html(&extracted_md));
@@ -978,7 +978,7 @@ fn test_ppt_roundtrip_similarity() -> Result<()> {
     let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
     let config = marksmen_core::Config::default();
     let events = marksmen_core::parsing::parser::parse(body);
-    let out_bytes = marksmen_ppt::convert(events, &config)?;
+    let out_bytes = marksmen_ppt::convert(&events, &config)?;
     let extracted_md = marksmen_ppt_read::parse_pptx(&out_bytes)?;
     let normalized_source = normalize_whitespace(demo_md);
     let normalized_extracted = normalize_whitespace(&extracted_md);
@@ -997,7 +997,7 @@ fn test_typst_roundtrip_similarity() -> Result<()> {
     let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
     let config = marksmen_core::Config::default();
     let events = marksmen_core::parsing::parser::parse(body);
-    let out_str = marksmen_typst::translator::translate(events, &config)?;
+    let out_str = marksmen_typst::translator::translate(&events, &config)?;
     let extracted_md = marksmen_typst_read::parse_typst(&out_str)?;
     let normalized_source = normalize_whitespace(demo_md);
     let normalized_extracted = normalize_whitespace(&extracted_md);
@@ -1018,7 +1018,7 @@ fn test_latex_roundtrip_similarity() -> Result<()> {
     let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
     let config = marksmen_core::Config::default();
     let events = marksmen_core::parsing::parser::parse(body);
-    let out_str = marksmen_latex::convert(events, &config)?;
+    let out_str = marksmen_latex::convert(&events, &config)?;
     let extracted_md = marksmen_latex_read::parse_latex(&out_str)?;
     let normalized_source = normalize_whitespace(demo_md);
     let normalized_extracted = normalize_whitespace(&extracted_md);
@@ -1037,7 +1037,7 @@ fn test_marp_roundtrip_similarity() -> Result<()> {
     let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
     let config = marksmen_core::Config::default();
     let events = marksmen_core::parsing::parser::parse(body);
-    let out_str = marksmen_marp::convert(events, &config)?;
+    let out_str = marksmen_marp::convert(&events, &config)?;
     let extracted_md = marksmen_marp_read::parse_marp(&out_str)?;
     let normalized_source = normalize_whitespace(demo_md);
     let normalized_extracted = normalize_whitespace(&extracted_md);
@@ -1060,7 +1060,7 @@ fn test_latex_roundtrip_demo_md() -> Result<()> {
     let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
     let config = marksmen_core::Config::default();
     let events = marksmen_core::parsing::parser::parse(body);
-    let out_str = marksmen_latex::convert(events, &config)?;
+    let out_str = marksmen_latex::convert(&events, &config)?;
     let extracted_md = marksmen_latex_read::parse_latex(&out_str)?;
     let ns = normalize_whitespace(&strip_vectors_and_html(&strip_mermaid(&source_stripped)));
     let ne = normalize_whitespace(&strip_vectors_and_html(&extracted_md));
@@ -1078,7 +1078,7 @@ fn test_typst_roundtrip_demo_md() -> Result<()> {
     let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
     let config = marksmen_core::Config::default();
     let events = marksmen_core::parsing::parser::parse(body);
-    let out_str = marksmen_typst::translator::translate(events, &config)?;
+    let out_str = marksmen_typst::translator::translate(&events, &config)?;
     let extracted_md = marksmen_typst_read::parse_typst(&out_str)?;
     let ns = normalize_whitespace(&strip_vectors_and_html(&strip_mermaid(&source_stripped)));
     let ne = normalize_whitespace(&strip_vectors_and_html(&extracted_md));
@@ -1096,7 +1096,7 @@ fn test_marp_roundtrip_demo_md() -> Result<()> {
     let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
     let config = marksmen_core::Config::default();
     let events = marksmen_core::parsing::parser::parse(body);
-    let out_str = marksmen_marp::convert(events, &config)?;
+    let out_str = marksmen_marp::convert(&events, &config)?;
     let extracted_md = marksmen_marp_read::parse_marp(&out_str)?;
     let ns = normalize_whitespace(&strip_vectors_and_html(&strip_mermaid(&source_stripped)));
     let ne = normalize_whitespace(&strip_vectors_and_html(&extracted_md));
@@ -1181,13 +1181,13 @@ fn test_all_formats_from_demo_md() -> Result<()> {
     let mut results: Vec<R> = Vec::new();
 
     // HTML
-    let html = marksmen_html::convert(marksmen_core::parsing::parser::parse(body), &config)?;
+    let html = marksmen_html::convert(&marksmen_core::parsing::parser::parse(body), &config)?;
     let html_ext = marksmen_html_read::parse_html(&html)?;
     results.push(R { name: "HTML",  score: jw(&html_ext),  threshold: 0.90 });
 
     // DOCX
     let docx = marksmen_docx::translation::document::convert(
-        marksmen_core::parsing::parser::parse(body), &config, &root.join("../../"), None)?;
+        &marksmen_core::parsing::parser::parse(body), &config, &root.join("../../"), None)?;
     let docx_ext = marksmen_docx_read::parse_docx(&docx, None)?;
     results.push(R { name: "DOCX",  score: jw(&strip_frontmatter(&docx_ext)), threshold: 0.945 });
 
@@ -1204,32 +1204,32 @@ fn test_all_formats_from_demo_md() -> Result<()> {
     results.push(R { name: "PDF",   score: strsim::jaro_winkler(pdf_src, &pdf_ext), threshold: 0.98 });
 
     // EPUB
-    let epub = marksmen_epub::convert(marksmen_core::parsing::parser::parse(body), &config)?;
+    let epub = marksmen_epub::convert(&marksmen_core::parsing::parser::parse(body), &config)?;
     let epub_ext = marksmen_epub_read::parse_epub(&epub)?;
     results.push(R { name: "EPUB",  score: jw(&epub_ext),  threshold: 0.90 });
 
     // PPTX
-    let pptx = marksmen_ppt::convert(marksmen_core::parsing::parser::parse(body), &config)?;
+    let pptx = marksmen_ppt::convert(&marksmen_core::parsing::parser::parse(body), &config)?;
     let pptx_ext = marksmen_ppt_read::parse_pptx(&pptx)?;
     results.push(R { name: "PPTX",  score: jw(&pptx_ext),  threshold: 0.85 });
 
     // XHTML
-    let xhtml = marksmen_xhtml::convert(marksmen_core::parsing::parser::parse(body), &config)?;
+    let xhtml = marksmen_xhtml::convert(&marksmen_core::parsing::parser::parse(body), &config)?;
     let xhtml_ext = marksmen_xhtml_read::parse_xhtml(&xhtml)?;
     results.push(R { name: "XHTML", score: jw(&xhtml_ext), threshold: 0.90 });
 
     // LaTeX
-    let latex = marksmen_latex::convert(marksmen_core::parsing::parser::parse(body), &config)?;
+    let latex = marksmen_latex::convert(&marksmen_core::parsing::parser::parse(body), &config)?;
     let latex_ext = marksmen_latex_read::parse_latex(&latex)?;
     results.push(R { name: "LaTeX", score: jw(&latex_ext), threshold: 0.85 });
 
     // Typst
-    let typst = marksmen_typst::translator::translate(marksmen_core::parsing::parser::parse(body), &config)?;
+    let typst = marksmen_typst::translator::translate(&marksmen_core::parsing::parser::parse(body), &config)?;
     let typst_ext = marksmen_typst_read::parse_typst(&typst)?;
     results.push(R { name: "Typst", score: jw(&typst_ext), threshold: 0.83 });
 
     // Marp
-    let marp = marksmen_marp::convert(marksmen_core::parsing::parser::parse(body), &config)?;
+    let marp = marksmen_marp::convert(&marksmen_core::parsing::parser::parse(body), &config)?;
     let marp_ext = marksmen_marp_read::parse_marp(&marp)?;
     results.push(R { name: "Marp",  score: jw(&marp_ext),  threshold: 0.90 });
 
@@ -1282,31 +1282,31 @@ fn test_visual_snapshots_extended() -> Result<()> {
     fs::write(snapshots_dir.join("demo_output.pdf"), &pdf_bytes)?;
 
     let docx_bytes = marksmen_docx::translation::document::convert(
-        marksmen_core::parsing::parser::parse(body), &config, &root.join("../../"), None)?;
+        &marksmen_core::parsing::parser::parse(body), &config, &root.join("../../"), None)?;
     fs::write(snapshots_dir.join("demo_output.docx"), &docx_bytes)?;
 
     let events_odt = marksmen_core::parsing::parser::parse(body);
     let odt_bytes = marksmen_odt::translate_and_render(&events_odt, &config, &root.join("../../"))?;
     fs::write(snapshots_dir.join("demo_output.odt"), &odt_bytes)?;
 
-    let epub_bytes = marksmen_epub::convert(marksmen_core::parsing::parser::parse(body), &config)?;
+    let epub_bytes = marksmen_epub::convert(&marksmen_core::parsing::parser::parse(body), &config)?;
     fs::write(snapshots_dir.join("demo_output.epub"), &epub_bytes)?;
 
-    let pptx_bytes = marksmen_ppt::convert(marksmen_core::parsing::parser::parse(body), &config)?;
+    let pptx_bytes = marksmen_ppt::convert(&marksmen_core::parsing::parser::parse(body), &config)?;
     fs::write(snapshots_dir.join("demo_output.pptx"), &pptx_bytes)?;
 
     // Text formats with extraction
-    let html_out = marksmen_html::convert(marksmen_core::parsing::parser::parse(body), &config)?;
+    let html_out = marksmen_html::convert(&marksmen_core::parsing::parser::parse(body), &config)?;
     fs::write(snapshots_dir.join("demo_output.html"), &html_out)?;
     let html_ext = marksmen_html_read::parse_html(&html_out)?;
     fs::write(snapshots_dir.join("html_extracted.md"), &html_ext)?;
 
-    let latex_out = marksmen_latex::convert(marksmen_core::parsing::parser::parse(body), &config)?;
+    let latex_out = marksmen_latex::convert(&marksmen_core::parsing::parser::parse(body), &config)?;
     fs::write(snapshots_dir.join("demo_output.tex"), &latex_out)?;
     let latex_ext = marksmen_latex_read::parse_latex(&latex_out)?;
     fs::write(snapshots_dir.join("latex_extracted.md"), &latex_ext)?;
 
-    let typst_out = marksmen_typst::translator::translate(marksmen_core::parsing::parser::parse(body), &config)?;
+    let typst_out = marksmen_typst::translator::translate(&marksmen_core::parsing::parser::parse(body), &config)?;
     fs::write(snapshots_dir.join("demo_output.typ"), &typst_out)?;
     let typst_ext = marksmen_typst_read::parse_typst(&typst_out)?;
     fs::write(snapshots_dir.join("typst_extracted.md"), &typst_ext)?;

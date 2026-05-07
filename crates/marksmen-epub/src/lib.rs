@@ -23,7 +23,7 @@ pub mod oebps;
 /// - One XHTML chapter file per H1 section (minimum one).
 /// - A fully populated OPF manifest and spine.
 /// - A fully populated NCX navMap.
-pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<Vec<u8>> {
+pub fn convert(events: &[Event<'_>], config: &Config) -> Result<Vec<u8>> {
     // Split events into chapters at every H1 boundary.
     // Each chapter is a (title, Vec<Event>) pair.
     let chapters_events = split_into_chapters(events);
@@ -56,7 +56,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<Vec<u8>> {
     for (idx, (title, ch_events)) in chapters_events.into_iter().enumerate() {
         let id = format!("chapter_{}", idx + 1);
         let filename = format!("chapter_{}.xhtml", idx + 1);
-        let xhtml_bytes = marksmen_xhtml::convert(ch_events, config)
+        let xhtml_bytes = marksmen_xhtml::convert(&ch_events, config)
             .with_context(|| format!("Failed to render XHTML for chapter {}", idx + 1))?;
         chapter_meta.push((id.clone(), filename.clone(), title));
         chapter_xhtml.push((filename, xhtml_bytes.into_bytes()));
@@ -97,14 +97,14 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<Vec<u8>> {
 ///
 /// # Returns
 /// A `Vec<(title, events)>` with at least one entry.
-fn split_into_chapters(events: Vec<Event<'_>>) -> Vec<(String, Vec<Event<'_>>)> {
+fn split_into_chapters<'a>(events: &[Event<'a>]) -> Vec<(String, Vec<Event<'a>>)> {
     let mut chapters: Vec<(String, Vec<Event<'_>>)> = Vec::new();
     let mut current_title = String::from("Content");
     let mut current_events: Vec<Event<'_>> = Vec::new();
     let mut in_h1 = false;
     let mut h1_text_buf = String::new();
 
-    for event in events {
+    for event in events.iter().cloned() {
         match &event {
             Event::Start(Tag::Heading { level: HeadingLevel::H1, .. }) => {
                 // Flush the accumulated chapter before starting a new one.

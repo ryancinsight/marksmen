@@ -104,3 +104,11 @@
 - [x] Add `proptest = "1"` and `lopdf = "0.34.0"` to `marksmen-roundtrip` dev-dependencies.
 - [x] All 24 `marksmen-roundtrip` tests pass; 0 failures.
 
+## Phase 21: Enterprise Automation & Intelligence
+- [x] Scaffold `marksmen-wasm` CSV ingestion and Mail Merge export functions.
+- [x] Wire `wasm_bridge.js` to expose native browser-based batch document generation for Mail Merge.
+- [x] Remove `tree-sitter` and C-bindings from `marksmen-diff`.
+- [x] Re-implement Document Comparison structural slicing in pure Rust using `pulldown-cmark`.
+- [x] Expose `generate_diff` endpoint in `marksmen-wasm` for browser-parity.
+- [ ] Implement Web Speech API dictation within `marksmen-editor`.
+- [ ] Implement local LLM context-aware grammar/clarity suggestions.

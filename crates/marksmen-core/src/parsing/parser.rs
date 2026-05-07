@@ -17,7 +17,7 @@ use pulldown_cmark::{Event, Options, Parser};
 ///
 /// Enables math, tables, strikethrough, tasklists, and heading attributes
 /// in addition to the default CommonMark support.
-pub fn parse(markdown: &str) -> Vec<Event<'_>> {
+pub fn parse<'a>(markdown: &'a str) -> Vec<Event<'a>> {
     let options = Options::ENABLE_MATH
         | Options::ENABLE_TABLES
         | Options::ENABLE_STRIKETHROUGH
@@ -66,9 +66,7 @@ mod tests {
     fn parses_table() {
         let md = "| A | B |\n|---|---|\n| 1 | 2 |";
         let events = parse(md);
-        let has_table = events
-            .iter()
-            .any(|e| matches!(e, Event::Start(Tag::Table(_))));
+        let has_table = events.iter().any(|e| matches!(e, Event::Start(Tag::Table(_))));
         assert!(has_table, "Expected Table event");
     }
 }

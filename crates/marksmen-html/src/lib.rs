@@ -4,7 +4,7 @@ use anyhow::Result;
 use marksmen_core::Config;
 use pulldown_cmark::{CodeBlockKind, Event, Tag, TagEnd};
 
-pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
+pub fn convert(events: &[Event<'_>], config: &Config) -> Result<String> {
     let mut out = String::with_capacity(events.len() * 100);
 
     out.push_str("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n");
@@ -43,7 +43,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
     let mut in_mermaid_block = false;
     let mut current_mermaid_source = String::new();
 
-    let iter = events.into_iter();
+    let iter = events.iter().cloned();
     for event in iter {
         match event {
             Event::Start(Tag::Paragraph) => out.push_str("<p>"),

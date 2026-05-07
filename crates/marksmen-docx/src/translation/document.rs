@@ -55,7 +55,7 @@ fn format_reference(r: &marksmen_csl::model::Reference) -> String {
 }
 
 pub fn convert(
-    events: Vec<Event<'_>>,
+    events: &[Event<'_>],
     config: &Config,
     input_dir: &Path,
     source_docx: Option<&[u8]>,
@@ -337,7 +337,7 @@ pub fn convert(
     let mut footnote_map: std::collections::HashMap<String, usize> =
         std::collections::HashMap::new();
     let mut footnote_counter: usize = 1;
-    for event in &events {
+    for event in events.iter().cloned() {
         if let Event::Start(Tag::FootnoteDefinition(label)) = event {
             footnote_map.insert(label.to_string(), footnote_counter);
             footnote_counter += 1;
@@ -398,7 +398,7 @@ pub fn convert(
     }
 
     // Process markdown token stream into DOCX elements
-    let mut event_iter = events.into_iter();
+    let mut event_iter = events.iter().cloned();
     while let Some(event) = event_iter.next() {
         match event {
             Event::Start(Tag::Table(aligns)) => {

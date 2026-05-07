@@ -17,7 +17,7 @@ pub fn md_to_html(markdown: &str) -> Result<String, JsValue> {
     let config = Config::default().merge_frontmatter(&fm);
     
     let events = parser::parse(body);
-    match marksmen_html::convert(events, &config) {
+    match marksmen_html::convert(&events, &config) {
         Ok(html) => Ok(html),
         Err(e) => Err(JsValue::from_str(&e.to_string())),
     }
@@ -41,11 +41,11 @@ pub fn export_document(markdown: &str, format: &str) -> Result<js_sys::Uint8Arra
     let events = marksmen_core::parsing::parser::parse(body);
 
     let bytes = match format {
-        "docx" => marksmen_docx::translation::document::convert(events.clone(), &config, std::path::Path::new(""), None).map_err(|e| e.to_string())?,
-        "pptx" => marksmen_ppt::convert(events.clone(), &config).map_err(|e| e.to_string())?,
-        "epub" => marksmen_epub::convert(events.clone(), &config).map_err(|e| e.to_string())?,
-        "typst" | "typ" => marksmen_typst::translator::translate(events.clone(), &config).map_err(|e| e.to_string())?.into_bytes(),
-        "html" | "htm" => marksmen_html::convert(events.clone(), &config).map_err(|e| e.to_string())?.into_bytes(),
+        "docx" => marksmen_docx::translation::document::convert(&events, &config, std::path::Path::new(""), None).map_err(|e| e.to_string())?,
+        "pptx" => marksmen_ppt::convert(&events, &config).map_err(|e| e.to_string())?,
+        "epub" => marksmen_epub::convert(&events, &config).map_err(|e| e.to_string())?,
+        "typst" | "typ" => marksmen_typst::translator::translate(&events, &config).map_err(|e| e.to_string())?.into_bytes(),
+        "html" | "htm" => marksmen_html::convert(&events, &config).map_err(|e| e.to_string())?.into_bytes(),
         _ => return Err(JsValue::from_str(&format!("Unsupported WASM export format: {}", format))),
     };
 
@@ -164,11 +164,11 @@ pub fn execute_mail_merge(template_markdown: &str, csv_data: &str, format: &str)
     let combined_events = concat.build();
 
     let bytes = match format {
-        "docx" => marksmen_docx::translation::document::convert(combined_events, &config, std::path::Path::new(""), None).map_err(|e| e.to_string())?,
-        "pptx" => marksmen_ppt::convert(combined_events, &config).map_err(|e| e.to_string())?,
-        "epub" => marksmen_epub::convert(combined_events, &config).map_err(|e| e.to_string())?,
-        "typst" | "typ" => marksmen_typst::translator::translate(combined_events, &config).map_err(|e| e.to_string())?.into_bytes(),
-        "html" | "htm" => marksmen_html::convert(combined_events, &config).map_err(|e| e.to_string())?.into_bytes(),
+        "docx" => marksmen_docx::translation::document::convert(&combined_events, &config, std::path::Path::new(""), None).map_err(|e| e.to_string())?,
+        "pptx" => marksmen_ppt::convert(&combined_events, &config).map_err(|e| e.to_string())?,
+        "epub" => marksmen_epub::convert(&combined_events, &config).map_err(|e| e.to_string())?,
+        "typst" | "typ" => marksmen_typst::translator::translate(&combined_events, &config).map_err(|e| e.to_string())?.into_bytes(),
+        "html" | "htm" => marksmen_html::convert(&combined_events, &config).map_err(|e| e.to_string())?.into_bytes(),
         _ => return Err(JsValue::from_str(&format!("Unsupported WASM merge format: {}", format))),
     };
 

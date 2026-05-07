@@ -38,7 +38,7 @@ Typst is an analytical typesetting engine, **not a web browser**. It cannot exec
 - **Underline**: This text is underlined via `<u>`
 - **Subscripts**: H2O via `<sub>`
 - **Superscripts**: E = mc<sup>2</sup> via `<sup>`
-- **Colors**: This text is colored via `<span style="color: ...">`
+- **Colors**: <span style="color: #e11d48">This text</span> is colored via `<span style="color: ...">`
 - **Line breaks**: Forced HTML break 
  is translated correctly.
 

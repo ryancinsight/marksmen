@@ -17,14 +17,14 @@ fn main() -> Result<()> {
 
     // 1. HTML5 Extraction
     let events_html = parse(body);
-    let html_out = marksmen_html::convert(events_html, &config)?;
+    let html_out = marksmen_html::convert(&events_html, &config)?;
     fs::write(root.join("demo_export.html"), &html_out)?;
     println!("[+] Generated demo_export.html natively.");
 
     // 2. OpenXML DOCX Compilation
     let events_docx = parse(body);
     let docx_bytes =
-        marksmen_docx::translation::document::convert(events_docx, &config, &root, None)?;
+        marksmen_docx::translation::document::convert(&events_docx, &config, &root, None)?;
     fs::write(root.join("demo_export.docx"), &docx_bytes)?;
     println!(
         "[+] Generated demo_export.docx ({} bytes).",

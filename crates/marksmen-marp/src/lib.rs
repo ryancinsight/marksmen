@@ -30,7 +30,7 @@ use marksmen_core::config::Config;
 use pulldown_cmark::{Alignment, CodeBlockKind, Event, HeadingLevel, Tag, TagEnd};
 
 /// Convert a pulldown-cmark event stream into a Marp Markdown document.
-pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
+pub fn convert(events: &[Event<'_>], config: &Config) -> Result<String> {
     let mut out = String::with_capacity(events.len() * 32);
 
     // ── YAML front matter ────────────────────────────────────────────────────
@@ -59,7 +59,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
 
     let mut state = SerState::default();
 
-    for event in &events {
+    for event in events.iter().cloned() {
         match event {
             // ── Slide boundaries ──────────────────────────────────────────
             Event::Rule => {
@@ -73,13 +73,13 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
                 // H1 and H2 start a new Marp slide (headingDivider: 2 handles this
                 // at render time, but we also emit explicit `---` separators
                 // for readers that do not respect headingDivider).
-                if (*level == HeadingLevel::H1 || *level == HeadingLevel::H2)
+                if (level == HeadingLevel::H1 || level == HeadingLevel::H2)
                     && state.heading_count > 0
                 {
                     out.push_str("\n---\n\n");
                 }
                 state.in_heading = true;
-                state.heading_prefix = heading_prefix(*level);
+                state.heading_prefix = heading_prefix(level);
             }
             Event::End(TagEnd::Heading(_)) => {
                 state.in_heading = false;
@@ -436,7 +436,7 @@ mod tests {
     fn test_front_matter_present() {
         let md = "# Hello\nBody text.";
         let events = parser::parse(md);
-        let marp = convert(events, &Config::default()).unwrap();
+        let marp = convert(&events, &Config::default()).unwrap();
         assert!(marp.starts_with("---\n"), "front matter missing");
         assert!(marp.contains("marp: true"), "marp directive missing");
         assert!(
@@ -449,7 +449,7 @@ mod tests {
     fn test_h1_slide_separator() {
         let md = "# First\nBody.\n\n# Second\nBody two.";
         let events = parser::parse(md);
-        let marp = convert(events, &Config::default()).unwrap();
+        let marp = convert(&events, &Config::default()).unwrap();
         // First H1 must not have a preceding separator (it IS the first slide).
         // Second H1 must have `---` inserted before it.
         let after_fm = marp.splitn(4, "---").collect::<Vec<_>>();
@@ -468,7 +468,7 @@ mod tests {
     fn test_rule_slide_separator() {
         let md = "Content A\n\n---\n\nContent B";
         let events = parser::parse(md);
-        let marp = convert(events, &Config::default()).unwrap();
+        let marp = convert(&events, &Config::default()).unwrap();
         // Must contain the `---\n\n` separator inside document body.
         let body_start = marp.find("---\n\n").expect("no front matter");
         // Skip the FM sentinel.
@@ -483,7 +483,7 @@ mod tests {
     fn test_inline_formatting() {
         let md = "**bold** and *italic* and `code`";
         let events = parser::parse(md);
-        let marp = convert(events, &Config::default()).unwrap();
+        let marp = convert(&events, &Config::default()).unwrap();
         assert!(marp.contains("**bold**"), "bold not serialized");
         assert!(marp.contains("*italic*"), "italic not serialized");
         assert!(marp.contains("`code`"), "inline code not serialized");
@@ -493,7 +493,7 @@ mod tests {
     fn test_list_serialization() {
         let md = "- alpha\n- beta\n- gamma";
         let events = parser::parse(md);
-        let marp = convert(events, &Config::default()).unwrap();
+        let marp = convert(&events, &Config::default()).unwrap();
         assert!(marp.contains("- alpha"), "bullet list item missing");
         assert!(marp.contains("- beta"), "bullet list item missing");
     }
@@ -502,7 +502,7 @@ mod tests {
     fn test_table_generation() {
         let md = "| A | B |\n|---|---|\n| 1 | 2 |";
         let events = parser::parse(md);
-        let marp = convert(events, &Config::default()).unwrap();
+        let marp = convert(&events, &Config::default()).unwrap();
         assert!(marp.contains("| A |"), "table header not serialized");
         assert!(marp.contains("| 1 |"), "table row not serialized");
     }

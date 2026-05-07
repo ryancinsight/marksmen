@@ -26,7 +26,7 @@ use pulldown_cmark::{CodeBlockKind, Event, Tag, TagEnd};
 /// For any Markdown source `M`, `parse_xhtml(convert(parse(M), cfg)) ≈ M`
 /// up to whitespace normalization and Mermaid source extraction from the
 /// hidden metadata block.
-pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
+pub fn convert(events: &[Event<'_>], config: &Config) -> Result<String> {
     let mut out = String::with_capacity(events.len() * 100);
 
     // XML declaration — required for XHTML served as `application/xhtml+xml`.
@@ -74,8 +74,7 @@ pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
     let mut in_mermaid_block = false;
     let mut current_mermaid_source = String::new();
 
-    let iter = events.into_iter();
-    for event in iter {
+    for event in events.iter().cloned() {
         match event {
             Event::Start(Tag::Paragraph) => out.push_str("<p>"),
             Event::End(TagEnd::Paragraph) => out.push_str("</p>\n"),
@@ -434,7 +433,7 @@ mod tests {
             Event::End(TagEnd::Paragraph),
         ];
         let config = Config::default();
-        let xhtml = convert(events, &config).unwrap();
+        let xhtml = convert(&events, &config).unwrap();
         assert!(
             xhtml.starts_with("<?xml version=\"1.0\""),
             "must begin with XML declaration"
@@ -453,7 +452,7 @@ mod tests {
     fn convert_void_elements_are_self_closing() {
         let events: Vec<Event<'static>> = vec![Event::SoftBreak];
         let config = Config::default();
-        let xhtml = convert(events, &config).unwrap();
+        let xhtml = convert(&events, &config).unwrap();
         assert!(
             xhtml.contains("<br />"),
             "br must use self-closing form in XHTML"
@@ -468,7 +467,7 @@ mod tests {
             Event::End(TagEnd::Paragraph),
         ];
         let config = Config::default();
-        let xhtml = convert(events, &config).unwrap();
+        let xhtml = convert(&events, &config).unwrap();
         assert!(
             !xhtml.contains("<script>"),
             "raw script tags must be escaped"

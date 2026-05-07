@@ -24,7 +24,7 @@ pub mod ooxml;
 /// # Invariant
 /// The returned `Vec<u8>` is a valid, self-contained OOXML Presentation
 /// archive, readable by Microsoft PowerPoint 2016+ and LibreOffice Impress.
-pub fn convert(events: Vec<Event<'_>>, config: &Config) -> Result<Vec<u8>> {
+pub fn convert(events: &[Event<'_>], config: &Config) -> Result<Vec<u8>> {
     let slides = segment_slides(events, config);
     pack_pptx(&slides)
 }
@@ -100,7 +100,7 @@ struct Run {
 
 // ── AST → Slides segmentation ────────────────────────────────────────────────
 
-fn segment_slides(events: Vec<Event<'_>>, config: &Config) -> Vec<Slide> {
+fn segment_slides(events: &[Event<'_>], config: &Config) -> Vec<Slide> {
     let mut slides: Vec<Slide> = Vec::new();
     let mut current: Slide = Slide::default();
 
@@ -144,7 +144,7 @@ fn segment_slides(events: Vec<Event<'_>>, config: &Config) -> Vec<Slide> {
     let mut current_cell = String::new();
     let mut in_table_head = false;
 
-    for event in events {
+    for event in events.iter().cloned() {
         // ── Table events (highest priority guard) ────────────────────────
         if in_table {
             match &event {
@@ -812,8 +812,7 @@ mod tests {
     fn test_pptx_zip_valid() {
         let md = "# Slide One\nFirst content paragraph.\n\n---\n\n# Slide Two\nSecond content.\n\n- item a\n- item b";
         let events = parser::parse(md);
-        let config = Config::default();
-        let bytes = convert(events, &config).expect("pptx conversion failed");
+        let bytes = convert(&events, &Config::default()).expect("pptx conversion failed");
         // Validate: must unpack as a valid zip archive.
         let cursor = Cursor::new(&bytes);
         let mut archive = zip::ZipArchive::new(cursor).expect("output is not a valid zip");
@@ -830,7 +829,7 @@ mod tests {
     fn test_slide_count_from_h1() {
         let md = "# Title\nintro\n\n# Second Slide\nbody\n\n# Third\nmore";
         let events = parser::parse(md);
-        let slides = segment_slides(events, &Config::default());
+        let slides = segment_slides(&events, &Config::default());
         assert_eq!(slides.len(), 3);
         assert_eq!(slides[0].title.trim(), "Title");
         assert_eq!(slides[1].title.trim(), "Second Slide");
@@ -840,7 +839,7 @@ mod tests {
     fn test_slide_count_from_rule() {
         let md = "## Content A\nbody a\n\n---\n\n## Content B\nbody b";
         let events = parser::parse(md);
-        let slides = segment_slides(events, &Config::default());
+        let slides = segment_slides(&events, &Config::default());
         assert_eq!(slides.len(), 2);
     }
 }

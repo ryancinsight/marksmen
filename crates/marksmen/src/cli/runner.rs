@@ -361,7 +361,7 @@ fn write_output(
                 marksmen_core::config::frontmatter::parse_frontmatter(markdown)?;
             let merged = config.merge_frontmatter(&fm_config);
             let events = marksmen_core::parsing::parser::parse(body);
-            let typst_source = marksmen_typst::translator::translate(events, &merged)?;
+            let typst_source = marksmen_typst::translator::translate(&events, &merged)?;
 
             fs::write(output_path, &typst_source).with_context(|| {
                 format!("Failed to write Typst output: {}", output_path.display())
@@ -374,7 +374,7 @@ fn write_output(
                 marksmen_core::config::frontmatter::parse_frontmatter(markdown)?;
             let merged = config.merge_frontmatter(&fm_config);
             let events = marksmen_core::parsing::parser::parse(body);
-            let html = marksmen_html::convert(events, &merged)?;
+            let html = marksmen_html::convert(&events, &merged)?;
 
             fs::write(output_path, &html).with_context(|| {
                 format!("Failed to write HTML output: {}", output_path.display())
@@ -387,7 +387,7 @@ fn write_output(
                 marksmen_core::config::frontmatter::parse_frontmatter(markdown)?;
             let merged = config.merge_frontmatter(&fm_config);
             let events = marksmen_core::parsing::parser::parse(body);
-            let xhtml = marksmen_xhtml::convert(events, &merged)?;
+            let xhtml = marksmen_xhtml::convert(&events, &merged)?;
 
             fs::write(output_path, &xhtml).with_context(|| {
                 format!("Failed to write XHTML output: {}", output_path.display())
@@ -402,7 +402,7 @@ fn write_output(
             let events = marksmen_core::parsing::parser::parse(body);
             let input_dir = input_path.parent().unwrap_or_else(|| Path::new("."));
             let docx_bytes = marksmen_docx::translation::document::convert(
-                events,
+                &events,
                 &merged,
                 input_dir,
                 source_docx_bytes,
@@ -443,7 +443,7 @@ fn write_output(
                 marksmen_core::config::frontmatter::parse_frontmatter(markdown)?;
             let merged = config.merge_frontmatter(&fm_config);
             let events = marksmen_core::parsing::parser::parse(body);
-            let epub_bytes = marksmen_epub::convert(events, &merged)?;
+            let epub_bytes = marksmen_epub::convert(&events, &merged)?;
 
             fs::write(output_path, &epub_bytes).with_context(|| {
                 format!("Failed to write EPUB output: {}", output_path.display())
@@ -456,7 +456,7 @@ fn write_output(
                 marksmen_core::config::frontmatter::parse_frontmatter(markdown)?;
             let merged = config.merge_frontmatter(&fm_config);
             let events = marksmen_core::parsing::parser::parse(body);
-            let ppt_bytes = marksmen_ppt::convert(events, &merged)?;
+            let ppt_bytes = marksmen_ppt::convert(&events, &merged)?;
 
             fs::write(output_path, &ppt_bytes).with_context(|| {
                 format!("Failed to write PPTX output: {}", output_path.display())

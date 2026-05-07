@@ -19,7 +19,7 @@ use marksmen_core::config::Config;
 ///
 /// The output is a complete Typst source document ready for compilation,
 /// including page setup preamble and all content.
-pub fn translate(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
+pub fn translate(events: &[Event<'_>], config: &Config) -> Result<String> {
     let mut output = String::with_capacity(4096);
 
     // Emit Typst preamble: page setup, text defaults.
@@ -27,7 +27,7 @@ pub fn translate(events: Vec<Event<'_>>, config: &Config) -> Result<String> {
 
     let mut state = TranslatorState::default();
 
-    for event in events {
+    for event in events.iter().cloned() {
         translate_event(&mut output, &mut state, event, config);
     }
 
@@ -1458,7 +1458,7 @@ mod tests {
     fn translate_md(md: &str) -> String {
         let config = Config::default();
         let events = parse(md);
-        translate(events, &config).unwrap()
+        translate(&events, &config).unwrap()
     }
 
     #[test]

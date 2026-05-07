@@ -1,7 +1,7 @@
 use marksmen_core::{parsing::parser::parse, Config};
 
 fn rtf_bytes(md: &str) -> Vec<u8> {
-    crate::convert(parse(md), &Config::default()).expect("convert failed")
+    crate::convert(&parse(md), &Config::default()).expect("convert failed")
 }
 fn rtf_str(md: &str) -> String {
     String::from_utf8(rtf_bytes(md)).expect("RTF is not UTF-8")

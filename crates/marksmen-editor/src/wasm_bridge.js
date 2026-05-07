@@ -231,6 +231,38 @@ export async function invoke(cmd, args = {}) {
             return;
         }
 
+        // ── AI Assistant / Grammar Check ──────────────────────────────────
+        case 'request_grammar_check': {
+            const text = args.text || '';
+            console.log('[WASM bridge] Mocking local LLM grammar check for payload length:', text.length);
+            
+            // Mock MVP Rule-based engine
+            const suggestions = [];
+            const rules = [
+                { pattern: /\b(its)\b/ig, correction: "it's", message: "Check if you meant 'it is' instead of the possessive 'its'." },
+                { pattern: /\b(there)\b/ig, correction: "their", message: "Check if you meant the possessive 'their' instead of 'there'." },
+                { pattern: /\b(your)\b/ig, correction: "you're", message: "Check if you meant 'you are'." },
+                { pattern: /\b(effect)\b/ig, correction: "affect", message: "Did you mean 'affect' as a verb?" },
+                { pattern: /\s{2,}/g, correction: " ", message: "Extra spaces detected." }
+            ];
+
+            let match;
+            rules.forEach(rule => {
+                while ((match = rule.pattern.exec(text)) !== null) {
+                    suggestions.push({
+                        matched: match[0],
+                        index: match.index,
+                        correction: rule.correction,
+                        message: rule.message
+                    });
+                }
+            });
+
+            // Simulate slight latency of local LLM
+            await new Promise(r => setTimeout(r, 600));
+            return suggestions;
+        }
+
         default:
             console.warn(`[WASM bridge] Unhandled command '${cmd}' in browser mode.`);
             return null;
