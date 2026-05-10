@@ -53,13 +53,19 @@ pub fn convert(
         final_bytes = encrypted_buffer.into_inner();
     }
 
-    if let (Some(cert_path), Some(key_path)) = (&merged_config.certificate_path, &merged_config.private_key_path) {
-        if let (Ok(cert), Ok(key)) = (std::fs::read(cert_path), std::fs::read(key_path)) {
-            if let Ok(signer) = marksmen_crypto::PdfSigner::new(&cert, &key) {
-                let mut signed_buffer = std::io::Cursor::new(Vec::new());
-                if signer.sign_pdf(std::io::Cursor::new(&final_bytes), &mut signed_buffer).is_ok() {
-                    final_bytes = signed_buffer.into_inner();
-                }
+    if let (Some(cert_path), Some(key_path)) = (
+        &merged_config.certificate_path,
+        &merged_config.private_key_path,
+    ) {
+        if let (Ok(cert), Ok(key)) = (std::fs::read(cert_path), std::fs::read(key_path))
+            && let Ok(signer) = marksmen_crypto::PdfSigner::new(&cert, &key)
+        {
+            let mut signed_buffer = std::io::Cursor::new(Vec::new());
+            if signer
+                .sign_pdf(std::io::Cursor::new(&final_bytes), &mut signed_buffer)
+                .is_ok()
+            {
+                final_bytes = signed_buffer.into_inner();
             }
         }
     }
@@ -233,10 +239,10 @@ fn embed_roundtrip_markdown(pdf_bytes: &[u8], markdown: &str) -> Result<Vec<u8>>
 
 fn extract_attr(tag: &str, attr: &str) -> Option<String> {
     let needle = format!("{}=\"", attr);
-    if let Some(start) = tag.find(&needle) {
-        if let Some(end) = tag[start + needle.len()..].find('"') {
-            return Some(tag[start + needle.len()..start + needle.len() + end].to_string());
-        }
+    if let Some(start) = tag.find(&needle)
+        && let Some(end) = tag[start + needle.len()..].find('"')
+    {
+        return Some(tag[start + needle.len()..start + needle.len() + end].to_string());
     }
     None
 }

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 pub struct Reference {
     pub id: String,
     pub r#type: String, // "article-journal", "book", "chapter", etc.
-    
+
     // Core String Variables
     pub title: Option<String>,
     pub container_title: Option<String>,
@@ -19,11 +19,11 @@ pub struct Reference {
     pub url: Option<String>,
     pub isbn: Option<String>,
     pub issn: Option<String>,
-    
+
     // Date Variables
     pub issued: Option<DateVariable>,
     pub accessed: Option<DateVariable>,
-    
+
     // Name Variables
     pub author: Option<Vec<NameVariable>>,
     pub editor: Option<Vec<NameVariable>>,

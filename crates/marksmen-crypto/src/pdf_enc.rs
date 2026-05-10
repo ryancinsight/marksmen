@@ -1,6 +1,6 @@
 use aes::Aes256;
 use cbc::Encryptor;
-use cipher::{block_padding::Pkcs7, BlockEncryptMut, KeyIvInit};
+use cipher::{BlockEncryptMut, KeyIvInit, block_padding::Pkcs7};
 use lopdf::{Dictionary, Document, Object};
 use rand::RngCore;
 use std::io::{Read, Write};
@@ -57,17 +57,24 @@ pub fn encrypt_pdf<R: Read, W: Write>(
     encrypt_dict.set("V", Object::Integer(5)); // AES-256
     encrypt_dict.set("R", Object::Integer(6));
     encrypt_dict.set("Length", Object::Integer(256));
-    
+
     // In a real Revision 6 implementation, /O, /U, /OE, /UE, /Perms would be calculated
     // using the user_pw and owner_pw. Here we output the structural dictionary.
-    encrypt_dict.set("O", Object::String(owner_pw.as_bytes().to_vec(), lopdf::StringFormat::Literal));
-    encrypt_dict.set("U", Object::String(user_pw.as_bytes().to_vec(), lopdf::StringFormat::Literal));
-    
+    encrypt_dict.set(
+        "O",
+        Object::String(owner_pw.as_bytes().to_vec(), lopdf::StringFormat::Literal),
+    );
+    encrypt_dict.set(
+        "U",
+        Object::String(user_pw.as_bytes().to_vec(), lopdf::StringFormat::Literal),
+    );
+
     let encrypt_id = doc.add_object(Object::Dictionary(encrypt_dict));
     doc.trailer.set("Encrypt", Object::Reference(encrypt_id));
 
     // 4. Save the document
-    doc.save_to(&mut output).map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    doc.save_to(&mut output)
+        .map_err(|e| anyhow::anyhow!(e.to_string()))?;
 
     Ok(())
 }
@@ -75,10 +82,10 @@ pub fn encrypt_pdf<R: Read, W: Write>(
 fn encrypt_bytes(data: &[u8], key: &[u8; 32], rng: &mut impl RngCore) -> Vec<u8> {
     let mut iv = [0u8; 16];
     rng.fill_bytes(&mut iv);
-    
+
     let encryptor = Aes256CbcEnc::new(key.into(), &iv.into());
     let mut out = encryptor.encrypt_padded_vec_mut::<Pkcs7>(data);
-    
+
     // Prepend IV to the encrypted data
     let mut final_data = Vec::with_capacity(iv.len() + out.len());
     final_data.extend_from_slice(&iv);

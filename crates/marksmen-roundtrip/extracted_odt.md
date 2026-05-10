@@ -9,7 +9,7 @@ Headers, footers, and page numbers are intrinsically supported via YAML frontmat
 Because the intermediate format is Typst, typography is mathematically precise. Let's look at a standard Markdown table:
 
 | Subsystem | Underlying Tech | Role | Status | 
-| :--- | :--- | :--- | :--- |
+| :--- | :---: | ---: | :---: |
 | **Parser** | `pulldown-cmark` | Emits syntax events | ✅ | 
 | **Translator** | `marksmen-core` | Maps AST to Typst | ✅ | 
 | **Compiler** | `typst` | Typesets elements | ✅ | 

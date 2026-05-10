@@ -58,7 +58,8 @@ pub struct PdfMetadata {
 
 /// Extract basic document metadata from the PDF Info dictionary.
 pub fn extract_pdf_metadata(bytes: &[u8]) -> Result<PdfMetadata> {
-    let document = Document::load_mem(bytes).context("Failed to parse PDF bytes for metadata extraction")?;
+    let document =
+        Document::load_mem(bytes).context("Failed to parse PDF bytes for metadata extraction")?;
     let mut metadata = PdfMetadata {
         title: None,
         author: None,
@@ -67,18 +68,19 @@ pub fn extract_pdf_metadata(bytes: &[u8]) -> Result<PdfMetadata> {
     };
 
     if let Ok(info_id) = document.trailer.get(b"Info").and_then(Object::as_reference)
-        && let Ok(info) = document.get_dictionary(info_id) {
-            let decode_pdf_string = |key: &[u8]| -> Option<String> {
-                info.get(key)
-                    .ok()
-                    .and_then(|obj| obj.as_string().ok())
-                    .map(|c| c.into_owned())
-            };
-            metadata.title = decode_pdf_string(b"Title");
-            metadata.author = decode_pdf_string(b"Author");
-            metadata.subject = decode_pdf_string(b"Subject");
-            metadata.creator = decode_pdf_string(b"Creator");
-        }
+        && let Ok(info) = document.get_dictionary(info_id)
+    {
+        let decode_pdf_string = |key: &[u8]| -> Option<String> {
+            info.get(key)
+                .ok()
+                .and_then(|obj| obj.as_string().ok())
+                .map(|c| c.into_owned())
+        };
+        metadata.title = decode_pdf_string(b"Title");
+        metadata.author = decode_pdf_string(b"Author");
+        metadata.subject = decode_pdf_string(b"Subject");
+        metadata.creator = decode_pdf_string(b"Creator");
+    }
     Ok(metadata)
 }
 
@@ -108,24 +110,25 @@ impl Rect {
     /// Parse from a lopdf `Object::Array` of 4 numbers.
     fn from_object(obj: &Object) -> Option<Self> {
         if let Ok(arr) = obj.as_array()
-            && arr.len() == 4 {
-                let nums: Vec<f32> = arr
-                    .iter()
-                    .filter_map(|o| match o {
-                        Object::Real(f) => Some(*f),
-                        Object::Integer(i) => Some(*i as f32),
-                        _ => None,
-                    })
-                    .collect();
-                if nums.len() == 4 {
-                    return Some(Rect {
-                        llx: nums[0],
-                        lly: nums[1],
-                        urx: nums[2],
-                        ury: nums[3],
-                    });
-                }
+            && arr.len() == 4
+        {
+            let nums: Vec<f32> = arr
+                .iter()
+                .filter_map(|o| match o {
+                    Object::Real(f) => Some(*f),
+                    Object::Integer(i) => Some(*i as f32),
+                    _ => None,
+                })
+                .collect();
+            if nums.len() == 4 {
+                return Some(Rect {
+                    llx: nums[0],
+                    lly: nums[1],
+                    urx: nums[2],
+                    ury: nums[3],
+                });
             }
+        }
         None
     }
 
@@ -235,8 +238,6 @@ pub fn extract_annotations(bytes: &[u8]) -> Result<Vec<LocalizedAnnotation>> {
             Err(_) => continue,
         };
 
-
-
         let annots = match page_dict.get(b"Annots") {
             Ok(a) => a,
             Err(_) => continue,
@@ -294,7 +295,6 @@ pub fn extract_annotations(bytes: &[u8]) -> Result<Vec<LocalizedAnnotation>> {
         };
 
         for annot_dict in foreign_annots {
-
             let subtype = match annot_dict.get(b"Subtype").and_then(|o| o.as_name()) {
                 Ok(name) => name,
                 Err(_) => continue,

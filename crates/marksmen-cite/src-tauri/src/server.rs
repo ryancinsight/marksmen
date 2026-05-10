@@ -1,10 +1,4 @@
-use axum::{
-    extract::State,
-    http::StatusCode,
-    response::IntoResponse,
-    routing::post,
-    Json, Router,
-};
+use axum::{extract::State, http::StatusCode, response::IntoResponse, routing::post, Json, Router};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use tauri::{AppHandle, Emitter};
@@ -34,7 +28,7 @@ pub async fn start_server(app: AppHandle) {
         .with_state(app);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 14242));
-    
+
     // Spawn server in background
     tokio::spawn(async move {
         if let Ok(listener) = tokio::net::TcpListener::bind(addr).await {
@@ -52,6 +46,6 @@ async fn handle_import(
         eprintln!("Failed to emit web-import event: {}", e);
         return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to emit event");
     }
-    
+
     (StatusCode::OK, "Imported successfully")
 }

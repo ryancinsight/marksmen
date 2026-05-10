@@ -34,6 +34,7 @@ pub fn parse_odt(bytes: &[u8], media_out_dir: Option<&std::path::Path>) -> Resul
     let mut in_span = false;
     let mut is_bold = false;
     let mut is_italic = false;
+    let mut is_strikethrough = false;
     let mut is_code = false;
     let mut is_underline = false;
     let mut is_sub = false;
@@ -48,6 +49,7 @@ pub fn parse_odt(bytes: &[u8], media_out_dir: Option<&std::path::Path>) -> Resul
     // following P_HiddenMeta, or plain text that should be emitted directly as $$...$$.
     let mut in_display_math_para = false;
     let mut display_math_text = String::new();
+    let mut link_href = String::new();
 
     let mut in_tbl = 0;
     let mut tr_count = 0;
@@ -83,19 +85,24 @@ pub fn parse_odt(bytes: &[u8], media_out_dir: Option<&std::path::Path>) -> Resul
                         let mut is_quote_paragraph = false;
                         for attr in e.attributes() {
                             if let Ok(a) = attr
-                                && a.key.as_ref() == b"text:style-name" {
-                                    if a.value.as_ref() == b"P_Rule" {
-                                        // Horizontal rule — not math.
-                                    } else if a.value.as_ref() == b"P_DisplayMath" {
-                                        in_display_math_para = true;
-                                    } else if a.value.as_ref() == b"P_Right" {
-                                        current_tc_alignment = 2;
-                                    } else if a.value.as_ref() == b"P_Quote" {
-                                        is_quote_paragraph = true;
-                                    } else if a.value.as_ref() == b"P_HiddenMeta" {
-                                        in_hidden_meta = true;
-                                    }
+                                && a.key.as_ref() == b"text:style-name"
+                            {
+                                if a.value.as_ref() == b"P_Rule" {
+                                    // Horizontal rule — not math.
+                                } else if a.value.as_ref() == b"P_DisplayMath" {
+                                    in_display_math_para = true;
+                                } else if a.value.as_ref() == b"P_Right" {
+                                    current_tc_alignment = 2;
+                                } else if a.value.as_ref() == b"P_Center" {
+                                    current_tc_alignment = 1;
+                                } else if a.value.as_ref() == b"P_Left" {
+                                    current_tc_alignment = 0;
+                                } else if a.value.as_ref() == b"P_Quote" {
+                                    is_quote_paragraph = true;
+                                } else if a.value.as_ref() == b"P_HiddenMeta" {
+                                    in_hidden_meta = true;
                                 }
+                            }
                         }
                         if in_hidden_meta {
                             continue;
@@ -125,12 +132,13 @@ pub fn parse_odt(bytes: &[u8], media_out_dir: Option<&std::path::Path>) -> Resul
                         let mut heading_level = 1u8;
                         for attr in e.attributes() {
                             if let Ok(a) = attr
-                                && a.key.as_ref() == b"text:outline-level" {
-                                    heading_level = String::from_utf8_lossy(a.value.as_ref())
-                                        .parse::<u8>()
-                                        .unwrap_or(1)
-                                        .clamp(1, 6);
-                                }
+                                && a.key.as_ref() == b"text:outline-level"
+                            {
+                                heading_level = String::from_utf8_lossy(a.value.as_ref())
+                                    .parse::<u8>()
+                                    .unwrap_or(1)
+                                    .clamp(1, 6);
+                            }
                         }
                         output.push_str("\n\n");
                         output.push_str(&"#".repeat(heading_level as usize));
@@ -144,7 +152,9 @@ pub fn parse_odt(bytes: &[u8], media_out_dir: Option<&std::path::Path>) -> Resul
                         }
                     }
                     b"table:table-row" | b"table:table-header-rows" => {
-                        if !output.is_empty() && !output.ends_with("\n") && !output.ends_with("\n\n")
+                        if !output.is_empty()
+                            && !output.ends_with("\n")
+                            && !output.ends_with("\n\n")
                         {
                             output.push('\n');
                         }
@@ -162,14 +172,16 @@ pub fn parse_odt(bytes: &[u8], media_out_dir: Option<&std::path::Path>) -> Resul
                         for attr in e.attributes() {
                             if let Ok(a) = attr
                                 && a.key.as_ref() == b"text:style-name"
-                                    && a.value.as_ref() == b"L_Numbered"
-                                {
-                                    is_ordered = true;
-                                }
+                                && a.value.as_ref() == b"L_Numbered"
+                            {
+                                is_ordered = true;
+                            }
                         }
                         list_ordered_stack.push(is_ordered);
                         list_counter_stack.push(0);
-                        if !output.is_empty() && !output.ends_with("\n\n") && !output.ends_with("\n")
+                        if !output.is_empty()
+                            && !output.ends_with("\n\n")
+                            && !output.ends_with("\n")
                         {
                             output.push('\n');
                         }
@@ -198,22 +210,34 @@ pub fn parse_odt(bytes: &[u8], media_out_dir: Option<&std::path::Path>) -> Resul
                         // Determine styling from text:style-name
                         for attr in e.attributes() {
                             if let Ok(a) = attr
-                                && a.key.as_ref() == b"text:style-name" {
-                                    match a.value.as_ref() {
-                                        b"S_Bold" => is_bold = true,
-                                        b"S_Italic" => is_italic = true,
-                                        b"S_MathInline" => is_inline_math = true,
-                                        b"S_Code" => is_code = true,
-                                        b"S_Underline" => is_underline = true,
-                                        b"S_Sub" => is_sub = true,
-                                        b"S_Sup" => is_sup = true,
-                                        b"S_HiddenMeta" => in_hidden_span_meta = true,
-                                        _ => {}
-                                    }
+                                && a.key.as_ref() == b"text:style-name"
+                            {
+                                match a.value.as_ref() {
+                                    b"S_Bold" => is_bold = true,
+                                    b"S_Italic" => is_italic = true,
+                                    b"S_Strikethrough" => is_strikethrough = true,
+                                    b"S_MathInline" => is_inline_math = true,
+                                    b"S_Code" => is_code = true,
+                                    b"S_Underline" => is_underline = true,
+                                    b"S_Sub" => is_sub = true,
+                                    b"S_Sup" => is_sup = true,
+                                    b"S_HiddenMeta" => in_hidden_span_meta = true,
+                                    _ => {}
                                 }
+                            }
                         }
                     }
                     b"text:line-break" => output.push('\n'),
+                    b"text:a" => {
+                        for attr in e.attributes() {
+                            if let Ok(a) = attr
+                                && a.key.as_ref() == b"xlink:href"
+                            {
+                                link_href = String::from_utf8_lossy(a.value.as_ref()).into_owned();
+                            }
+                        }
+                        output.push('[');
+                    }
                     b"text:changed-region" => {
                         for attr in e.attributes().flatten() {
                             if attr.key.as_ref() == b"text:id" {
@@ -378,6 +402,7 @@ pub fn parse_odt(bytes: &[u8], media_out_dir: Option<&std::path::Path>) -> Resul
                     in_span = false;
                     is_bold = false;
                     is_italic = false;
+                    is_strikethrough = false;
                     is_inline_math = false;
                     is_code = false;
                     is_underline = false;
@@ -393,6 +418,10 @@ pub fn parse_odt(bytes: &[u8], media_out_dir: Option<&std::path::Path>) -> Resul
                         in_hidden_span_meta = false;
                         hidden_span_meta_text.clear();
                     }
+                }
+                b"text:a" => {
+                    output.push_str(&format!("]({})", link_href));
+                    link_href.clear();
                 }
                 b"text:changed-region" => {
                     tracked_changes_map.insert(
@@ -464,11 +493,13 @@ pub fn parse_odt(bytes: &[u8], media_out_dir: Option<&std::path::Path>) -> Resul
                             if is_bold {
                                 core_text = format!("**{}**", core_text);
                             }
-                            if is_italic
-                                && !core_text.contains("$") {
-                                    // Only wrap if it's not pre-wrapped math
-                                    core_text = format!("*{}*", core_text);
-                                }
+                            if is_strikethrough {
+                                core_text = format!("~~{}~~", core_text);
+                            }
+                            if is_italic && !core_text.contains("$") {
+                                // Only wrap if it's not pre-wrapped math
+                                core_text = format!("*{}*", core_text);
+                            }
                             if is_underline {
                                 core_text = format!("<u>{}</u>", core_text);
                             }

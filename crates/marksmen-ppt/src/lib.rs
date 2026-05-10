@@ -161,15 +161,14 @@ fn segment_slides(events: &[Event<'_>], config: &Config) -> Vec<Slide> {
                 Event::Start(Tag::TableRow) => {
                     current_row.clear();
                 }
-                Event::End(TagEnd::TableRow)
-                    if !in_table_head => {
-                        table_rows.push(
-                            std::mem::take(&mut current_row)
-                                .into_iter()
-                                .map(|c| c.trim().to_string())
-                                .collect(),
-                        );
-                    }
+                Event::End(TagEnd::TableRow) if !in_table_head => {
+                    table_rows.push(
+                        std::mem::take(&mut current_row)
+                            .into_iter()
+                            .map(|c| c.trim().to_string())
+                            .collect(),
+                    );
+                }
                 Event::Start(Tag::TableCell) => {
                     current_cell.clear();
                 }
@@ -579,7 +578,6 @@ fn render_slide_xml(slide: &Slide) -> String {
         </p:txBody>
       </p:sp>"#,
     );
-
 
     format!(
         r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>

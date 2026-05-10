@@ -1,8 +1,8 @@
 use marksmen_core::config::Config;
-use marksmen_xml::escape;
 use marksmen_mermaid::graph::directed_graph;
 use marksmen_mermaid::layout::{coordinate_assign, crossing_reduction, rank_assignment};
 use marksmen_mermaid::parsing::parser;
+use marksmen_xml::escape;
 use pulldown_cmark::{Event, Tag, TagEnd};
 use std::path::Path;
 
@@ -64,6 +64,8 @@ pub fn translate_events<'a>(
 
     let mut in_mermaid_block = false;
     let mut current_mermaid_source = String::new();
+    let mut table_alignments: Vec<pulldown_cmark::Alignment> = Vec::new();
+    let mut current_cell_idx = 0;
     // List state: track ordered/unordered per nesting level.
     // ODF nesting: <text:list-item> can contain <text:p> then a nested <text:list>.
     // We close </text:p> before emitting a nested <text:list>, reopen if needed.
@@ -86,16 +88,40 @@ pub fn translate_events<'a>(
             Event::End(TagEnd::Heading(_)) => output.push_str("</text:h>\n"),
 
             // --- Tables ---
-            Event::Start(Tag::Table(_)) => {
+            Event::Start(Tag::Table(ref aligns)) => {
+                table_alignments = aligns.clone();
                 output.push_str("<table:table table:style-name=\"Table_Full\">\n")
             }
-            Event::End(TagEnd::Table) => output.push_str("</table:table>\n"),
-            Event::Start(Tag::TableHead) => output.push_str("<table:table-header-rows>\n"),
+            Event::End(TagEnd::Table) => {
+                table_alignments.clear();
+                output.push_str("</table:table>\n");
+            }
+            Event::Start(Tag::TableHead) => {
+                current_cell_idx = 0;
+                output.push_str("<table:table-header-rows>\n");
+            }
             Event::End(TagEnd::TableHead) => output.push_str("</table:table-header-rows>\n"),
-            Event::Start(Tag::TableRow) => output.push_str("<table:table-row>\n"),
+            Event::Start(Tag::TableRow) => {
+                current_cell_idx = 0;
+                output.push_str("<table:table-row>\n");
+            }
             Event::End(TagEnd::TableRow) => output.push_str("</table:table-row>\n"),
-            Event::Start(Tag::TableCell) => output.push_str("<table:table-cell><text:p>"),
-            Event::End(TagEnd::TableCell) => output.push_str("</text:p></table:table-cell>\n"),
+            Event::Start(Tag::TableCell) => {
+                let align = table_alignments
+                    .get(current_cell_idx)
+                    .unwrap_or(&pulldown_cmark::Alignment::None);
+                let p_style = match align {
+                    pulldown_cmark::Alignment::Center => " text:style-name=\"P_Center\"",
+                    pulldown_cmark::Alignment::Right => " text:style-name=\"P_Right\"",
+                    pulldown_cmark::Alignment::Left => " text:style-name=\"P_Left\"",
+                    pulldown_cmark::Alignment::None => "",
+                };
+                output.push_str(&format!("<table:table-cell><text:p{}>", p_style));
+            }
+            Event::End(TagEnd::TableCell) => {
+                output.push_str("</text:p></table:table-cell>\n");
+                current_cell_idx += 1;
+            }
 
             // --- Lists ---
             Event::Start(Tag::List(start_num)) => {
@@ -135,6 +161,18 @@ pub fn translate_events<'a>(
                 output.push_str("<text:span text:style-name=\"S_Italic\">")
             }
             Event::End(TagEnd::Emphasis) => output.push_str("</text:span>"),
+            Event::Start(Tag::Strikethrough) => {
+                output.push_str("<text:span text:style-name=\"S_Strikethrough\">")
+            }
+            Event::End(TagEnd::Strikethrough) => output.push_str("</text:span>"),
+            Event::Start(Tag::Superscript) => {
+                output.push_str("<text:span text:style-name=\"S_Superscript\">")
+            }
+            Event::End(TagEnd::Superscript) => output.push_str("</text:span>"),
+            Event::Start(Tag::Subscript) => {
+                output.push_str("<text:span text:style-name=\"S_Subscript\">")
+            }
+            Event::End(TagEnd::Subscript) => output.push_str("</text:span>"),
 
             Event::Start(Tag::BlockQuote(_)) => in_blockquote = true,
             Event::End(TagEnd::BlockQuote(_)) => in_blockquote = false,
@@ -162,7 +200,7 @@ pub fn translate_events<'a>(
             Event::End(TagEnd::CodeBlock) => {
                 if in_mermaid_block {
                     in_mermaid_block = false;
-                    
+
                     let ast = match parser::parse(&current_mermaid_source) {
                         Ok(a) => a,
                         Err(_) => {
@@ -180,7 +218,9 @@ pub fn translate_events<'a>(
                     let spaced_graph = coordinate_assign::assign_coordinates(&ranked_graph);
 
                     let svg_result = marksmen_render::mermaid::render_graph_to_svg(&spaced_graph);
-                    if let Some((png_bytes, _width, _height)) = marksmen_render::svg_bytes_to_png(svg_result.as_bytes()) {
+                    if let Some((png_bytes, _width, _height)) =
+                        marksmen_render::svg_bytes_to_png(svg_result.as_bytes())
+                    {
                         let filename = format!("mermaid_{}.png", images.len() + 1);
                         let image_id = format!("Pictures/{}", filename);
                         images.push((image_id.clone(), png_bytes));

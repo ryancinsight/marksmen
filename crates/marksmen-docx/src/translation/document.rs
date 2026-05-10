@@ -10,7 +10,9 @@ use pulldown_cmark::{CodeBlockKind, Event, Tag, TagEnd};
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 
-fn load_references(input_dir: &Path) -> std::collections::HashMap<String, marksmen_csl::model::Reference> {
+fn load_references(
+    input_dir: &Path,
+) -> std::collections::HashMap<String, marksmen_csl::model::Reference> {
     let mut map = std::collections::HashMap::new();
     let mut try_parse = |path: std::path::PathBuf| {
         if let Ok(json) = std::fs::read_to_string(&path) {
@@ -21,7 +23,7 @@ fn load_references(input_dir: &Path) -> std::collections::HashMap<String, marksm
             }
         }
     };
-    
+
     try_parse(input_dir.join("references.json"));
     if let Ok(appdata) = std::env::var("APPDATA") {
         try_parse(Path::new(&appdata).join("marksmen").join("references.json"));
@@ -35,16 +37,36 @@ fn format_reference(r: &marksmen_csl::model::Reference) -> String {
         let mut names = Vec::new();
         for a in authors {
             let mut name = String::new();
-            if let Some(first) = &a.given { name.push_str(first); name.push(' '); }
-            if let Some(last) = &a.family { name.push_str(last); }
-            if !name.is_empty() { names.push(name.trim().to_string()); }
+            if let Some(first) = &a.given {
+                name.push_str(first);
+                name.push(' ');
+            }
+            if let Some(last) = &a.family {
+                name.push_str(last);
+            }
+            if !name.is_empty() {
+                names.push(name.trim().to_string());
+            }
         }
-        if !names.is_empty() { s.push_str(&names.join(", ")); s.push_str(". "); }
+        if !names.is_empty() {
+            s.push_str(&names.join(", "));
+            s.push_str(". ");
+        }
     }
-    if let Some(title) = &r.title { s.push_str(title); s.push_str(". "); }
-    if let Some(container) = &r.container_title { s.push_str(container); s.push_str(", "); }
-    if let Some(vol) = &r.volume { s.push_str(&format!("vol. {}, ", vol)); }
-    if let Some(page) = &r.page { s.push_str(&format!("pp. {}, ", page)); }
+    if let Some(title) = &r.title {
+        s.push_str(title);
+        s.push_str(". ");
+    }
+    if let Some(container) = &r.container_title {
+        s.push_str(container);
+        s.push_str(", ");
+    }
+    if let Some(vol) = &r.volume {
+        s.push_str(&format!("vol. {}, ", vol));
+    }
+    if let Some(page) = &r.page {
+        s.push_str(&format!("pp. {}, ", page));
+    }
     if let Some(issued) = &r.issued {
         let dp = &issued.date_parts;
         if let Some(year) = dp.get(0).and_then(|a| a.get(0)) {
@@ -268,7 +290,7 @@ pub fn convert(
                 let mut reader = quick_xml::Reader::from_str(&cxml);
                 reader.config_mut().trim_text(true);
                 let mut buf = Vec::new();
-                
+
                 let mut current_id = None;
                 let mut in_comment = false;
                 let mut in_t = false;
@@ -276,15 +298,20 @@ pub fn convert(
 
                 loop {
                     match reader.read_event_into(&mut buf) {
-                        Ok(quick_xml::events::Event::Start(ref e)) if e.name().as_ref() == b"w:comment" => {
+                        Ok(quick_xml::events::Event::Start(ref e))
+                            if e.name().as_ref() == b"w:comment" =>
+                        {
                             in_comment = true;
                             current_text.clear();
-                            current_id = e.attributes()
+                            current_id = e
+                                .attributes()
                                 .filter_map(|a| a.ok())
                                 .find(|a| a.key.as_ref() == b"w:id")
                                 .and_then(|a| String::from_utf8(a.value.into_owned()).ok());
                         }
-                        Ok(quick_xml::events::Event::End(ref e)) if e.name().as_ref() == b"w:comment" => {
+                        Ok(quick_xml::events::Event::End(ref e))
+                            if e.name().as_ref() == b"w:comment" =>
+                        {
                             if let Some(id_str) = current_id.take() {
                                 let text_norm = current_text.trim().to_ascii_lowercase();
                                 if let Ok(id_num) = id_str.parse::<usize>() {
@@ -295,7 +322,9 @@ pub fn convert(
                             }
                             in_comment = false;
                         }
-                        Ok(quick_xml::events::Event::Start(ref e)) if e.name().as_ref() == b"w:t" && in_comment => {
+                        Ok(quick_xml::events::Event::Start(ref e))
+                            if e.name().as_ref() == b"w:t" && in_comment =>
+                        {
                             in_t = true;
                         }
                         Ok(quick_xml::events::Event::End(ref e)) if e.name().as_ref() == b"w:t" => {
@@ -307,7 +336,7 @@ pub fn convert(
                             }
                         }
                         Ok(quick_xml::events::Event::Eof) | Err(_) => break,
-                        _ => ()
+                        _ => (),
                     }
                     buf.clear();
                 }
@@ -364,12 +393,11 @@ pub fn convert(
                 for inner in scan_iter.by_ref() {
                     match inner {
                         Event::End(TagEnd::FootnoteDefinition) => break,
-                        Event::End(TagEnd::Paragraph)
-                            if fn_has_runs => {
-                                fn_paragraphs
-                                    .push(std::mem::replace(&mut fn_paragraph, Paragraph::new()));
-                                fn_has_runs = false;
-                            }
+                        Event::End(TagEnd::Paragraph) if fn_has_runs => {
+                            fn_paragraphs
+                                .push(std::mem::replace(&mut fn_paragraph, Paragraph::new()));
+                            fn_has_runs = false;
+                        }
                         Event::Text(t) => {
                             fn_paragraph = fn_paragraph.add_run(Run::new().add_text(t.to_string()));
                             fn_has_runs = true;
@@ -1105,13 +1133,17 @@ pub fn convert(
             doc = doc.add_paragraph(
                 Paragraph::new()
                     .style("Heading1")
-                    .add_run(Run::new().add_text("Bibliography"))
+                    .add_run(Run::new().add_text("Bibliography")),
             );
-            
+
             for (i, id) in text_state.cited_ids.iter().enumerate() {
                 if let Some(reference) = db.get(id) {
                     let formatted = format_reference(reference);
-                    let p = Paragraph::new().add_run(Run::new().add_text(format!("[{}] {}", i + 1, formatted)));
+                    let p = Paragraph::new().add_run(Run::new().add_text(format!(
+                        "[{}] {}",
+                        i + 1,
+                        formatted
+                    )));
                     doc = doc.add_paragraph(p);
                 }
             }
@@ -1191,21 +1223,30 @@ pub fn convert(
                     let mut sect_events = Vec::new();
                     loop {
                         match reader.read_event_into(&mut buf) {
-                            Ok(quick_xml::events::Event::Start(ref e)) if e.name().as_ref() == b"w:sectPr" => {
+                            Ok(quick_xml::events::Event::Start(ref e))
+                                if e.name().as_ref() == b"w:sectPr" =>
+                            {
                                 in_sect = true;
-                                sect_events.push(quick_xml::events::Event::Start(e.clone().into_owned()));
+                                sect_events
+                                    .push(quick_xml::events::Event::Start(e.clone().into_owned()));
                             }
-                            Ok(quick_xml::events::Event::End(ref e)) if e.name().as_ref() == b"w:sectPr" && in_sect => {
-                                sect_events.push(quick_xml::events::Event::End(e.clone().into_owned()));
+                            Ok(quick_xml::events::Event::End(ref e))
+                                if e.name().as_ref() == b"w:sectPr" && in_sect =>
+                            {
+                                sect_events
+                                    .push(quick_xml::events::Event::End(e.clone().into_owned()));
                                 break;
                             }
-                            Ok(quick_xml::events::Event::Empty(ref e)) if e.name().as_ref() == b"w:sectPr" => {
-                                sect_events.push(quick_xml::events::Event::Empty(e.clone().into_owned()));
+                            Ok(quick_xml::events::Event::Empty(ref e))
+                                if e.name().as_ref() == b"w:sectPr" =>
+                            {
+                                sect_events
+                                    .push(quick_xml::events::Event::Empty(e.clone().into_owned()));
                                 break;
                             }
                             Ok(e) if in_sect => sect_events.push(e.into_owned()),
                             Ok(quick_xml::events::Event::Eof) | Err(_) => break,
-                            _ => ()
+                            _ => (),
                         }
                         buf.clear();
                     }
@@ -1230,18 +1271,20 @@ pub fn convert(
                     let mut buf = Vec::new();
                     loop {
                         match reader.read_event_into(&mut buf) {
-                            Ok(quick_xml::events::Event::Empty(ref e)) | Ok(quick_xml::events::Event::Start(ref e)) => {
+                            Ok(quick_xml::events::Event::Empty(ref e))
+                            | Ok(quick_xml::events::Event::Start(ref e)) => {
                                 if e.name().as_ref() == b"Override" {
                                     let mut out = Vec::new();
                                     let mut writer = quick_xml::Writer::new(&mut out);
-                                    let _ = writer.write_event(quick_xml::events::Event::Empty(e.clone()));
+                                    let _ = writer
+                                        .write_event(quick_xml::events::Event::Empty(e.clone()));
                                     if let Ok(s) = String::from_utf8(out) {
                                         source_ct_overrides.push(s);
                                     }
                                 }
                             }
                             Ok(quick_xml::events::Event::Eof) | Err(_) => break,
-                            _ => ()
+                            _ => (),
                         }
                         buf.clear();
                     }
@@ -1256,10 +1299,13 @@ pub fn convert(
                     let mut buf = Vec::new();
                     loop {
                         match reader.read_event_into(&mut buf) {
-                            Ok(quick_xml::events::Event::Empty(ref e)) if e.name().as_ref() == b"Relationship" => {
+                            Ok(quick_xml::events::Event::Empty(ref e))
+                                if e.name().as_ref() == b"Relationship" =>
+                            {
                                 let mut out = Vec::new();
                                 let mut writer = quick_xml::Writer::new(&mut out);
-                                let _ = writer.write_event(quick_xml::events::Event::Empty(e.clone()));
+                                let _ =
+                                    writer.write_event(quick_xml::events::Event::Empty(e.clone()));
                                 if let Ok(entry) = String::from_utf8(out) {
                                     if !entry.contains("Target=\"styles.xml\"")
                                         && !entry.contains("Target=\"numbering.xml\"")
@@ -1275,7 +1321,7 @@ pub fn convert(
                                 }
                             }
                             Ok(quick_xml::events::Event::Eof) | Err(_) => break,
-                            _ => ()
+                            _ => (),
                         }
                         buf.clear();
                     }
@@ -1288,7 +1334,7 @@ pub fn convert(
                     let mut reader = quick_xml::Reader::from_str(&cxml);
                     reader.config_mut().trim_text(true);
                     let mut buf = Vec::new();
-                    
+
                     let mut current_id = None;
                     let mut in_comment = false;
                     let mut in_t = false;
@@ -1296,30 +1342,47 @@ pub fn convert(
 
                     loop {
                         match reader.read_event_into(&mut buf) {
-                            Ok(quick_xml::events::Event::Start(ref e)) if e.name().as_ref() == b"w:comment" => {
+                            Ok(quick_xml::events::Event::Start(ref e))
+                                if e.name().as_ref() == b"w:comment" =>
+                            {
                                 in_comment = true;
                                 current_text.clear();
-                                current_id = e.attributes()
+                                current_id = e
+                                    .attributes()
                                     .filter_map(|a| a.ok())
                                     .find(|a| a.key.as_ref() == b"w:id")
                                     .and_then(|a| String::from_utf8(a.value.into_owned()).ok());
                             }
-                            Ok(quick_xml::events::Event::End(ref e)) if e.name().as_ref() == b"w:comment" => {
+                            Ok(quick_xml::events::Event::End(ref e))
+                                if e.name().as_ref() == b"w:comment" =>
+                            {
                                 if let Some(id_str) = current_id.take() {
                                     let text_norm = current_text.trim().to_ascii_lowercase();
                                     if let Ok(id_num) = id_str.parse::<usize>() {
                                         if !text_norm.is_empty() {
-                                            src_comment_meta.insert(text_norm, (id_str, String::new(), String::new(), String::new()));
+                                            src_comment_meta.insert(
+                                                text_norm,
+                                                (
+                                                    id_str,
+                                                    String::new(),
+                                                    String::new(),
+                                                    String::new(),
+                                                ),
+                                            );
                                             let _ = id_num;
                                         }
                                     }
                                 }
                                 in_comment = false;
                             }
-                            Ok(quick_xml::events::Event::Start(ref e)) if e.name().as_ref() == b"w:t" && in_comment => {
+                            Ok(quick_xml::events::Event::Start(ref e))
+                                if e.name().as_ref() == b"w:t" && in_comment =>
+                            {
                                 in_t = true;
                             }
-                            Ok(quick_xml::events::Event::End(ref e)) if e.name().as_ref() == b"w:t" => {
+                            Ok(quick_xml::events::Event::End(ref e))
+                                if e.name().as_ref() == b"w:t" =>
+                            {
                                 in_t = false;
                             }
                             Ok(quick_xml::events::Event::Text(ref e)) if in_t => {
@@ -1328,7 +1391,7 @@ pub fn convert(
                                 }
                             }
                             Ok(quick_xml::events::Event::Eof) | Err(_) => break,
-                            _ => ()
+                            _ => (),
                         }
                         buf.clear();
                     }
@@ -1407,20 +1470,25 @@ pub fn convert(
                                 for entry in &source_rels_entries {
                                     let mut temp_reader = quick_xml::Reader::from_str(entry);
                                     let mut temp_buf = Vec::new();
-                                    if let Ok(quick_xml::events::Event::Empty(te)) = temp_reader.read_event_into(&mut temp_buf) {
-                                        let _ = writer.write_event(quick_xml::events::Event::Empty(te));
+                                    if let Ok(quick_xml::events::Event::Empty(te)) =
+                                        temp_reader.read_event_into(&mut temp_buf)
+                                    {
+                                        let _ =
+                                            writer.write_event(quick_xml::events::Event::Empty(te));
                                     }
                                 }
                             }
                             let _ = writer.write_event(quick_xml::events::Event::End(e));
                         }
                         Ok(quick_xml::events::Event::Eof) => break,
-                        Ok(e) => { let _ = writer.write_event(e); },
+                        Ok(e) => {
+                            let _ = writer.write_event(e);
+                        }
                         Err(_) => break,
                     }
                     buf.clear();
                 }
-                
+
                 zip_writer.start_file(&path, options)?;
                 std::io::Write::write_all(&mut zip_writer, &out)?;
             } else {
@@ -1445,8 +1513,13 @@ pub fn convert(
                     match reader.read_event_into(&mut buf) {
                         Ok(quick_xml::events::Event::Empty(e)) => {
                             if e.name().as_ref() == b"Override" {
-                                if let Some(attr) = e.attributes().filter_map(|a| a.ok()).find(|a| a.key.as_ref() == b"PartName") {
-                                    existing_parts.insert(String::from_utf8_lossy(&attr.value).into_owned());
+                                if let Some(attr) = e
+                                    .attributes()
+                                    .filter_map(|a| a.ok())
+                                    .find(|a| a.key.as_ref() == b"PartName")
+                                {
+                                    existing_parts
+                                        .insert(String::from_utf8_lossy(&attr.value).into_owned());
                                 }
                             }
                             let _ = writer.write_event(quick_xml::events::Event::Empty(e));
@@ -1456,11 +1529,20 @@ pub fn convert(
                                 for entry in &source_ct_overrides {
                                     let mut temp_reader = quick_xml::Reader::from_str(entry);
                                     let mut temp_buf = Vec::new();
-                                    if let Ok(quick_xml::events::Event::Empty(te)) = temp_reader.read_event_into(&mut temp_buf) {
-                                        if let Some(attr) = te.attributes().filter_map(|a| a.ok()).find(|a| a.key.as_ref() == b"PartName") {
-                                            let pn = String::from_utf8_lossy(&attr.value).into_owned();
+                                    if let Ok(quick_xml::events::Event::Empty(te)) =
+                                        temp_reader.read_event_into(&mut temp_buf)
+                                    {
+                                        if let Some(attr) = te
+                                            .attributes()
+                                            .filter_map(|a| a.ok())
+                                            .find(|a| a.key.as_ref() == b"PartName")
+                                        {
+                                            let pn =
+                                                String::from_utf8_lossy(&attr.value).into_owned();
                                             if !existing_parts.contains(&pn) {
-                                                let _ = writer.write_event(quick_xml::events::Event::Empty(te));
+                                                let _ = writer.write_event(
+                                                    quick_xml::events::Event::Empty(te),
+                                                );
                                             }
                                         }
                                     }
@@ -1469,12 +1551,14 @@ pub fn convert(
                             let _ = writer.write_event(quick_xml::events::Event::End(e));
                         }
                         Ok(quick_xml::events::Event::Eof) => break,
-                        Ok(e) => { let _ = writer.write_event(e); },
+                        Ok(e) => {
+                            let _ = writer.write_event(e);
+                        }
                         Err(_) => break,
                     }
                     buf.clear();
                 }
-                
+
                 zip_writer.start_file(&path, options)?;
                 std::io::Write::write_all(&mut zip_writer, &out)?;
             } else {
@@ -1508,7 +1592,7 @@ pub fn convert(
                             } else if e.name().as_ref() == b"w:sectPr" && source_sect_pr.is_some() {
                                 skip_sect = true;
                             }
-                            
+
                             if !skip_sect {
                                 let mut new_attrs = Vec::new();
                                 for attr in e.attributes() {
@@ -1547,14 +1631,16 @@ pub fn convert(
                                     loop {
                                         match temp_reader.read_event_into(&mut temp_buf) {
                                             Ok(quick_xml::events::Event::Eof) | Err(_) => break,
-                                            Ok(ev) => { let _ = writer.write_event(ev); }
+                                            Ok(ev) => {
+                                                let _ = writer.write_event(ev);
+                                            }
                                         }
                                         temp_buf.clear();
                                     }
                                 }
                                 continue;
                             }
-                            
+
                             if !skip_sect {
                                 let _ = writer.write_event(quick_xml::events::Event::End(e));
                             }
@@ -1568,14 +1654,16 @@ pub fn convert(
                                     loop {
                                         match temp_reader.read_event_into(&mut temp_buf) {
                                             Ok(quick_xml::events::Event::Eof) | Err(_) => break,
-                                            Ok(ev) => { let _ = writer.write_event(ev); }
+                                            Ok(ev) => {
+                                                let _ = writer.write_event(ev);
+                                            }
                                         }
                                         temp_buf.clear();
                                     }
                                 }
                                 continue;
                             }
-                            
+
                             if !skip_sect {
                                 let mut new_attrs = Vec::new();
                                 for attr in e.attributes() {
@@ -1611,7 +1699,7 @@ pub fn convert(
                     }
                     buf.clear();
                 }
-                
+
                 zip_writer.start_file(&path, options)?;
                 std::io::Write::write_all(&mut zip_writer, &out)?;
             } else {
@@ -1681,9 +1769,12 @@ pub fn convert(
 
         // Extract our word/document.xml from the generated archive.
         let generated_doc_xml: Vec<u8> = {
-            let mut gen_archive = zip::ZipArchive::new(Cursor::new(&generated_bytes))
-                .map_err(|e| anyhow::anyhow!("Failed to parse generated DOCX for template swap: {}", e))?;
-            let mut doc_xml_file = gen_archive.by_name("word/document.xml")
+            let mut gen_archive =
+                zip::ZipArchive::new(Cursor::new(&generated_bytes)).map_err(|e| {
+                    anyhow::anyhow!("Failed to parse generated DOCX for template swap: {}", e)
+                })?;
+            let mut doc_xml_file = gen_archive
+                .by_name("word/document.xml")
                 .map_err(|_| anyhow::anyhow!("word/document.xml missing from generated DOCX"))?;
             let mut buf = Vec::new();
             std::io::Read::read_to_end(&mut doc_xml_file, &mut buf)?;
@@ -1697,8 +1788,14 @@ pub fn convert(
                 if let Ok(mut f) = a.by_name("word/comments.xml") {
                     let mut buf = Vec::new();
                     let _ = std::io::Read::read_to_end(&mut f, &mut buf);
-                    if buf.is_empty() { None } else { Some(buf) }
-                } else { None }
+                    if buf.is_empty() {
+                        None
+                    } else {
+                        Some(buf)
+                    }
+                } else {
+                    None
+                }
             })
         };
 
@@ -1723,8 +1820,11 @@ pub fn convert(
                 let _ = std::io::Read::read_to_end(&mut f, &mut buf);
                 (nm, cm, buf)
             };
-            if tpl_written.contains(&fname) { continue; }
-            let opts = zip::write::FileOptions::<()>::default().compression_method(zip::CompressionMethod::Deflated);
+            if tpl_written.contains(&fname) {
+                continue;
+            }
+            let opts = zip::write::FileOptions::<()>::default()
+                .compression_method(zip::CompressionMethod::Deflated);
             if fname.ends_with('/') {
                 let _ = tpl_zip.add_directory(&fname, opts);
             } else {
@@ -1753,22 +1853,34 @@ pub fn convert(
 
         tpl_zip.finish()?;
         let raw_zip = tpl_out.into_inner();
-        
+
         // Stage 3: Agile Encryption (OLE2 container)
         if let Some(pwd) = &config.password {
             let mut encrypted_buffer = std::io::Cursor::new(Vec::new());
-            if marksmen_crypto::protect_docx(std::io::Cursor::new(&raw_zip), &mut encrypted_buffer, pwd).is_ok() {
+            if marksmen_crypto::protect_docx(
+                std::io::Cursor::new(&raw_zip),
+                &mut encrypted_buffer,
+                pwd,
+            )
+            .is_ok()
+            {
                 return Ok(encrypted_buffer.into_inner());
             }
         }
-        
+
         return Ok(raw_zip);
     }
 
     // Stage 3: Agile Encryption for non-template path
     if let Some(pwd) = &config.password {
         let mut encrypted_buffer = std::io::Cursor::new(Vec::new());
-        if marksmen_crypto::protect_docx(std::io::Cursor::new(&generated_bytes), &mut encrypted_buffer, pwd).is_ok() {
+        if marksmen_crypto::protect_docx(
+            std::io::Cursor::new(&generated_bytes),
+            &mut encrypted_buffer,
+            pwd,
+        )
+        .is_ok()
+        {
             return Ok(encrypted_buffer.into_inner());
         }
     }

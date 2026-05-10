@@ -116,10 +116,7 @@ impl DirectedGraph {
             label,
         });
 
-        self.adjacency
-            .entry(from)
-            .or_default()
-            .push(edge_idx);
+        self.adjacency.entry(from).or_default().push(edge_idx);
     }
 
     pub fn rebuild_adjacency(&mut self) {

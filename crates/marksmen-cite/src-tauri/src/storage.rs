@@ -25,10 +25,7 @@ pub fn load_references(app: tauri::AppHandle) -> Result<Vec<Reference>, String> 
 }
 
 #[tauri::command]
-pub fn save_references(
-    app: tauri::AppHandle,
-    references: Vec<Reference>,
-) -> Result<(), String> {
+pub fn save_references(app: tauri::AppHandle, references: Vec<Reference>) -> Result<(), String> {
     let path = db_path(&app)?.join("references.json");
     let data = serde_json::to_string_pretty(&references).map_err(|e| e.to_string())?;
     fs::write(&path, data).map_err(|e| e.to_string())
@@ -45,10 +42,7 @@ pub fn load_collections(app: tauri::AppHandle) -> Result<Vec<Collection>, String
 }
 
 #[tauri::command]
-pub fn save_collections(
-    app: tauri::AppHandle,
-    collections: Vec<Collection>,
-) -> Result<(), String> {
+pub fn save_collections(app: tauri::AppHandle, collections: Vec<Collection>) -> Result<(), String> {
     let path = db_path(&app)?.join("collections.json");
     let data = serde_json::to_string_pretty(&collections).map_err(|e| e.to_string())?;
     fs::write(&path, data).map_err(|e| e.to_string())
@@ -68,13 +62,13 @@ pub fn merge_cloud_sync(
 ) -> Result<crate::sync::SyncPayload, String> {
     let local_refs = load_references(app.clone())?;
     let local_cols = load_collections(app.clone())?;
-    
+
     let local_payload = crate::sync::SyncPayload::new(device_id, local_refs, local_cols);
     let merged = crate::sync::merge_sync_payloads(local_payload, remote_payload);
-    
+
     // Save merged state back to local disk
     save_references(app.clone(), merged.references.clone())?;
     save_collections(app.clone(), merged.collections.clone())?;
-    
+
     Ok(merged)
 }

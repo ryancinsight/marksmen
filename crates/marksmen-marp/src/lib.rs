@@ -350,10 +350,11 @@ fn push_text(state: &mut SerState, out: &mut String, text: &str, apply_fmt: bool
     };
 
     if state.in_table
-        && let Some(cell) = state.table_cells.last_mut() {
-            cell.push_str(&formatted);
-            return;
-        }
+        && let Some(cell) = state.table_cells.last_mut()
+    {
+        cell.push_str(&formatted);
+        return;
+    }
     if state.in_link {
         state.link_text_buf.push_str(text);
         return;

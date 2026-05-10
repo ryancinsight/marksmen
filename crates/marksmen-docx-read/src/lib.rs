@@ -16,7 +16,6 @@ use std::path::Path;
 ///
 /// If `media_out_dir` is provided, traverses `w:drawing` logic, performs `a:blip` mapping through
 /// `word/_rels/document.xml.rels`, and isolates binary sub streams to local IO limits.
-
 pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> {
     let cursor = Cursor::new(bytes);
     let mut archive =
@@ -31,20 +30,21 @@ pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> 
             loop {
                 match reader.read_event() {
                     Ok(Event::Start(e)) | Ok(Event::Empty(e))
-                        if e.name().as_ref() == b"Relationship" => {
-                            let mut id = String::new();
-                            let mut target = String::new();
-                            for attr in e.attributes().flatten() {
-                                if attr.key.as_ref() == b"Id" {
-                                    id = String::from_utf8_lossy(&attr.value).into_owned();
-                                } else if attr.key.as_ref() == b"Target" {
-                                    target = String::from_utf8_lossy(&attr.value).into_owned();
-                                }
-                            }
-                            if !id.is_empty() && !target.is_empty() {
-                                rels_map.insert(id, target);
+                        if e.name().as_ref() == b"Relationship" =>
+                    {
+                        let mut id = String::new();
+                        let mut target = String::new();
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == b"Id" {
+                                id = String::from_utf8_lossy(&attr.value).into_owned();
+                            } else if attr.key.as_ref() == b"Target" {
+                                target = String::from_utf8_lossy(&attr.value).into_owned();
                             }
                         }
+                        if !id.is_empty() && !target.is_empty() {
+                            rels_map.insert(id, target);
+                        }
+                    }
                     Ok(Event::Eof) | Err(_) => break,
                     _ => {}
                 }
@@ -79,20 +79,18 @@ pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> 
                             }
                         }
                     }
-                    Ok(Event::Text(e))
-                        if in_comment => {
-                            comment_text.push_str(&e.unescape().unwrap_or_default());
+                    Ok(Event::Text(e)) if in_comment => {
+                        comment_text.push_str(&e.unescape().unwrap_or_default());
+                    }
+                    Ok(Event::End(e)) if e.name().as_ref() == b"w:comment" => {
+                        in_comment = false;
+                        if !current_id.is_empty() {
+                            comments_map.insert(
+                                current_id.clone(),
+                                (current_author.clone(), comment_text.clone()),
+                            );
                         }
-                    Ok(Event::End(e))
-                        if e.name().as_ref() == b"w:comment" => {
-                            in_comment = false;
-                            if !current_id.is_empty() {
-                                comments_map.insert(
-                                    current_id.clone(),
-                                    (current_author.clone(), comment_text.clone()),
-                                );
-                            }
-                        }
+                    }
                     Ok(Event::Eof) | Err(_) => break,
                     _ => {}
                 }
@@ -112,9 +110,10 @@ pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> 
             &comments_map,
             &rels_map,
             media_out_dir,
-        ) {
-            header_text = parsed;
-        }
+        )
+    {
+        header_text = parsed;
+    }
 
     let mut footnotes_xml = String::new();
     if let Ok(mut footnotes_file) = archive.by_name("word/footnotes.xml") {
@@ -129,20 +128,22 @@ pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> 
                 let id_rest = &block[id_start + 6..];
                 if let Some(id_end) = id_rest.find('"') {
                     let id = &id_rest[..id_end];
-                    if id != "-1" && id != "0"
-                        && let Some(end_idx) = block.find("</w:footnote>") {
-                            let footnote_xml =
-                                format!("<w:footnote>{}</w:footnote>", &block[..end_idx]);
-                            if let Ok(parsed) = parse_xml_payload(
-                                &mut archive,
-                                &footnote_xml,
-                                &comments_map,
-                                &rels_map,
-                                media_out_dir,
-                            ) {
-                                footnotes_map.insert(id.to_string(), parsed.trim().to_string());
-                            }
+                    if id != "-1"
+                        && id != "0"
+                        && let Some(end_idx) = block.find("</w:footnote>")
+                    {
+                        let footnote_xml =
+                            format!("<w:footnote>{}</w:footnote>", &block[..end_idx]);
+                        if let Ok(parsed) = parse_xml_payload(
+                            &mut archive,
+                            &footnote_xml,
+                            &comments_map,
+                            &rels_map,
+                            media_out_dir,
+                        ) {
+                            footnotes_map.insert(id.to_string(), parsed.trim().to_string());
                         }
+                    }
                 }
             }
         }
@@ -176,9 +177,10 @@ pub fn parse_docx(bytes: &[u8], media_out_dir: Option<&Path>) -> Result<String> 
             &comments_map,
             &rels_map,
             media_out_dir,
-        ) {
-            footer_text = parsed;
-        }
+        )
+    {
+        footer_text = parsed;
+    }
 
     // Extract the page metadata comment from doc_text and hoist to TOP of final_out
     // so the DOCX writer sees it as the first event via peek().
@@ -437,15 +439,13 @@ fn parse_xml_payload(
                         p_ilvl = 0;
                         p_list_marker_emitted = false;
                         is_highlight = false;
-                        if in_tbl == 0
-                            && !output.is_empty()
-                                && !output.ends_with("\n\n") {
-                                    if output.ends_with('\n') {
-                                        output.push('\n');
-                                    } else {
-                                        output.push_str("\n\n");
-                                    }
-                                }
+                        if in_tbl == 0 && !output.is_empty() && !output.ends_with("\n\n") {
+                            if output.ends_with('\n') {
+                                output.push('\n');
+                            } else {
+                                output.push_str("\n\n");
+                            }
+                        }
                     }
                     b"w:tbl" => {
                         in_tbl += 1;
@@ -487,86 +487,92 @@ fn parse_xml_payload(
                         for attr in e.attributes().flatten() {
                             if attr.key.as_ref() == b"w:fill" {
                                 let fill_val = String::from_utf8_lossy(&attr.value);
-                                if fill_val != "auto" && fill_val != "clear"
-                                    && let Some(state) = tc_state_stack.last_mut() {
-                                        state.2 = Some(fill_val.into_owned());
-                                    }
+                                if fill_val != "auto"
+                                    && fill_val != "clear"
+                                    && let Some(state) = tc_state_stack.last_mut()
+                                {
+                                    state.2 = Some(fill_val.into_owned());
+                                }
                             }
                         }
                     }
                     b"w:gridSpan" => {
                         for attr in e.attributes().flatten() {
                             if attr.key.as_ref() == b"w:val"
-                                && let Some(state) = tc_state_stack.last_mut() {
-                                    state.0 =
-                                        String::from_utf8_lossy(&attr.value).parse().unwrap_or(1);
-                                }
+                                && let Some(state) = tc_state_stack.last_mut()
+                            {
+                                state.0 = String::from_utf8_lossy(&attr.value).parse().unwrap_or(1);
+                            }
                         }
                     }
                     b"w:pStyle" => {
                         for attr in e.attributes() {
                             if let Ok(a) = attr
-                                && a.key.as_ref() == b"w:val" {
-                                    let val = a.value;
-                                    if val.as_ref() == b"Quote" {
-                                        in_quote = true;
-                                    } else if val.as_ref() == b"CodeBlock" {
-                                        if !output.ends_with("\n\n") && !output.ends_with("\n") {
-                                            output.push_str("\n\n");
-                                        }
-                                        output.push_str("```\n");
-                                        in_code_block = true;
-                                    } else if val.starts_with(b"Heading") && val.len() == 8 {
-                                        let level = val[7] - b'0';
-                                        if (1..=6).contains(&level) {
-                                            p_heading_level = level;
-                                        }
-                                    } else {
-                                        let style_name = String::from_utf8_lossy(&val).into_owned();
-                                        let is_internal = style_name == "Normal"
-                                            || style_name == "DefaultParagraphFont"
-                                            || style_name == "Header"
-                                            || style_name == "Footer"
-                                            || style_name.starts_with("a-")
-                                            || style_name.is_empty();
-                                        if !is_internal {
-                                            p_custom_style = Some(style_name);
-                                        }
+                                && a.key.as_ref() == b"w:val"
+                            {
+                                let val = a.value;
+                                if val.as_ref() == b"Quote" {
+                                    in_quote = true;
+                                } else if val.as_ref() == b"CodeBlock" {
+                                    if !output.ends_with("\n\n") && !output.ends_with("\n") {
+                                        output.push_str("\n\n");
+                                    }
+                                    output.push_str("```\n");
+                                    in_code_block = true;
+                                } else if val.starts_with(b"Heading") && val.len() == 8 {
+                                    let level = val[7] - b'0';
+                                    if (1..=6).contains(&level) {
+                                        p_heading_level = level;
+                                    }
+                                } else {
+                                    let style_name = String::from_utf8_lossy(&val).into_owned();
+                                    let is_internal = style_name == "Normal"
+                                        || style_name == "DefaultParagraphFont"
+                                        || style_name == "Header"
+                                        || style_name == "Footer"
+                                        || style_name.starts_with("a-")
+                                        || style_name.is_empty();
+                                    if !is_internal {
+                                        p_custom_style = Some(style_name);
                                     }
                                 }
+                            }
                         }
                     }
                     b"w:numId" => {
                         for attr in e.attributes() {
                             if let Ok(a) = attr
-                                && a.key.as_ref() == b"w:val" {
-                                    p_num_id =
-                                        String::from_utf8_lossy(&a.value).parse().unwrap_or(0);
-                                }
+                                && a.key.as_ref() == b"w:val"
+                            {
+                                p_num_id = String::from_utf8_lossy(&a.value).parse().unwrap_or(0);
+                            }
                         }
                     }
                     b"w:ilvl" => {
                         for attr in e.attributes() {
                             if let Ok(a) = attr
-                                && a.key.as_ref() == b"w:val" {
-                                    p_ilvl = String::from_utf8_lossy(&a.value).parse().unwrap_or(0);
-                                }
+                                && a.key.as_ref() == b"w:val"
+                            {
+                                p_ilvl = String::from_utf8_lossy(&a.value).parse().unwrap_or(0);
+                            }
                         }
                     }
                     b"w:jc" => {
                         for attr in e.attributes() {
                             if let Ok(a) = attr
-                                && a.key.as_ref() == b"w:val" {
-                                    if a.value.as_ref() == b"center" {
-                                        p_aligned_center = true;
-                                        if let Some(state) = tc_state_stack.last_mut() {
-                                            state.1 = 1;
-                                        }
-                                    } else if a.value.as_ref() == b"right"
-                                        && let Some(state) = tc_state_stack.last_mut() {
-                                            state.1 = 2;
-                                        }
+                                && a.key.as_ref() == b"w:val"
+                            {
+                                if a.value.as_ref() == b"center" {
+                                    p_aligned_center = true;
+                                    if let Some(state) = tc_state_stack.last_mut() {
+                                        state.1 = 1;
+                                    }
+                                } else if a.value.as_ref() == b"right"
+                                    && let Some(state) = tc_state_stack.last_mut()
+                                {
+                                    state.1 = 2;
                                 }
+                            }
                         }
                     }
                     b"w:r" => {
@@ -631,19 +637,18 @@ fn parse_xml_payload(
                                 } else if fld_type == b"separate" {
                                     in_fld_cached = true;
                                     in_fld_instr = false;
-                                } else if fld_type == b"end"
-                                    && in_fld {
-                                        if !fld_instr_buf.is_empty() || !fld_eval_buf.is_empty() {
-                                            output.push_str(&format!(
-                                                "<span data-field=\"{}\">{}</span>",
-                                                marksmen_xml_read::escape(fld_instr_buf.trim()),
-                                                marksmen_xml_read::escape(fld_eval_buf.trim())
-                                            ));
-                                        }
-                                        in_fld = false;
-                                        in_fld_cached = false;
-                                        in_fld_instr = false;
+                                } else if fld_type == b"end" && in_fld {
+                                    if !fld_instr_buf.is_empty() || !fld_eval_buf.is_empty() {
+                                        output.push_str(&format!(
+                                            "<span data-field=\"{}\">{}</span>",
+                                            marksmen_xml_read::escape(fld_instr_buf.trim()),
+                                            marksmen_xml_read::escape(fld_eval_buf.trim())
+                                        ));
                                     }
+                                    in_fld = false;
+                                    in_fld_cached = false;
+                                    in_fld_instr = false;
+                                }
                             }
                         }
                     }
@@ -658,42 +663,47 @@ fn parse_xml_payload(
                         let mut strike_val = true;
                         for attr in e.attributes().flatten() {
                             if attr.key.as_ref() == b"w:val"
-                                && (attr.value.as_ref() == b"false" || attr.value.as_ref() == b"0") {
-                                    strike_val = false;
-                                }
+                                && (attr.value.as_ref() == b"false" || attr.value.as_ref() == b"0")
+                            {
+                                strike_val = false;
+                            }
                         }
                         is_strike = strike_val;
                     }
                     b"w:highlight" => {
                         for attr in e.attributes() {
                             if let Ok(a) = attr
-                                && a.key.as_ref() == b"w:val" && a.value.as_ref() != b"none" {
-                                    is_highlight = true;
-                                }
+                                && a.key.as_ref() == b"w:val"
+                                && a.value.as_ref() != b"none"
+                            {
+                                is_highlight = true;
+                            }
                         }
                     }
                     b"w:vertAlign" => {
                         for attr in e.attributes() {
                             if let Ok(a) = attr
-                                && a.key.as_ref() == b"w:val" {
-                                    if a.value.as_ref() == b"subscript" {
-                                        is_subscript = true;
-                                    } else if a.value.as_ref() == b"superscript" {
-                                        is_superscript = true;
-                                    }
+                                && a.key.as_ref() == b"w:val"
+                            {
+                                if a.value.as_ref() == b"subscript" {
+                                    is_subscript = true;
+                                } else if a.value.as_ref() == b"superscript" {
+                                    is_superscript = true;
                                 }
+                            }
                         }
                     }
                     b"w:rFonts" => {
                         for attr in e.attributes() {
                             if let Ok(a) = attr
-                                && a.key.as_ref() == b"w:ascii" {
-                                    if a.value.as_ref() == b"Cambria Math" {
-                                        is_math = true;
-                                    } else if a.value.as_ref() == b"Consolas" {
-                                        is_code = true;
-                                    }
+                                && a.key.as_ref() == b"w:ascii"
+                            {
+                                if a.value.as_ref() == b"Cambria Math" {
+                                    is_math = true;
+                                } else if a.value.as_ref() == b"Consolas" {
+                                    is_code = true;
                                 }
+                            }
                         }
                     }
                     b"w:hyperlink" => {
@@ -717,9 +727,11 @@ fn parse_xml_payload(
                         let mut is_page = false;
                         for attr in e.attributes() {
                             if let Ok(a) = attr
-                                && a.key.as_ref() == b"w:type" && a.value.as_ref() == b"page" {
-                                    is_page = true;
-                                }
+                                && a.key.as_ref() == b"w:type"
+                                && a.value.as_ref() == b"page"
+                            {
+                                is_page = true;
+                            }
                         }
                         if is_page {
                             output.push_str("\n<!-- pagebreak -->\n");
@@ -977,9 +989,10 @@ fn parse_xml_payload(
                             buf.push_str("</table>");
                         }
                         if in_tbl == 1
-                            && let Some(full_html) = nested_html_buf.take() {
-                                output.push_str(&full_html);
-                            }
+                            && let Some(full_html) = nested_html_buf.take()
+                        {
+                            output.push_str(&full_html);
+                        }
                     } else {
                         output.push('\n');
                     }
@@ -1020,11 +1033,10 @@ fn parse_xml_payload(
                     fld_instr_buf.push_str(&raw_text);
                     continue;
                 }
-                if in_t
-                    && in_fld_cached {
-                        fld_eval_buf.push_str(&raw_text);
-                        continue;
-                    }
+                if in_t && in_fld_cached {
+                    fld_eval_buf.push_str(&raw_text);
+                    continue;
+                }
                 if in_t && in_r && in_p {
                     let mut text = raw_text;
                     if !text.is_empty() {

@@ -13,7 +13,6 @@ use crate::reader::{
 use lopdf::{Dictionary, Document, Object};
 use tracing;
 
-
 /// Process a slice of PDF operations, appending decoded `RichSpan`s and `GraphicRect`s to output vectors.
 ///
 /// `resources` is the `/Resources` dictionary for the current context (page or XObject).
@@ -260,7 +259,9 @@ fn dispatch_at_depth(
         "Do" => {
             if let Some(name_bytes) = op.operands.first().and_then(|o| o.as_name().ok()) {
                 let name = String::from_utf8_lossy(name_bytes).into_owned();
-                invoke_xobject(&name, state, resources, doc, page, out, out_rects, xobj_depth);
+                invoke_xobject(
+                    &name, state, resources, doc, page, out, out_rects, xobj_depth,
+                );
             }
         }
 
@@ -464,12 +465,7 @@ fn invoke_xobject(
 
     // XObject has its own graphics state scope; apply /Matrix if present.
     state.push();
-    if let Some(m) = stream
-        .dict
-        .get(b"Matrix")
-        .ok()
-        .and_then(parse_matrix_obj)
-    {
+    if let Some(m) = stream.dict.get(b"Matrix").ok().and_then(parse_matrix_obj) {
         state.ctm = matrix_mul(state.ctm, m);
     }
 

@@ -18,15 +18,15 @@ impl PluginEngine {
     /// and returns the mutated JSON AST.
     pub fn apply_filter(&self, json_payload: &str) -> Result<String> {
         let mut store = Store::new(&self.engine, ());
-        
+
         let instance = Instance::new(&mut store, &self.module, &[])?;
 
         let memory = instance
             .get_memory(&mut store, "memory")
             .ok_or_else(|| anyhow::anyhow!("failed to find `memory` export"))?;
 
-        let filter_func = instance
-            .get_typed_func::<(u32, u32), (u32, u32)>(&mut store, "filter")?;
+        let filter_func =
+            instance.get_typed_func::<(u32, u32), (u32, u32)>(&mut store, "filter")?;
 
         let alloc_func = instance
             .get_typed_func::<u32, u32>(&mut store, "alloc")

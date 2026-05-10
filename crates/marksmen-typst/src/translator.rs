@@ -158,7 +158,7 @@ fn emit_preamble(output: &mut String, config: &Config) {
             .replace("{t}", "#counter(page).final().first()");
         output.push_str(&format!("  footer: context [{}],\n", footer_typst));
     } else if config.page.page_numbers {
-        output.push_str(&format!("  numbering: \"1\",\n"));
+        output.push_str("  numbering: \"1\",\n");
     }
 
     output.push_str(")\n");
@@ -249,18 +249,16 @@ fn translate_event(
 ) {
     match event {
         // --- Block elements ---
-        Event::Start(Tag::Heading { level, .. }) => {
-            if !state.in_header_block && !state.in_footer_block {
-                output.push('\n');
-                let prefix = elements::heading_prefix(heading_level_to_u8(level));
-                output.push_str(&prefix);
-                output.push(' ');
-            }
+        Event::Start(Tag::Heading { level, .. })
+            if !state.in_header_block && !state.in_footer_block =>
+        {
+            output.push('\n');
+            let prefix = elements::heading_prefix(heading_level_to_u8(level));
+            output.push_str(&prefix);
+            output.push(' ');
         }
-        Event::End(TagEnd::Heading(_)) => {
-            if !state.in_header_block && !state.in_footer_block {
-                output.push('\n');
-            }
+        Event::End(TagEnd::Heading(_)) if !state.in_header_block && !state.in_footer_block => {
+            output.push('\n');
         }
 
         Event::Start(Tag::Paragraph) => {
@@ -415,6 +413,38 @@ fn translate_event(
             };
             dest.push(']');
         }
+        Event::Start(Tag::Superscript) => {
+            let dest = if state.in_table_cell {
+                &mut state.current_cell
+            } else {
+                output
+            };
+            dest.push_str("#super[");
+        }
+        Event::End(TagEnd::Superscript) => {
+            let dest = if state.in_table_cell {
+                &mut state.current_cell
+            } else {
+                output
+            };
+            dest.push(']');
+        }
+        Event::Start(Tag::Subscript) => {
+            let dest = if state.in_table_cell {
+                &mut state.current_cell
+            } else {
+                output
+            };
+            dest.push_str("#sub[");
+        }
+        Event::End(TagEnd::Subscript) => {
+            let dest = if state.in_table_cell {
+                &mut state.current_cell
+            } else {
+                output
+            };
+            dest.push(']');
+        }
 
         // --- Links and images ---
         Event::Start(Tag::Link {
@@ -475,10 +505,7 @@ fn translate_event(
 
             output.push_str("\n#align(center)[\n#table(\n");
 
-            let mut frs = Vec::new();
-            for _ in 0..ncols {
-                frs.push("1fr");
-            }
+            let frs = vec!["1fr"; ncols];
 
             output.push_str(&format!("  columns: ({}),\n", frs.join(", ")));
             output.push_str("  inset: 3pt,\n");
@@ -524,7 +551,10 @@ fn translate_event(
                 // to permanently scrub the sensitive data from the AST.
                 let redacted_len = text.chars().count();
                 let scrubbed = "█".repeat(redacted_len);
-                let output_text = format!("#highlight(fill: black, extent: 1pt)[#text(fill: black)[{}]]", scrubbed);
+                let output_text = format!(
+                    "#highlight(fill: black, extent: 1pt)[#text(fill: black)[{}]]",
+                    scrubbed
+                );
                 if state.in_table_cell {
                     state.current_cell.push_str(&output_text);
                 } else {
@@ -824,8 +854,12 @@ fn process_single_tag(
     } else if lower.starts_with("<form") {
         let form_type = extract_css_value(lower, "type=\"").unwrap_or_else(|| "text".to_string());
         let form_name = extract_css_value(lower, "name=\"").unwrap_or_else(|| "field".to_string());
-        let placeholder = format!(" [FORM: {} ({})] ", form_name.replace('\"', ""), form_type.replace('\"', ""));
-        
+        let placeholder = format!(
+            " [FORM: {} ({})] ",
+            form_name.replace('\"', ""),
+            form_type.replace('\"', "")
+        );
+
         let dest = if state.in_table_cell {
             &mut state.current_cell
         } else {
@@ -833,7 +867,6 @@ fn process_single_tag(
         };
         dest.push_str(&format!("#box(stroke: 0.5pt + gray, inset: 4pt, fill: luma(240), baseline: 20%)[#text(size: 8pt, fill: gray)[{}]]", placeholder));
     }
-
     // --- <cite> (Stage 2) ---
     else if lower.starts_with("<cite") {
         if let Some(id) = extract_attr(original, "data-id") {
@@ -847,7 +880,6 @@ fn process_single_tag(
     } else if lower.starts_with("</cite>") {
         // Handled silently since `#cite(...)` doesn't wrap content
     } else if lower.starts_with("<b")
-
         && !lower.starts_with("<br")
         && !lower.starts_with("<body")
         && !lower.starts_with("<block")
@@ -1010,7 +1042,7 @@ fn process_single_tag(
         }
     } else if lower.starts_with("</p") {
         if state.html_p_has_text_wrapper {
-            output.push_str("]");
+            output.push(']');
             state.html_p_has_text_wrapper = false;
         }
         output.push_str("\n\n");
@@ -1108,7 +1140,7 @@ fn process_single_tag(
         } else {
             output
         };
-        dest.push_str("}");
+        dest.push('}');
 
     // --- <a> with id or href ---
     } else if lower.starts_with("<a") {
@@ -1120,28 +1152,28 @@ fn process_single_tag(
                     output.push_str(&format!("#h(0pt) <{}>\n", label));
                 }
             }
-        } else if lower.contains("href=\"") {
-            if let Some(s) = original.find("href=\"") {
-                let rest = &original[s + 6..];
-                if let Some(e) = rest.find('"') {
-                    let href = &rest[..e];
-                    // Extract link text from between > and </a> if present in the same tag vicinity
-                    let link_text = if let Some(gt) = original.find('>') {
-                        let after = &original[gt + 1..];
-                        if let Some(lt) = after.find('<') {
-                            after[..lt].trim()
-                        } else {
-                            after.trim()
-                        }
+        } else if lower.contains("href=\"")
+            && let Some(s) = original.find("href=\"")
+        {
+            let rest = &original[s + 6..];
+            if let Some(e) = rest.find('"') {
+                let href = &rest[..e];
+                // Extract link text from between > and </a> if present in the same tag vicinity
+                let link_text = if let Some(gt) = original.find('>') {
+                    let after = &original[gt + 1..];
+                    if let Some(lt) = after.find('<') {
+                        after[..lt].trim()
                     } else {
-                        ""
-                    };
-                    if !link_text.is_empty() {
-                        output.push_str(&format!("#link(\"{}\")[{}]", href, link_text));
-                    } else {
-                        output.push_str(&format!("#link(\"{}\")[", href));
-                        state.html_a_open = true;
+                        after.trim()
                     }
+                } else {
+                    ""
+                };
+                if !link_text.is_empty() {
+                    output.push_str(&format!("#link(\"{}\")[{}]", href, link_text));
+                } else {
+                    output.push_str(&format!("#link(\"{}\")[", href));
+                    state.html_a_open = true;
                 }
             }
         }
@@ -1183,10 +1215,11 @@ fn process_single_tag(
                 let rest = &original[s + 7..];
                 if let Some(e) = rest.find('"').or_else(|| rest.find('\'')) {
                     let style_str = &rest[..e];
-                    for rule in style_str.split(';') {
+                    let rules = style_str.split(';');
+                    for rule in rules {
                         let rule = rule.trim();
-                        if rule.starts_with("width:") {
-                            width = rule[6..].trim();
+                        if let Some(stripped) = rule.strip_prefix("width:") {
+                            width = stripped.trim();
                             break;
                         }
                     }
@@ -1372,12 +1405,12 @@ fn format_table_cells(cells: &[String], is_header: bool, output: &mut String) {
         let mut colspan = 1;
 
         let mut bg_color = String::new();
-        if let Some(start) = cell_content.find("<!-- BG_COLOR:") {
-            if let Some(end) = cell_content[start..].find("-->") {
-                let hex = cell_content[start + 14..start + end].trim();
-                bg_color = format!("rgb(\"{}\")", hex);
-                cell_content.replace_range(start..start + end + 3, "");
-            }
+        if let Some(start) = cell_content.find("<!-- BG_COLOR:")
+            && let Some(end) = cell_content[start..].find("-->")
+        {
+            let hex = cell_content[start + 14..start + end].trim();
+            bg_color = format!("rgb(\"{}\")", hex);
+            cell_content.replace_range(start..start + end + 3, "");
         }
 
         let mut j = i + 1;

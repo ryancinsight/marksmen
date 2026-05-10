@@ -1,7 +1,6 @@
 use rsa::RsaPrivateKey;
-use x509_cert::Certificate;
 use std::io::{Read, Write};
-
+use x509_cert::Certificate;
 
 /// Signs a PDF document by calculating the `/ByteRange`, hashing the content,
 /// and injecting a CMS (PKCS#7) signature hex string.
@@ -13,10 +12,11 @@ pub struct PdfSigner {
 
 impl PdfSigner {
     pub fn new(cert_der: &[u8], key_der: &[u8]) -> anyhow::Result<Self> {
-        let cert = der::Decode::from_der(cert_der).map_err(|e| anyhow::anyhow!("Cert error: {}", e))?;
+        let cert =
+            der::Decode::from_der(cert_der).map_err(|e| anyhow::anyhow!("Cert error: {}", e))?;
         let key = pkcs8::DecodePrivateKey::from_pkcs8_der(key_der)
             .map_err(|e| anyhow::anyhow!("Key error: {}", e))?;
-        
+
         Ok(Self { cert, key })
     }
 
@@ -31,12 +31,12 @@ impl PdfSigner {
         // 2. Calculate the ByteRange [0, sig_start, sig_end, EOF]
         // 3. Hash the ranges using SHA-256
         let _hash = [0u8; 32]; // Stub for actual SHA-256 hash
-        
+
         // 4. Generate CMS SignedData
         // We use RustCrypto's cms crate to build the SignedData structure
         // This requires SignerInfo, Certificates, and DigestAlgorithms.
         // For now, we mock the CMS generation to return a valid DER format structure.
-        
+
         // 5. Convert CMS DER to Hex and inject into the PDF
         let _signature_hex = hex::encode(vec![0u8; 1024]); // Stub
 

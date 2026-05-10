@@ -1,5 +1,5 @@
+use pulldown_cmark::{CowStr, Event, Tag};
 use std::collections::HashMap;
-use pulldown_cmark::{Event, Tag, CowStr};
 
 /// Replaces `{{field}}` tags in a string with values from the given record.
 /// Returns `Some(String)` if replacements occurred, otherwise `None`.
@@ -42,15 +42,22 @@ fn replace_tags(text: &str, record: &HashMap<String, String>) -> Option<String> 
         }
     }
 
-    if replaced_any { Some(output) } else { None }
+    if replaced_any {
+        Some(output)
+    } else {
+        None
+    }
 }
 
 /// Applies variable substitution across an entire Markdown AST stream.
 /// This operation is highly efficient: it clones unmodified AST events directly (O(1) reference copies)
 /// and only allocates memory for text fragments containing replacement variables.
-pub fn process_ast<'a>(template_events: &[Event<'a>], record: &HashMap<String, String>) -> Vec<Event<'a>> {
+pub fn process_ast<'a>(
+    template_events: &[Event<'a>],
+    record: &HashMap<String, String>,
+) -> Vec<Event<'a>> {
     let mut processed = Vec::with_capacity(template_events.len());
-    
+
     for event in template_events {
         let new_event = match event {
             Event::Text(text) => {
@@ -67,9 +74,18 @@ pub fn process_ast<'a>(template_events: &[Event<'a>], record: &HashMap<String, S
                     event.clone()
                 }
             }
-            Event::Start(Tag::Link { link_type, dest_url, title, id }) => {
-                let new_dest = replace_tags(dest_url, record).map(|s| CowStr::Boxed(s.into_boxed_str())).unwrap_or_else(|| dest_url.clone());
-                let new_title = replace_tags(title, record).map(|s| CowStr::Boxed(s.into_boxed_str())).unwrap_or_else(|| title.clone());
+            Event::Start(Tag::Link {
+                link_type,
+                dest_url,
+                title,
+                id,
+            }) => {
+                let new_dest = replace_tags(dest_url, record)
+                    .map(|s| CowStr::Boxed(s.into_boxed_str()))
+                    .unwrap_or_else(|| dest_url.clone());
+                let new_title = replace_tags(title, record)
+                    .map(|s| CowStr::Boxed(s.into_boxed_str()))
+                    .unwrap_or_else(|| title.clone());
                 Event::Start(Tag::Link {
                     link_type: *link_type,
                     dest_url: new_dest,
@@ -77,9 +93,18 @@ pub fn process_ast<'a>(template_events: &[Event<'a>], record: &HashMap<String, S
                     id: id.clone(),
                 })
             }
-            Event::Start(Tag::Image { link_type, dest_url, title, id }) => {
-                let new_dest = replace_tags(dest_url, record).map(|s| CowStr::Boxed(s.into_boxed_str())).unwrap_or_else(|| dest_url.clone());
-                let new_title = replace_tags(title, record).map(|s| CowStr::Boxed(s.into_boxed_str())).unwrap_or_else(|| title.clone());
+            Event::Start(Tag::Image {
+                link_type,
+                dest_url,
+                title,
+                id,
+            }) => {
+                let new_dest = replace_tags(dest_url, record)
+                    .map(|s| CowStr::Boxed(s.into_boxed_str()))
+                    .unwrap_or_else(|| dest_url.clone());
+                let new_title = replace_tags(title, record)
+                    .map(|s| CowStr::Boxed(s.into_boxed_str()))
+                    .unwrap_or_else(|| title.clone());
                 Event::Start(Tag::Image {
                     link_type: *link_type,
                     dest_url: new_dest,
@@ -87,18 +112,18 @@ pub fn process_ast<'a>(template_events: &[Event<'a>], record: &HashMap<String, S
                     id: id.clone(),
                 })
             }
-            _ => event.clone()
+            _ => event.clone(),
         };
         processed.push(new_event);
     }
-    
+
     processed
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pulldown_cmark::{Parser, Event, Tag};
+    use pulldown_cmark::{Event, Parser, Tag};
 
     #[test]
     fn test_ast_replacement() {
@@ -118,15 +143,15 @@ mod tests {
             panic!("Expected text node");
         }
     }
-    
+
     #[test]
     fn test_missing_field_ast() {
         let md = "Hello {{Name}}";
         let record = HashMap::new();
-        
+
         let events: Vec<_> = Parser::new(md).collect();
         let processed = process_ast(&events, &record);
-        
+
         if let Event::Text(ref text) = processed[1] {
             assert_eq!(text.as_ref(), "Hello ");
         } else {

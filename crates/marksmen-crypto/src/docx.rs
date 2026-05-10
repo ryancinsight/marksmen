@@ -8,15 +8,15 @@ pub fn protect_docx<R: std::io::Read, W: std::io::Write + std::io::Seek + std::i
     password: &str,
 ) -> std::io::Result<()> {
     let mut rng = rand::rng();
-    
+
     // Initialize the Agile Encryption writer over the provided output stream
     let mut writer = Ecma376AgileWriter::create(&mut rng, password, output)?;
-    
+
     // Stream bytes through the cipher
     std::io::copy(&mut input, &mut writer)?;
-    
+
     // Finalize the OLE2 wrapping
     writer.finalize()?;
-    
+
     Ok(())
 }

@@ -1500,33 +1500,34 @@ fn parse_er_diagram(input: &str) -> anyhow::Result<ErDiagram> {
             || parts.len() >= 4 && parts[1].contains('}')
             || parts[1].contains('|')
             || parts[1].contains('o'))
-            && parts.len() >= 4 {
-                let left = parts[0].to_string();
-                let cardinality = parts[1];
-                let right = parts[2].to_string();
-                let label = parts[3..].join(" ").trim_matches(':').trim().to_string();
-                let (left_cardinality, right_cardinality) =
-                    if let Some((l, r)) = cardinality.split_once("--") {
-                        (l.to_string(), r.to_string())
-                    } else {
-                        (cardinality.to_string(), String::new())
-                    };
-                entities.entry(left.clone()).or_insert_with(|| ErEntity {
-                    name: left.clone(),
-                    attributes: Vec::new(),
-                });
-                entities.entry(right.clone()).or_insert_with(|| ErEntity {
-                    name: right.clone(),
-                    attributes: Vec::new(),
-                });
-                relationships.push(ErRelationship {
-                    left,
-                    left_cardinality,
-                    right_cardinality,
-                    right,
-                    label,
-                });
-            }
+            && parts.len() >= 4
+        {
+            let left = parts[0].to_string();
+            let cardinality = parts[1];
+            let right = parts[2].to_string();
+            let label = parts[3..].join(" ").trim_matches(':').trim().to_string();
+            let (left_cardinality, right_cardinality) =
+                if let Some((l, r)) = cardinality.split_once("--") {
+                    (l.to_string(), r.to_string())
+                } else {
+                    (cardinality.to_string(), String::new())
+                };
+            entities.entry(left.clone()).or_insert_with(|| ErEntity {
+                name: left.clone(),
+                attributes: Vec::new(),
+            });
+            entities.entry(right.clone()).or_insert_with(|| ErEntity {
+                name: right.clone(),
+                attributes: Vec::new(),
+            });
+            relationships.push(ErRelationship {
+                left,
+                left_cardinality,
+                right_cardinality,
+                right,
+                label,
+            });
+        }
     }
 
     if entities.is_empty() {

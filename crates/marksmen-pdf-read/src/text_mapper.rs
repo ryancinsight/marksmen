@@ -59,31 +59,31 @@ pub fn extract_text_runs(document: &Document, page_id: ObjectId) -> Result<Vec<T
             _ => None,
         };
         if let Some(res) = resources_dict
-            && let Ok(fonts_obj) = res.get(b"Font") {
-                let fonts_dict = match fonts_obj {
-                    Object::Dictionary(d) => Some(d),
-                    Object::Reference(id) => document.get_dictionary(*id).ok(),
-                    _ => None,
-                };
-                if let Some(fd) = fonts_dict {
-                    for (k, v) in fd.iter() {
-                        let font_obj_res = match v {
-                            Object::Dictionary(d) => Ok(d),
-                            Object::Reference(id) => document.get_dictionary(*id),
-                            _ => Err(lopdf::Error::DictKey),
-                        };
-                        if let Ok(font_obj) = font_obj_res
-                            && let Ok(base_font) =
-                                font_obj.get(b"BaseFont").and_then(|o| o.as_name())
-                            {
-                                font_map.insert(
-                                    String::from_utf8_lossy(k).into_owned(),
-                                    String::from_utf8_lossy(base_font).into_owned(),
-                                );
-                            }
+            && let Ok(fonts_obj) = res.get(b"Font")
+        {
+            let fonts_dict = match fonts_obj {
+                Object::Dictionary(d) => Some(d),
+                Object::Reference(id) => document.get_dictionary(*id).ok(),
+                _ => None,
+            };
+            if let Some(fd) = fonts_dict {
+                for (k, v) in fd.iter() {
+                    let font_obj_res = match v {
+                        Object::Dictionary(d) => Ok(d),
+                        Object::Reference(id) => document.get_dictionary(*id),
+                        _ => Err(lopdf::Error::DictKey),
+                    };
+                    if let Ok(font_obj) = font_obj_res
+                        && let Ok(base_font) = font_obj.get(b"BaseFont").and_then(|o| o.as_name())
+                    {
+                        font_map.insert(
+                            String::from_utf8_lossy(k).into_owned(),
+                            String::from_utf8_lossy(base_font).into_owned(),
+                        );
                     }
                 }
             }
+        }
     }
 
     let mut runs: Vec<TextRun> = Vec::new();
@@ -193,66 +193,67 @@ fn process_operations(
             "Do" => {
                 // XObject Traversal
                 if let Some(name_obj) = operation.operands.first()
-                    && let Ok(name) = name_obj.as_name() {
-                        println!(
-                            "DEBUG: Found Do operator for XObject: {}",
-                            String::from_utf8_lossy(name)
-                        );
-                        if let Ok(xobjs) = resources.get(b"XObject") {
-                            let xdict = match xobjs {
-                                Object::Dictionary(d) => Some(d),
-                                Object::Reference(id) => document.get_dictionary(*id).ok(),
-                                _ => None,
-                            };
-                            if let Some(xd) = xdict {
-                                if let Ok(xobj_ref) = xd.get(name) {
-                                    if let Ok(Object::Stream(xstream)) = match xobj_ref {
-                                        Object::Reference(id) => document.get_object(*id),
-                                        obj => Ok(obj),
-                                    } {
-                                        if let Ok(xcontent) = xstream.decode_content() {
-                                            tracing::debug!(
-                                                "Extracted {} operations from XObject",
-                                                xcontent.operations.len()
-                                            );
-                                            // Extract potential local resources for this XObject
-                                            let local_res = xstream
-                                                .dict
-                                                .get(b"Resources")
-                                                .and_then(|o| match o {
-                                                    Object::Dictionary(d) => Ok(d.clone()),
-                                                    Object::Reference(id) => {
-                                                        document.get_dictionary(*id).cloned()
-                                                    }
-                                                    _ => Err(lopdf::Error::DictKey),
-                                                })
-                                                .unwrap_or_else(|_| resources.clone());
+                    && let Ok(name) = name_obj.as_name()
+                {
+                    println!(
+                        "DEBUG: Found Do operator for XObject: {}",
+                        String::from_utf8_lossy(name)
+                    );
+                    if let Ok(xobjs) = resources.get(b"XObject") {
+                        let xdict = match xobjs {
+                            Object::Dictionary(d) => Some(d),
+                            Object::Reference(id) => document.get_dictionary(*id).ok(),
+                            _ => None,
+                        };
+                        if let Some(xd) = xdict {
+                            if let Ok(xobj_ref) = xd.get(name) {
+                                if let Ok(Object::Stream(xstream)) = match xobj_ref {
+                                    Object::Reference(id) => document.get_object(*id),
+                                    obj => Ok(obj),
+                                } {
+                                    if let Ok(xcontent) = xstream.decode_content() {
+                                        tracing::debug!(
+                                            "Extracted {} operations from XObject",
+                                            xcontent.operations.len()
+                                        );
+                                        // Extract potential local resources for this XObject
+                                        let local_res = xstream
+                                            .dict
+                                            .get(b"Resources")
+                                            .and_then(|o| match o {
+                                                Object::Dictionary(d) => Ok(d.clone()),
+                                                Object::Reference(id) => {
+                                                    document.get_dictionary(*id).cloned()
+                                                }
+                                                _ => Err(lopdf::Error::DictKey),
+                                            })
+                                            .unwrap_or_else(|_| resources.clone());
 
-                                            state.push_gs(); // Isolate XObject state
-                                            process_operations(
-                                                document,
-                                                &local_res,
-                                                &xcontent.operations,
-                                                state,
-                                                font_map,
-                                                runs,
-                                                layout_bounds,
-                                            );
-                                            state.pop_gs();
-                                        } else {
-                                            tracing::debug!("Failed to decode XObject stream");
-                                        }
+                                        state.push_gs(); // Isolate XObject state
+                                        process_operations(
+                                            document,
+                                            &local_res,
+                                            &xcontent.operations,
+                                            state,
+                                            font_map,
+                                            runs,
+                                            layout_bounds,
+                                        );
+                                        state.pop_gs();
                                     } else {
-                                        tracing::debug!("XObject is not a stream");
+                                        tracing::debug!("Failed to decode XObject stream");
                                     }
                                 } else {
-                                    tracing::debug!("XObject name not found in XObject dict");
+                                    tracing::debug!("XObject is not a stream");
                                 }
+                            } else {
+                                tracing::debug!("XObject name not found in XObject dict");
                             }
-                        } else {
-                            tracing::debug!("No XObject dictionary found in resources");
                         }
+                    } else {
+                        tracing::debug!("No XObject dictionary found in resources");
                     }
+                }
             }
             "Tm" => {
                 // Set text matrix (and text line matrix).
@@ -292,14 +293,15 @@ fn process_operations(
             "Tf" => {
                 // Set font and size.
                 if let Some(font_name_obj) = operation.operands.first()
-                    && let Ok(name) = font_name_obj.as_name() {
-                        let key = String::from_utf8_lossy(name).into_owned();
-                        if let Some(base_font) = font_map.get(&key) {
-                            state.font_name = base_font.clone();
-                        } else {
-                            state.font_name = key;
-                        }
+                    && let Ok(name) = font_name_obj.as_name()
+                {
+                    let key = String::from_utf8_lossy(name).into_owned();
+                    if let Some(base_font) = font_map.get(&key) {
+                        state.font_name = base_font.clone();
+                    } else {
+                        state.font_name = key;
                     }
+                }
                 if let Some(size) = operand_f32(&operation.operands, 1) {
                     state.font_size = size;
                 }
@@ -346,19 +348,20 @@ fn process_operations(
                     .operands
                     .first()
                     .and_then(|o| o.as_string().ok().map(|s| s.into_owned()))
-                    && !text.is_empty() {
-                        if let Some(rect) = state.text_rect(&text, layout_bounds) {
-                            let is_bold = state.font_name.to_lowercase().contains("bold");
-                            runs.push(TextRun {
-                                text: text.clone(),
-                                rect,
-                                font_size: state.font_size,
-                                font_name: state.font_name.clone(),
-                                is_bold,
-                            });
-                        }
-                        state.advance_tm(&text, layout_bounds);
+                    && !text.is_empty()
+                {
+                    if let Some(rect) = state.text_rect(&text, layout_bounds) {
+                        let is_bold = state.font_name.to_lowercase().contains("bold");
+                        runs.push(TextRun {
+                            text: text.clone(),
+                            rect,
+                            font_size: state.font_size,
+                            font_name: state.font_name.clone(),
+                            is_bold,
+                        });
                     }
+                    state.advance_tm(&text, layout_bounds);
+                }
             }
             _ => {}
         }

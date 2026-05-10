@@ -59,6 +59,15 @@ pub fn translate<'a>(events: &[Event<'a>], config: &Config, input_dir: &Path) ->
     <style:style style:name="P_Rule" style:family="paragraph">
       <style:paragraph-properties fo:text-align="center"/>
     </style:style>
+    <style:style style:name="P_Center" style:family="paragraph">
+      <style:paragraph-properties fo:text-align="center"/>
+    </style:style>
+    <style:style style:name="P_Right" style:family="paragraph">
+      <style:paragraph-properties fo:text-align="right"/>
+    </style:style>
+    <style:style style:name="P_Left" style:family="paragraph">
+      <style:paragraph-properties fo:text-align="left"/>
+    </style:style>
     <style:style style:name="P_DisplayMath" style:family="paragraph">
       <style:paragraph-properties fo:text-align="center"/>
       <style:text-properties fo:font-style="italic" style:font-style-asian="italic" style:font-style-complex="italic" style:font-name="Cambria Math" fo:font-family="Cambria Math"/>
@@ -71,6 +80,15 @@ pub fn translate<'a>(events: &[Event<'a>], config: &Config, input_dir: &Path) ->
     </style:style>
     <style:style style:name="S_HiddenMeta" style:family="text">
       <style:text-properties fo:font-size="1pt" fo:color="#ffffff" text:display="none"/>
+    </style:style>
+    <style:style style:name="S_Strikethrough" style:family="text">
+      <style:text-properties style:text-line-through-style="solid"/>
+    </style:style>
+    <style:style style:name="S_Superscript" style:family="text">
+      <style:text-properties style:text-position="super 58%"/>
+    </style:style>
+    <style:style style:name="S_Subscript" style:family="text">
+      <style:text-properties style:text-position="sub 58%"/>
     </style:style>
     <style:style style:name="T_Title" style:family="paragraph">
       <style:paragraph-properties fo:text-align="center"/>

@@ -4,8 +4,8 @@ mod export;
 mod fetch;
 mod import;
 mod model;
-mod storage;
 mod server;
+mod storage;
 mod sync;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

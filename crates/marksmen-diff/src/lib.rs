@@ -3,8 +3,8 @@
 //! Provides mathematically rigorous symmetric differences over AST strings, generating HTML payloads.
 
 use marksmen_core::config::Config;
+use pulldown_cmark::{Event, Parser};
 use similar::{DiffOp, TextDiff};
-use pulldown_cmark::{Parser, Event};
 
 /// Derives the symmetric structural difference between two Markdown artifacts.
 /// Returns the diff safely rendered as HTML to prevent Markdown syntax breakage.
@@ -55,7 +55,7 @@ pub fn diff_markdown(old: &str, new: &str) -> String {
                         let new_block = new_blocks[*new_index + i];
                         let inline_diff = TextDiff::from_words(old_block, new_block);
                         let mut diffed_md = String::new();
-                        
+
                         for change in inline_diff.iter_all_changes() {
                             match change.tag() {
                                 similar::ChangeTag::Delete => {
@@ -73,7 +73,7 @@ pub fn diff_markdown(old: &str, new: &str) -> String {
                                 }
                             }
                         }
-                        
+
                         out.push_str(&render_block(&diffed_md, &config));
                     }
                 } else {
@@ -149,7 +149,7 @@ mod tests {
         let new_blocks = get_top_level_blocks(new);
         println!("OLD BLOCKS: {:?}", old_blocks);
         println!("NEW BLOCKS: {:?}", new_blocks);
-        
+
         let result = diff_markdown(old, new);
         println!("RESULT:\n{}", result);
         assert!(result.contains("<h1>Header</h1>"));

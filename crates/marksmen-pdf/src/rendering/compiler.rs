@@ -56,11 +56,10 @@ pub fn compile_to_pdf(
         }
     }
 
-    let pdf_bytes =
-        typst_pdf::pdf(&document, &options).map_err(|errs| {
-            let msgs: Vec<String> = errs.iter().map(|e| format!("{:?}", e)).collect();
-            anyhow::anyhow!("PDF export failed:\n{}", msgs.join("\n"))
-        })?;
+    let pdf_bytes = typst_pdf::pdf(&document, &options).map_err(|errs| {
+        let msgs: Vec<String> = errs.iter().map(|e| format!("{:?}", e)).collect();
+        anyhow::anyhow!("PDF export failed:\n{}", msgs.join("\n"))
+    })?;
 
     Ok(pdf_bytes)
 }

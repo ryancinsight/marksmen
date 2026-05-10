@@ -23,7 +23,9 @@ pub fn parse<'a>(markdown: &'a str) -> Vec<Event<'a>> {
         | Options::ENABLE_STRIKETHROUGH
         | Options::ENABLE_TASKLISTS
         | Options::ENABLE_HEADING_ATTRIBUTES
-        | Options::ENABLE_FOOTNOTES;
+        | Options::ENABLE_FOOTNOTES
+        | Options::ENABLE_SUPERSCRIPT
+        | Options::ENABLE_SUBSCRIPT;
 
     Parser::new_ext(markdown, options).collect()
 }
@@ -66,7 +68,9 @@ mod tests {
     fn parses_table() {
         let md = "| A | B |\n|---|---|\n| 1 | 2 |";
         let events = parse(md);
-        let has_table = events.iter().any(|e| matches!(e, Event::Start(Tag::Table(_))));
+        let has_table = events
+            .iter()
+            .any(|e| matches!(e, Event::Start(Tag::Table(_))));
         assert!(has_table, "Expected Table event");
     }
 }

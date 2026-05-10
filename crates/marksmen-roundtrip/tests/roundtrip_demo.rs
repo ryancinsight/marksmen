@@ -376,8 +376,12 @@ fn test_visual_snapshots() -> Result<()> {
     // ── DOCX ─────────────────────────────────────────────────────────────────
     let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
     let events = marksmen_core::parsing::parser::parse(body);
-    let docx_bytes =
-        marksmen_docx::translation::document::convert(&events, &config, &root.join("../../"), None)?;
+    let docx_bytes = marksmen_docx::translation::document::convert(
+        &events,
+        &config,
+        &root.join("../../"),
+        None,
+    )?;
     // DOCX is a ZIP archive; magic bytes are PK (0x50 0x4B).
     assert!(
         docx_bytes.starts_with(&[0x50, 0x4B]),
@@ -1066,7 +1070,11 @@ fn test_latex_roundtrip_demo_md() -> Result<()> {
     let ne = normalize_whitespace(&strip_vectors_and_html(&extracted_md));
     let jw = strsim::jaro_winkler(&ns, &ne);
     println!("LaTeX (demo.md) JW: {:.4}", jw);
-    assert!(jw > 0.85, "LaTeX demo.md roundtrip below 0.85 (got {:.4})", jw);
+    assert!(
+        jw > 0.85,
+        "LaTeX demo.md roundtrip below 0.85 (got {:.4})",
+        jw
+    );
     Ok(())
 }
 
@@ -1084,7 +1092,11 @@ fn test_typst_roundtrip_demo_md() -> Result<()> {
     let ne = normalize_whitespace(&strip_vectors_and_html(&extracted_md));
     let jw = strsim::jaro_winkler(&ns, &ne);
     println!("Typst (demo.md) JW: {:.4}", jw);
-    assert!(jw > 0.83, "Typst demo.md roundtrip below 0.83 (got {:.4})", jw);
+    assert!(
+        jw > 0.83,
+        "Typst demo.md roundtrip below 0.83 (got {:.4})",
+        jw
+    );
     Ok(())
 }
 
@@ -1102,7 +1114,11 @@ fn test_marp_roundtrip_demo_md() -> Result<()> {
     let ne = normalize_whitespace(&strip_vectors_and_html(&extracted_md));
     let jw = strsim::jaro_winkler(&ns, &ne);
     println!("Marp (demo.md) JW: {:.4}", jw);
-    assert!(jw > 0.88, "Marp demo.md roundtrip below 0.88 (got {:.4})", jw);
+    assert!(
+        jw > 0.88,
+        "Marp demo.md roundtrip below 0.88 (got {:.4})",
+        jw
+    );
     Ok(())
 }
 
@@ -1122,20 +1138,29 @@ fn test_pdf_native_reader_foreign_path() -> Result<()> {
     let pdf_bytes = marksmen_pdf::convert(source_md, &config, None)?;
 
     // Strip the roundtrip key so parse_pdf falls through to native reader.
-    let mut doc = lopdf::Document::load_mem(&pdf_bytes)
-        .map_err(|e| anyhow::anyhow!("lopdf: {e}"))?;
-    if let Ok(info_id) = doc.trailer.get(b"Info").and_then(lopdf::Object::as_reference) {
+    let mut doc =
+        lopdf::Document::load_mem(&pdf_bytes).map_err(|e| anyhow::anyhow!("lopdf: {e}"))?;
+    if let Ok(info_id) = doc
+        .trailer
+        .get(b"Info")
+        .and_then(lopdf::Object::as_reference)
+    {
         if let Ok(info) = doc.get_dictionary_mut(info_id) {
             info.remove(b"MarksmenRoundtripMarkdown");
         }
     }
     let mut stripped = Vec::new();
-    doc.save_to(&mut stripped).map_err(|e| anyhow::anyhow!("lopdf save: {e}"))?;
+    doc.save_to(&mut stripped)
+        .map_err(|e| anyhow::anyhow!("lopdf save: {e}"))?;
 
     let extracted = marksmen_pdf_read::parse_pdf(&stripped)?;
     let ss = marksmen_roundtrip::structural_similarity(source_md, &extracted);
     println!("PDF native reader structural similarity: {:.4}", ss);
-    assert!(ss > 0.70, "PDF native reader structural similarity {:.4} < 0.70", ss);
+    assert!(
+        ss > 0.70,
+        "PDF native reader structural similarity {:.4} < 0.70",
+        ss
+    );
     Ok(())
 }
 
@@ -1173,94 +1198,182 @@ fn test_all_formats_from_demo_md() -> Result<()> {
     let demo_md = fs::read_to_string(root.join("../../demo.md"))?;
     let (body, _) = marksmen_core::config::frontmatter::parse_frontmatter(&demo_md)?;
     let config = marksmen_core::Config::default();
-    let ns = normalize_whitespace(&strip_vectors_and_html(&strip_mermaid(&strip_frontmatter(&demo_md))));
-    let jw = |ext: &str| strsim::jaro_winkler(&ns, &normalize_whitespace(&strip_vectors_and_html(&strip_mermaid(ext))));
+    let ns = normalize_whitespace(&strip_vectors_and_html(&strip_mermaid(&strip_frontmatter(
+        &demo_md,
+    ))));
+    let jw = |ext: &str| {
+        strsim::jaro_winkler(
+            &ns,
+            &normalize_whitespace(&strip_vectors_and_html(&strip_mermaid(ext))),
+        )
+    };
 
     #[derive(Debug)]
-    struct R { name: &'static str, score: f64, threshold: f64 }
+    struct R {
+        name: &'static str,
+        score: f64,
+        threshold: f64,
+    }
     let mut results: Vec<R> = Vec::new();
 
     // HTML
     let html = marksmen_html::convert(&marksmen_core::parsing::parser::parse(body), &config)?;
     let html_ext = marksmen_html_read::parse_html(&html)?;
-    results.push(R { name: "HTML",  score: jw(&html_ext),  threshold: 0.90 });
+    results.push(R {
+        name: "HTML",
+        score: jw(&html_ext),
+        threshold: 0.90,
+    });
 
     // DOCX
     let docx = marksmen_docx::translation::document::convert(
-        &marksmen_core::parsing::parser::parse(body), &config, &root.join("../../"), None)?;
+        &marksmen_core::parsing::parser::parse(body),
+        &config,
+        &root.join("../../"),
+        None,
+    )?;
     let docx_ext = marksmen_docx_read::parse_docx(&docx, None)?;
-    results.push(R { name: "DOCX",  score: jw(&strip_frontmatter(&docx_ext)), threshold: 0.945 });
+    results.push(R {
+        name: "DOCX",
+        score: jw(&strip_frontmatter(&docx_ext)),
+        threshold: 0.945,
+    });
 
     // ODT
     let events_odt = marksmen_core::parsing::parser::parse(body);
     let odt = marksmen_odt::translate_and_render(&events_odt, &config, &root.join("../../"))?;
     let odt_ext = marksmen_odt_read::parse_odt(&odt, None)?;
-    results.push(R { name: "ODT",   score: jw(&strip_frontmatter(&odt_ext)),  threshold: 0.80 });
+    results.push(R {
+        name: "ODT",
+        score: jw(&strip_frontmatter(&odt_ext)),
+        threshold: 0.80,
+    });
 
     // PDF (embedded, lossless)
     let pdf_src = "# PDF Matrix\n\nAlpha **beta** *gamma*.\n";
     let pdf_bytes = marksmen_pdf::convert(pdf_src, &config, None)?;
     let pdf_ext = marksmen_pdf_read::parse_pdf(&pdf_bytes)?;
-    results.push(R { name: "PDF",   score: strsim::jaro_winkler(pdf_src, &pdf_ext), threshold: 0.98 });
+    results.push(R {
+        name: "PDF",
+        score: strsim::jaro_winkler(pdf_src, &pdf_ext),
+        threshold: 0.98,
+    });
 
     // EPUB
     let epub = marksmen_epub::convert(&marksmen_core::parsing::parser::parse(body), &config)?;
     let epub_ext = marksmen_epub_read::parse_epub(&epub)?;
-    results.push(R { name: "EPUB",  score: jw(&epub_ext),  threshold: 0.90 });
+    results.push(R {
+        name: "EPUB",
+        score: jw(&epub_ext),
+        threshold: 0.90,
+    });
 
     // PPTX
     let pptx = marksmen_ppt::convert(&marksmen_core::parsing::parser::parse(body), &config)?;
     let pptx_ext = marksmen_ppt_read::parse_pptx(&pptx)?;
-    results.push(R { name: "PPTX",  score: jw(&pptx_ext),  threshold: 0.85 });
+    results.push(R {
+        name: "PPTX",
+        score: jw(&pptx_ext),
+        threshold: 0.85,
+    });
 
     // XHTML
     let xhtml = marksmen_xhtml::convert(&marksmen_core::parsing::parser::parse(body), &config)?;
     let xhtml_ext = marksmen_xhtml_read::parse_xhtml(&xhtml)?;
-    results.push(R { name: "XHTML", score: jw(&xhtml_ext), threshold: 0.90 });
+    results.push(R {
+        name: "XHTML",
+        score: jw(&xhtml_ext),
+        threshold: 0.90,
+    });
 
     // LaTeX
     let latex = marksmen_latex::convert(&marksmen_core::parsing::parser::parse(body), &config)?;
     let latex_ext = marksmen_latex_read::parse_latex(&latex)?;
-    results.push(R { name: "LaTeX", score: jw(&latex_ext), threshold: 0.85 });
+    results.push(R {
+        name: "LaTeX",
+        score: jw(&latex_ext),
+        threshold: 0.85,
+    });
 
     // Typst
-    let typst = marksmen_typst::translator::translate(&marksmen_core::parsing::parser::parse(body), &config)?;
+    let typst = marksmen_typst::translator::translate(
+        &marksmen_core::parsing::parser::parse(body),
+        &config,
+    )?;
     let typst_ext = marksmen_typst_read::parse_typst(&typst)?;
-    results.push(R { name: "Typst", score: jw(&typst_ext), threshold: 0.83 });
+    results.push(R {
+        name: "Typst",
+        score: jw(&typst_ext),
+        threshold: 0.83,
+    });
 
     // Marp
     let marp = marksmen_marp::convert(&marksmen_core::parsing::parser::parse(body), &config)?;
     let marp_ext = marksmen_marp_read::parse_marp(&marp)?;
-    results.push(R { name: "Marp",  score: jw(&marp_ext),  threshold: 0.90 });
+    results.push(R {
+        name: "Marp",
+        score: jw(&marp_ext),
+        threshold: 0.90,
+    });
 
-    println!("\n{:<8} {:>8} {:>10} {}", "Format", "Score", "Threshold", "Status");
+    println!(
+        "\n{:<8} {:>8} {:>10} {}",
+        "Format", "Score", "Threshold", "Status"
+    );
     println!("{}", "-".repeat(40));
     let mut all_pass = true;
     for r in &results {
         let pass = r.score >= r.threshold;
-        if !pass { all_pass = false; }
-        println!("{:<8} {:>8.4} {:>10.4} {}", r.name, r.score, r.threshold, if pass { "PASS" } else { "FAIL" });
+        if !pass {
+            all_pass = false;
+        }
+        println!(
+            "{:<8} {:>8.4} {:>10.4} {}",
+            r.name,
+            r.score,
+            r.threshold,
+            if pass { "PASS" } else { "FAIL" }
+        );
     }
 
     // Write similarity_report.json
     let snapshots_dir = root.join("tests/snapshots");
     fs::create_dir_all(&snapshots_dir)?;
-    let rows: Vec<String> = results.iter().map(|r| {
-        format!("  {{\"format\":\"{}\",\"score\":{:.4},\"threshold\":{:.4},\"pass\":{}}}",
-            r.name, r.score, r.threshold, r.score >= r.threshold)
-    }).collect();
-    fs::write(snapshots_dir.join("similarity_report.json"),
-        format!("[\n{}\n]", rows.join(",\n")))?;
-    println!("similarity_report.json written to {}", snapshots_dir.display());
+    let rows: Vec<String> = results
+        .iter()
+        .map(|r| {
+            format!(
+                "  {{\"format\":\"{}\",\"score\":{:.4},\"threshold\":{:.4},\"pass\":{}}}",
+                r.name,
+                r.score,
+                r.threshold,
+                r.score >= r.threshold
+            )
+        })
+        .collect();
+    fs::write(
+        snapshots_dir.join("similarity_report.json"),
+        format!("[\n{}\n]", rows.join(",\n")),
+    )?;
+    println!(
+        "similarity_report.json written to {}",
+        snapshots_dir.display()
+    );
 
-    assert!(all_pass, "One or more format roundtrips failed — see table above");
+    assert!(
+        all_pass,
+        "One or more format roundtrips failed — see table above"
+    );
     Ok(())
 }
 
 // ─── Extended visual snapshot viewer ─────────────────────────────────────────
 
 fn html_escape(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
 }
 
 /// Extended snapshot viewer: generates all text-format extractions, similarity table in
@@ -1278,11 +1391,19 @@ fn test_visual_snapshots_extended() -> Result<()> {
     // Generate binary formats
     let pdf_bytes = marksmen_pdf::convert(&demo_md, &config, Some(root.join("../../").into()))?;
     assert!(pdf_bytes.starts_with(b"%PDF"));
-    assert!(pdf_bytes.len() > 50_000, "PDF too small: {} bytes", pdf_bytes.len());
+    assert!(
+        pdf_bytes.len() > 50_000,
+        "PDF too small: {} bytes",
+        pdf_bytes.len()
+    );
     fs::write(snapshots_dir.join("demo_output.pdf"), &pdf_bytes)?;
 
     let docx_bytes = marksmen_docx::translation::document::convert(
-        &marksmen_core::parsing::parser::parse(body), &config, &root.join("../../"), None)?;
+        &marksmen_core::parsing::parser::parse(body),
+        &config,
+        &root.join("../../"),
+        None,
+    )?;
     fs::write(snapshots_dir.join("demo_output.docx"), &docx_bytes)?;
 
     let events_odt = marksmen_core::parsing::parser::parse(body);
@@ -1306,57 +1427,87 @@ fn test_visual_snapshots_extended() -> Result<()> {
     let latex_ext = marksmen_latex_read::parse_latex(&latex_out)?;
     fs::write(snapshots_dir.join("latex_extracted.md"), &latex_ext)?;
 
-    let typst_out = marksmen_typst::translator::translate(&marksmen_core::parsing::parser::parse(body), &config)?;
+    let typst_out = marksmen_typst::translator::translate(
+        &marksmen_core::parsing::parser::parse(body),
+        &config,
+    )?;
     fs::write(snapshots_dir.join("demo_output.typ"), &typst_out)?;
     let typst_ext = marksmen_typst_read::parse_typst(&typst_out)?;
     fs::write(snapshots_dir.join("typst_extracted.md"), &typst_ext)?;
 
     // Similarity scores
     let ns = normalize_whitespace(&strip_vectors_and_html(&strip_mermaid(&source_stripped)));
-    let jw = |e: &str| strsim::jaro_winkler(&ns,
-        &normalize_whitespace(&strip_vectors_and_html(&strip_mermaid(e))));
+    let jw = |e: &str| {
+        strsim::jaro_winkler(
+            &ns,
+            &normalize_whitespace(&strip_vectors_and_html(&strip_mermaid(e))),
+        )
+    };
 
     let docx_ext = marksmen_docx_read::parse_docx(&docx_bytes, None)?;
-    let odt_ext  = marksmen_odt_read::parse_odt(&odt_bytes, None)?;
+    let odt_ext = marksmen_odt_read::parse_odt(&odt_bytes, None)?;
     let epub_ext = marksmen_epub_read::parse_epub(&epub_bytes)?;
     let pptx_ext = marksmen_ppt_read::parse_pptx(&pptx_bytes)?;
 
     let matrix: &[(&str, f64, f64)] = &[
-        ("PDF",   0.98,                       0.98),
-        ("DOCX",  jw(&strip_frontmatter(&docx_ext)), 0.945),
-        ("ODT",   jw(&strip_frontmatter(&odt_ext)),  0.80),
-        ("HTML",  jw(&html_ext),               0.90),
-        ("EPUB",  jw(&epub_ext),               0.90),
-        ("PPTX",  jw(&pptx_ext),               0.85),
-        ("LaTeX", jw(&latex_ext),              0.85),
-        ("Typst", jw(&typst_ext),              0.85),
+        ("PDF", 0.98, 0.98),
+        ("DOCX", jw(&strip_frontmatter(&docx_ext)), 0.945),
+        ("ODT", jw(&strip_frontmatter(&odt_ext)), 0.80),
+        ("HTML", jw(&html_ext), 0.90),
+        ("EPUB", jw(&epub_ext), 0.90),
+        ("PPTX", jw(&pptx_ext), 0.85),
+        ("LaTeX", jw(&latex_ext), 0.85),
+        ("Typst", jw(&typst_ext), 0.85),
     ];
 
     // Write similarity_report.json
-    let rows: Vec<String> = matrix.iter().map(|(fmt, score, thr)| {
-        format!("  {{\"format\":\"{}\",\"score\":{:.4},\"threshold\":{:.4},\"pass\":{}}}",
-            fmt, score, thr, score >= thr)
-    }).collect();
-    fs::write(snapshots_dir.join("similarity_report.json"),
-        format!("[\n{}\n]", rows.join(",\n")))?;
+    let rows: Vec<String> = matrix
+        .iter()
+        .map(|(fmt, score, thr)| {
+            format!(
+                "  {{\"format\":\"{}\",\"score\":{:.4},\"threshold\":{:.4},\"pass\":{}}}",
+                fmt,
+                score,
+                thr,
+                score >= thr
+            )
+        })
+        .collect();
+    fs::write(
+        snapshots_dir.join("similarity_report.json"),
+        format!("[\n{}\n]", rows.join(",\n")),
+    )?;
 
     // Build HTML index
-    let table_rows: String = matrix.iter().map(|(fmt, score, thr)| {
-        let pass = score >= thr;
-        let color = if pass { "#22c55e" } else { "#ef4444" };
-        format!("<tr><td>{}</td><td style='font-family:monospace'>{:.4}</td>\
+    let table_rows: String = matrix
+        .iter()
+        .map(|(fmt, score, thr)| {
+            let pass = score >= thr;
+            let color = if pass { "#22c55e" } else { "#ef4444" };
+            format!(
+                "<tr><td>{}</td><td style='font-family:monospace'>{:.4}</td>\
             <td>{:.4}</td><td style='color:{};font-weight:bold'>{}</td></tr>",
-            fmt, score, thr, color, if pass { "PASS" } else { "FAIL" })
-    }).collect();
+                fmt,
+                score,
+                thr,
+                color,
+                if pass { "PASS" } else { "FAIL" }
+            )
+        })
+        .collect();
 
-    let diff_card = |label: &str, src: &str, ext: &str| format!(
-        "<div class='card full-width'><h2>{} Source vs Extracted</h2>\
+    let diff_card = |label: &str, src: &str, ext: &str| {
+        format!(
+            "<div class='card full-width'><h2>{} Source vs Extracted</h2>\
         <div class='diff-grid'>\
         <div><h3>Source</h3><textarea readonly rows='16'>{}</textarea></div>\
         <div><h3>Extracted</h3><textarea readonly rows='16'>{}</textarea></div>\
         </div></div>",
-        label, html_escape(src), html_escape(ext)
-    );
+            label,
+            html_escape(src),
+            html_escape(ext)
+        )
+    };
 
     let viewer = format!(
         "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'>\
@@ -1405,8 +1556,12 @@ fn test_visual_snapshots_extended() -> Result<()> {
         {typst_diff}\
         </div></body></html>",
         table_rows = table_rows,
-        pdf_b = pdf_bytes.len(), docx_b = docx_bytes.len(), odt_b = odt_bytes.len(),
-        epub_b = epub_bytes.len(), pptx_b = pptx_bytes.len(), html_b = html_out.len(),
+        pdf_b = pdf_bytes.len(),
+        docx_b = docx_bytes.len(),
+        odt_b = odt_bytes.len(),
+        epub_b = epub_bytes.len(),
+        pptx_b = pptx_bytes.len(),
+        html_b = html_out.len(),
         latex_diff = diff_card("LaTeX", &source_stripped, &latex_ext),
         typst_diff = diff_card("Typst", &source_stripped, &typst_ext),
     );
@@ -1414,4 +1569,3 @@ fn test_visual_snapshots_extended() -> Result<()> {
     println!("Snapshots written to {}", snapshots_dir.display());
     Ok(())
 }
-

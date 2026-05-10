@@ -203,22 +203,20 @@ fn push(s: &mut WriterState, buf: &mut String, text: &str) {
 fn write_event(buf: &mut String, ev: &Event<'_>, s: &mut WriterState) {
     match ev {
         // Paragraph
-        Event::Start(Tag::Paragraph)
-            if !s.in_table => {
-                s.in_paragraph = true;
-                let li = if s.in_blockquote {
-                    "\\li720\\ri720 "
-                } else {
-                    ""
-                };
-                buf.push_str(&format!("\\pard\\s0{}\\widctlpar\\f0\\fs24\\cf1 ", li));
-            }
-        Event::End(TagEnd::Paragraph)
-            if !s.in_table => {
-                close_groups(buf, &mut s.open_groups);
-                buf.push_str("\\par\n");
-                s.in_paragraph = false;
-            }
+        Event::Start(Tag::Paragraph) if !s.in_table => {
+            s.in_paragraph = true;
+            let li = if s.in_blockquote {
+                "\\li720\\ri720 "
+            } else {
+                ""
+            };
+            buf.push_str(&format!("\\pard\\s0{}\\widctlpar\\f0\\fs24\\cf1 ", li));
+        }
+        Event::End(TagEnd::Paragraph) if !s.in_table => {
+            close_groups(buf, &mut s.open_groups);
+            buf.push_str("\\par\n");
+            s.in_paragraph = false;
+        }
 
         // Headings
         Event::Start(Tag::Heading { level, .. }) => {
@@ -343,29 +341,26 @@ fn write_event(buf: &mut String, ev: &Event<'_>, s: &mut WriterState) {
             push(s, buf, "{\\b ");
             s.open_groups += 1;
         }
-        Event::End(TagEnd::Strong)
-            if s.open_groups > 0 => {
-                push(s, buf, "}");
-                s.open_groups -= 1;
-            }
+        Event::End(TagEnd::Strong) if s.open_groups > 0 => {
+            push(s, buf, "}");
+            s.open_groups -= 1;
+        }
         Event::Start(Tag::Emphasis) => {
             push(s, buf, "{\\i ");
             s.open_groups += 1;
         }
-        Event::End(TagEnd::Emphasis)
-            if s.open_groups > 0 => {
-                push(s, buf, "}");
-                s.open_groups -= 1;
-            }
+        Event::End(TagEnd::Emphasis) if s.open_groups > 0 => {
+            push(s, buf, "}");
+            s.open_groups -= 1;
+        }
         Event::Start(Tag::Strikethrough) => {
             push(s, buf, "{\\strike ");
             s.open_groups += 1;
         }
-        Event::End(TagEnd::Strikethrough)
-            if s.open_groups > 0 => {
-                push(s, buf, "}");
-                s.open_groups -= 1;
-            }
+        Event::End(TagEnd::Strikethrough) if s.open_groups > 0 => {
+            push(s, buf, "}");
+            s.open_groups -= 1;
+        }
         Event::Code(c) => {
             push(s, buf, &format!("{{\\f1\\fs20\\cf2 {}}}", rtf_escape(c)));
         }
@@ -380,11 +375,10 @@ fn write_event(buf: &mut String, ev: &Event<'_>, s: &mut WriterState) {
             );
             s.open_groups += 1;
         }
-        Event::End(TagEnd::Link)
-            if s.open_groups > 0 => {
-                push(s, buf, "}}");
-                s.open_groups -= 1;
-            }
+        Event::End(TagEnd::Link) if s.open_groups > 0 => {
+            push(s, buf, "}}");
+            s.open_groups -= 1;
+        }
 
         // Images
         Event::Start(Tag::Image {
@@ -599,12 +593,11 @@ fn image_dimensions(bytes: &[u8], is_png: bool) -> (u32, u32) {
         // JPEG: scan for SOFn markers
         let mut i = 0usize;
         while i + 3 < bytes.len() {
-            if bytes[i] == 0xFF && matches!(bytes[i + 1], 0xC0..=0xC2)
-                && i + 8 < bytes.len() {
-                    let h = u16::from_be_bytes([bytes[i + 5], bytes[i + 6]]) as u32;
-                    let w = u16::from_be_bytes([bytes[i + 7], bytes[i + 8]]) as u32;
-                    return (w.max(1), h.max(1));
-                }
+            if bytes[i] == 0xFF && matches!(bytes[i + 1], 0xC0..=0xC2) && i + 8 < bytes.len() {
+                let h = u16::from_be_bytes([bytes[i + 5], bytes[i + 6]]) as u32;
+                let w = u16::from_be_bytes([bytes[i + 7], bytes[i + 8]]) as u32;
+                return (w.max(1), h.max(1));
+            }
             i += 1;
         }
     }

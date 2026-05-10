@@ -7,13 +7,13 @@ use serde::{Deserialize, Serialize};
 pub struct SyncPayload {
     /// Universally unique identifier for the device uploading the sync packet
     pub device_id: String,
-    
+
     /// ISO 8601 timestamp of the last successful sync point
     pub last_synced_at: String,
-    
+
     /// A deterministic cryptographic hash (SHA-256) of the library state to verify integrity
     pub library_hash: String,
-    
+
     /// The full collection of references being pushed to the remote
     pub references: Vec<Reference>,
 
@@ -21,12 +21,16 @@ pub struct SyncPayload {
     pub collections: Vec<crate::model::Collection>,
 }
 
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
-use sha2::{Sha256, Digest};
 
 impl SyncPayload {
     /// Create a new sync payload bound to the current UTC timestamp
-    pub fn new(device_id: String, mut references: Vec<Reference>, mut collections: Vec<crate::model::Collection>) -> Self {
+    pub fn new(
+        device_id: String,
+        mut references: Vec<Reference>,
+        mut collections: Vec<crate::model::Collection>,
+    ) -> Self {
         // Ensure deterministic ordering for the hash
         references.sort_by(|a, b| a.id.cmp(&b.id));
         collections.sort_by(|a, b| a.id.cmp(&b.id));
@@ -40,7 +44,10 @@ impl SyncPayload {
             hasher.update(&col_bytes);
         }
         let result = hasher.finalize();
-        let hash = result.iter().map(|b| format!("{:02x}", b)).collect::<String>();
+        let hash = result
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect::<String>();
 
         Self {
             device_id,
@@ -131,14 +138,14 @@ mod tests {
 
         let merged = merge_sync_payloads(local, remote);
         assert_eq!(merged.references.len(), 2);
-        
+
         let merged_ref1 = merged.references.iter().find(|r| r.id == "A").unwrap();
         assert_eq!(merged_ref1.title, "New Title"); // Remote wins
 
         // Hashes should be deterministic
         let merged2 = merge_sync_payloads(
             SyncPayload::new("device1".to_string(), vec![merged_ref1.clone()], vec![]),
-            SyncPayload::new("device2".to_string(), vec![merged_ref1.clone()], vec![])
+            SyncPayload::new("device2".to_string(), vec![merged_ref1.clone()], vec![]),
         );
         assert_eq!(merged.library_hash, merged2.library_hash);
     }

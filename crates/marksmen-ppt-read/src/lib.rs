@@ -102,20 +102,18 @@ fn parse_slide_xml(xml_str: &str) -> Result<String> {
                         in_title_sp = false;
                         in_body_sp = false;
                     }
-                    b"p:ph"
-                        if in_sp => {
-                            // Check for type="title"
-                            for attr in e.attributes().flatten() {
-                                if attr.key.as_ref() == b"type"
-                                    && attr.value.as_ref() == b"title" {
-                                        ph_seen_title = true;
-                                        in_title_sp = true;
-                                    }
-                            }
-                            if !ph_seen_title {
-                                in_body_sp = true;
+                    b"p:ph" if in_sp => {
+                        // Check for type="title"
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == b"type" && attr.value.as_ref() == b"title" {
+                                ph_seen_title = true;
+                                in_title_sp = true;
                             }
                         }
+                        if !ph_seen_title {
+                            in_body_sp = true;
+                        }
+                    }
                     b"a:p" => {
                         in_para = true;
                         current_para.clear();
@@ -145,15 +143,14 @@ fn parse_slide_xml(xml_str: &str) -> Result<String> {
                 }
                 _ => {}
             },
-            XmlEvent::Text(ref e)
-                if reading_t => {
-                    let text = e.unescape().unwrap_or_default();
-                    if in_title_sp {
-                        title.push_str(&text);
-                    } else if in_body_sp && in_para {
-                        current_para.push_str(&text);
-                    }
+            XmlEvent::Text(ref e) if reading_t => {
+                let text = e.unescape().unwrap_or_default();
+                if in_title_sp {
+                    title.push_str(&text);
+                } else if in_body_sp && in_para {
+                    current_para.push_str(&text);
                 }
+            }
             XmlEvent::Eof => break,
             _ => {}
         }

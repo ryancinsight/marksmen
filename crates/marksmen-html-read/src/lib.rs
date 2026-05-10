@@ -88,6 +88,7 @@ fn render_node(handle: ego_tree::NodeRef<'_, Node>, out: &mut String, in_pre: bo
                     render_children(&el, out, false);
                     out.push('*');
                 }
+
                 "del" => {
                     out.push_str("~~");
                     render_children(&el, out, false);
@@ -141,10 +142,15 @@ fn render_node(handle: ego_tree::NodeRef<'_, Node>, out: &mut String, in_pre: bo
                             out.push_str(&format!("[^{}]", label));
                         }
                     } else {
-                        out.push_str("<sup>");
+                        out.push('^');
                         render_children(&el, out, false);
-                        out.push_str("</sup>");
+                        out.push('^');
                     }
+                }
+                "sub" => {
+                    out.push('~');
+                    render_children(&el, out, false);
+                    out.push('~');
                 }
                 "div" => {
                     let class = element.attr("class").unwrap_or_default();
@@ -207,6 +213,15 @@ fn render_node(handle: ego_tree::NodeRef<'_, Node>, out: &mut String, in_pre: bo
                     let alt = element.attr("alt").unwrap_or("Image");
                     let src = element.attr("src").unwrap_or_default();
                     out.push_str(&format!("![{}]({})", alt, src));
+                }
+                "input" => {
+                    if element.attr("type") == Some("checkbox") {
+                        if element.attr("checked").is_some() {
+                            out.push_str("[x] ");
+                        } else {
+                            out.push_str("[ ] ");
+                        }
+                    }
                 }
                 "br" => out.push('\n'),
                 "hr" => {
@@ -292,9 +307,21 @@ fn render_table(table: &ElementRef<'_>, out: &mut String) {
         out.push_str(" |");
     }
     out.push('\n');
+    let aligns: Vec<&str> = table
+        .value()
+        .attr("data-align")
+        .map(|s| s.split(',').collect())
+        .unwrap_or_default();
+
     out.push('|');
-    for _ in &rows[0] {
-        out.push_str(" :--- |");
+    for (i, _) in rows[0].iter().enumerate() {
+        let align = aligns.get(i).copied().unwrap_or("left");
+        match align {
+            "center" => out.push_str(" :---: |"),
+            "right" => out.push_str(" ---: |"),
+            "none" => out.push_str(" --- |"),
+            _ => out.push_str(" :--- |"),
+        }
     }
     out.push('\n');
 

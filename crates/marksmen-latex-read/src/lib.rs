@@ -32,7 +32,135 @@ pub fn parse_latex(text: &str) -> Result<String> {
     // Here we just naively clear all naked trailing braces that were attached to formatting tags.
     // However, to keep it simple and safe for math tags, we will just use a simplistic custom pass.
 
+    // Footnotes
+    mapped = mapped.replace("\\footnotemark[", "[^");
+    mapped = replace_footnotetext(&mapped);
+
+    // Figures
+    mapped = extract_figures(&mapped);
+
+    // Tables
+    mapped = extract_tables(&mapped);
+
     Ok(process_replacements(&mapped))
+}
+
+fn replace_footnotetext(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(idx) = rest.find("\\footnotetext[") {
+        out.push_str(&rest[..idx]);
+        out.push_str("\n\n[^");
+        rest = &rest[idx + "\\footnotetext[".len()..];
+        if let Some(close) = rest.find("]{") {
+            out.push_str(&rest[..close]);
+            out.push_str("]: ");
+            rest = &rest[close + 2..];
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+fn extract_figures(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(start) = rest.find("\\begin{figure}") {
+        out.push_str(&rest[..start]);
+        let end_fig = rest[start..]
+            .find("\\end{figure}")
+            .unwrap_or(rest.len() - start)
+            + start;
+        let fig_body = &rest[start..end_fig];
+        rest = &rest[end_fig + "\\end{figure}".len()..];
+
+        let mut url = "";
+        let mut title = "";
+
+        if let Some(ig_start) = fig_body.find("\\includegraphics") {
+            let after_ig = &fig_body[ig_start..];
+            if let Some(brace_start) = after_ig.find('{')
+                && let Some(brace_end) = after_ig[brace_start..].find('}')
+            {
+                url = &after_ig[brace_start + 1..brace_start + brace_end];
+            }
+        }
+
+        if let Some(cap_start) = fig_body.find("\\caption{") {
+            let after_cap = &fig_body[cap_start + "\\caption{".len()..];
+            if let Some(cap_end) = after_cap.find('}') {
+                title = &after_cap[..cap_end];
+            }
+        }
+
+        out.push_str(&format!("![{}]({})\n\n", title, url));
+    }
+    out.push_str(rest);
+    out
+}
+
+fn extract_tables(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(start) = rest.find("\\begin{longtable}{") {
+        out.push_str(&rest[..start]);
+        rest = &rest[start + "\\begin{longtable}{".len()..];
+
+        let align_end = rest.find('}').unwrap_or(0);
+        let align_str = &rest[..align_end];
+        rest = &rest[align_end + 1..];
+
+        let end_table = rest.find("\\end{longtable}").unwrap_or(rest.len());
+        let table_body = &rest[..end_table];
+        rest = &rest[end_table + "\\end{longtable}".len()..];
+
+        let mut header = String::new();
+        let mut body = table_body.to_string();
+
+        if let Some(mid) = body.find("\\midrule\n") {
+            header = body[..mid].to_string();
+            body = body[mid + "\\midrule\n".len()..].to_string();
+        }
+
+        header = header.replace("\\toprule\n", "");
+        body = body.replace("\\bottomrule\n", "");
+
+        let clean_row = |mut r: &str| -> String {
+            r = r.trim();
+            if r.ends_with("\\\\") {
+                r = r[..r.len() - 2].trim();
+            }
+            let mut s = r.replace("\\&", "MARKSMEN_ESCAPED_AMP");
+            s = s.replace("&", " | ");
+            s = s.replace("MARKSMEN_ESCAPED_AMP", "\\&");
+            s = s.replace("\\\\\n", " |\n| ");
+            s = s.replace("\\\\", " |\n| ");
+            s
+        };
+
+        out.push('\n');
+        out.push('|');
+        out.push(' ');
+        out.push_str(&clean_row(&header));
+        out.push_str(" |\n|");
+
+        for c in align_str.chars() {
+            match c {
+                'l' => out.push_str(" :--- |"),
+                'c' => out.push_str(" :---: |"),
+                'r' => out.push_str(" ---: |"),
+                _ => out.push_str(" --- |"),
+            }
+        }
+        out.push('\n');
+
+        out.push('|');
+        out.push(' ');
+        out.push_str(&clean_row(&body));
+        out.push_str(" |\n\n");
+    }
+    out.push_str(rest);
+    out
 }
 
 fn extract_document_body(text: &str) -> &str {
@@ -41,9 +169,10 @@ fn extract_document_body(text: &str) -> &str {
     if let Some(start) = text.find(begin_doc) {
         let offset = start + begin_doc.len();
         if let Some(end) = text.find(end_doc)
-            && offset < end {
-                return text[offset..end].trim();
-            }
+            && offset < end
+        {
+            return text[offset..end].trim();
+        }
     }
     text
 }
@@ -58,17 +187,18 @@ fn process_replacements(text: &str) -> String {
     // Very rudimentary parser to strip closing braces for formatting tags that were converted
     while let Some(c) = chars.next() {
         if c == '\\'
-            && let Some(&n) = chars.peek() {
-                if n == '\\' {
-                    chars.next();
-                    out.push('\n'); // convert \\ to newline
-                    continue;
-                } else if matches!(n, '%' | '$' | '#' | '_' | '{' | '}' | '&') {
-                    chars.next();
-                    out.push(n);
-                    continue;
-                }
+            && let Some(&n) = chars.peek()
+        {
+            if n == '\\' {
+                chars.next();
+                out.push('\n'); // convert \\ to newline
+                continue;
+            } else if matches!(n, '%' | '$' | '#' | '_' | '{' | '}' | '&') {
+                chars.next();
+                out.push(n);
+                continue;
             }
+        }
 
         if c == '{' {
             brace_depth += 1;

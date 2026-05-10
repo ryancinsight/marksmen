@@ -130,7 +130,7 @@ pub fn latex_to_typst(latex: &str) -> String {
                                 '|' => "|",
                                 '.' => "",
                                 _ => {
-                                    result.push_str(&chars[i].to_string());
+                                    result.push(chars[i]);
                                     i += 1;
                                     continue;
                                 }
@@ -188,10 +188,10 @@ pub fn latex_to_typst(latex: &str) -> String {
                 // identifier formation.
                 if c.is_ascii_alphabetic() {
                     let last = result.chars().rev().find(|ch| !ch.is_whitespace());
-                    if let Some(prev) = last {
-                        if prev.is_ascii_alphanumeric() {
-                            result.push(' ');
-                        }
+                    if let Some(prev) = last
+                        && prev.is_ascii_alphanumeric()
+                    {
+                        result.push(' ');
                     }
                 }
                 result.push(c);

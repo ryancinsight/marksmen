@@ -33,7 +33,7 @@ pub struct TextState {
     /// the auto-incremented counter, so `w:commentRangeStart` in `document.xml`
     /// matches the verbatim-passed-through `comments.xml`.
     pub source_comment_ids: std::collections::HashMap<String, usize>,
-    
+
     /// Tracked citations parsed from `<cite data-id="xyz">`.
     pub cited_ids: Vec<String>,
 }
@@ -133,6 +133,10 @@ pub fn handle_event<'a>(
         Event::End(TagEnd::Emphasis) => text_state.is_italic = false,
         Event::Start(Tag::Strikethrough) => text_state.is_strike = true,
         Event::End(TagEnd::Strikethrough) => text_state.is_strike = false,
+        Event::Start(Tag::Superscript) => text_state.is_superscript = true,
+        Event::End(TagEnd::Superscript) => text_state.is_superscript = false,
+        Event::Start(Tag::Subscript) => text_state.is_subscript = true,
+        Event::End(TagEnd::Subscript) => text_state.is_subscript = false,
         Event::Start(Tag::Link { dest_url, .. }) => {
             text_state.active_link = Some(dest_url.to_string())
         }

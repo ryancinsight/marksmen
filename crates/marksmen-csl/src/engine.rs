@@ -1,5 +1,5 @@
-use crate::schema::{Style, RenderingElement, Layout, Text};
 use crate::model::Reference;
+use crate::schema::{Layout, RenderingElement, Style, Text};
 use std::collections::HashMap;
 
 /// The evaluation context holds the style, the current reference, and formatting state.
@@ -29,21 +29,21 @@ pub fn evaluate_layout(layout: &Layout, ctx: &Context) -> String {
     if let Some(prefix) = &layout.prefix {
         output.push_str(prefix);
     }
-    
+
     let mut elements_out = Vec::new();
     for el in &layout.elements {
         if let Some(rendered) = evaluate_element(el, ctx).filter(|r| !r.is_empty()) {
             elements_out.push(rendered);
         }
     }
-    
+
     let delimiter = layout.delimiter.as_deref().unwrap_or("");
     output.push_str(&elements_out.join(delimiter));
-    
+
     if let Some(suffix) = &layout.suffix {
         output.push_str(suffix);
     }
-    
+
     output
 }
 
@@ -59,9 +59,15 @@ pub fn evaluate_element(element: &RenderingElement, ctx: &Context) -> Option<Str
             };
             if let Some(parts) = date_val.and_then(|v| v.date_parts.first()) {
                 let year = parts.first().map(|y| y.to_string()).unwrap_or_default();
-                let month = parts.get(1).map(|m| format!("{:02}", m)).unwrap_or_default();
-                let day = parts.get(2).map(|d| format!("{:02}", d)).unwrap_or_default();
-                
+                let month = parts
+                    .get(1)
+                    .map(|m| format!("{:02}", m))
+                    .unwrap_or_default();
+                let day = parts
+                    .get(2)
+                    .map(|d| format!("{:02}", d))
+                    .unwrap_or_default();
+
                 let mut out = year;
                 if !month.is_empty() {
                     out.push('-');
@@ -86,18 +92,18 @@ pub fn evaluate_element(element: &RenderingElement, ctx: &Context) -> Option<Str
                 "translator" => ctx.reference.translator.as_ref(),
                 _ => None,
             };
-            
+
             if let Some(authors) = authors_opt {
                 if authors.is_empty() {
                     return None;
                 }
-                
+
                 let mut formatted_names = Vec::new();
                 for author in authors {
                     let family = author.family.as_deref().unwrap_or("");
                     let given = author.given.as_deref().unwrap_or("");
                     let literal = author.literal.as_deref().unwrap_or("");
-                    
+
                     if !literal.is_empty() {
                         formatted_names.push(literal.to_string());
                     } else if !family.is_empty() && !given.is_empty() {
@@ -108,13 +114,13 @@ pub fn evaluate_element(element: &RenderingElement, ctx: &Context) -> Option<Str
                         formatted_names.push(format!("{}{}", family, given));
                     }
                 }
-                
+
                 let delimiter = if let Some(n) = &names.name {
                     n.delimiter.clone().unwrap_or_else(|| ", ".to_string())
                 } else {
                     ", ".to_string()
                 };
-                
+
                 let out = if formatted_names.len() > 1 {
                     let last = formatted_names.pop().unwrap();
                     let and_symbol = if let Some(n) = &names.name {
@@ -130,7 +136,7 @@ pub fn evaluate_element(element: &RenderingElement, ctx: &Context) -> Option<Str
                 } else {
                     formatted_names[0].clone()
                 };
-                
+
                 Some(out)
             } else {
                 None
@@ -166,7 +172,7 @@ pub fn evaluate_element(element: &RenderingElement, ctx: &Context) -> Option<Str
                     return Some(out);
                 }
             }
-            
+
             for condition in &choose.else_if_block {
                 if evaluate_condition(condition, ctx) {
                     let mut out = String::new();
@@ -178,7 +184,7 @@ pub fn evaluate_element(element: &RenderingElement, ctx: &Context) -> Option<Str
                     return Some(out);
                 }
             }
-            
+
             if let Some(else_block) = &choose.else_block {
                 let mut out = String::new();
                 for el in &else_block.elements {
@@ -188,7 +194,7 @@ pub fn evaluate_element(element: &RenderingElement, ctx: &Context) -> Option<Str
                 }
                 return Some(out);
             }
-            
+
             None
         }
     }
@@ -196,7 +202,7 @@ pub fn evaluate_element(element: &RenderingElement, ctx: &Context) -> Option<Str
 
 fn evaluate_text(text: &Text, ctx: &Context) -> Option<String> {
     let mut content = None;
-    
+
     if let Some(val) = &text.value {
         content = Some(val.clone());
     } else if let Some(var) = &text.variable {
@@ -228,7 +234,7 @@ fn evaluate_text(text: &Text, ctx: &Context) -> Option<String> {
         // TODO: Locale term lookup
         content = Some(format!("[term:{}]", term));
     }
-    
+
     if let Some(ref c) = content {
         if c.is_empty() {
             return None;
@@ -237,14 +243,14 @@ fn evaluate_text(text: &Text, ctx: &Context) -> Option<String> {
         if let Some(prefix) = &text.prefix {
             final_out.push_str(prefix);
         }
-        
+
         // TODO: apply font-style, text-case, font-weight formatting via markup wrappers
         if text.quotes.unwrap_or(false) {
             final_out.push_str(&format!("\"{}\"", c));
         } else {
             final_out.push_str(c);
         }
-        
+
         if let Some(suffix) = &text.suffix {
             final_out.push_str(suffix);
         }
@@ -266,7 +272,7 @@ fn evaluate_condition(condition: &crate::schema::IfBlock, ctx: &Context) -> bool
             "editor" => ctx.reference.editor.is_some(),
             _ => false,
         };
-        
+
         // Handle "match" attribute ("all", "any", "none")
         // For a single variable, "any" and "all" are equivalent to `is_present`.
         let match_type = condition.match_condition.as_deref().unwrap_or("all");
@@ -275,7 +281,7 @@ fn evaluate_condition(condition: &crate::schema::IfBlock, ctx: &Context) -> bool
             _ => return is_present,
         }
     }
-    
+
     if let Some(typ) = &condition.type_match {
         let is_match = ctx.reference.r#type == *typ;
         let match_type = condition.match_condition.as_deref().unwrap_or("all");
@@ -284,6 +290,6 @@ fn evaluate_condition(condition: &crate::schema::IfBlock, ctx: &Context) -> bool
             _ => return is_match,
         }
     }
-    
+
     false
 }

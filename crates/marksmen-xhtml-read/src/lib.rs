@@ -147,6 +147,23 @@ fn render_node(handle: ego_tree::NodeRef<'_, Node>, out: &mut String, in_pre: bo
                         render_children(&el, out, false);
                     }
                 }
+                "sup" => {
+                    let class = element.attr("class").unwrap_or_default();
+                    if class.contains("footnote-ref") {
+                        if let Some(label) = element.attr("data-label") {
+                            out.push_str(&format!("[^{}]", label));
+                        }
+                    } else {
+                        out.push('^');
+                        render_children(&el, out, false);
+                        out.push('^');
+                    }
+                }
+                "sub" => {
+                    out.push('~');
+                    render_children(&el, out, false);
+                    out.push('~');
+                }
                 "div" => {
                     let class = element.attr("class").unwrap_or_default();
                     if class.contains("math-display") {
@@ -156,6 +173,28 @@ fn render_node(handle: ego_tree::NodeRef<'_, Node>, out: &mut String, in_pre: bo
                         out.push_str("\n$$\n\n");
                     } else if class.contains("mermaid-graph") {
                         // Visible rendered SVG is skipped; hidden metadata block carries source.
+                    } else if class.contains("footnote-def") {
+                        if let Some(label) = element.attr("data-label") {
+                            ensure_block_break(out);
+                            out.push_str(&format!("[^{}]: ", label));
+
+                            let mut inner = String::new();
+                            render_children(&el, &mut inner, false);
+
+                            let mut body = inner.as_str();
+                            let prefix = format!("[{}]:", label);
+                            if body.starts_with(&prefix) {
+                                body = &body[prefix.len()..];
+                            } else if body.starts_with(&format!("[{}]", label)) {
+                                body = &body[label.len() + 2..];
+                                if body.starts_with(':') {
+                                    body = &body[1..];
+                                }
+                            }
+
+                            out.push_str(body.trim_start());
+                            out.push_str("\n\n");
+                        }
                     } else {
                         render_children(&el, out, false);
                     }
@@ -181,6 +220,15 @@ fn render_node(handle: ego_tree::NodeRef<'_, Node>, out: &mut String, in_pre: bo
                     let alt = element.attr("alt").unwrap_or("Image");
                     let src = element.attr("src").unwrap_or_default();
                     out.push_str(&format!("![{}]({})", alt, src));
+                }
+                "input" => {
+                    if element.attr("type") == Some("checkbox") {
+                        if element.attr("checked").is_some() {
+                            out.push_str("[x] ");
+                        } else {
+                            out.push_str("[ ] ");
+                        }
+                    }
                 }
                 // Self-closing in XHTML; emitted as `<br />` by the writer.
                 "br" => out.push('\n'),
@@ -308,9 +356,21 @@ fn render_table(table: &ElementRef<'_>, out: &mut String) {
     }
     out.push('\n');
 
+    let aligns: Vec<&str> = table
+        .value()
+        .attr("data-align")
+        .map(|s| s.split(',').collect())
+        .unwrap_or_default();
+
     out.push('|');
-    for _ in &rows[0] {
-        out.push_str(" :--- |");
+    for (i, _) in rows[0].iter().enumerate() {
+        let align = aligns.get(i).copied().unwrap_or("left");
+        match align {
+            "center" => out.push_str(" :---: |"),
+            "right" => out.push_str(" ---: |"),
+            "none" => out.push_str(" --- |"),
+            _ => out.push_str(" :--- |"),
+        }
     }
     out.push('\n');
 

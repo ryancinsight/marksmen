@@ -153,8 +153,29 @@ pub fn convert(events: &[Event<'_>], config: &Config) -> Result<String> {
             }
             Event::Start(Tag::Item) => out.push_str("<li>"),
             Event::End(TagEnd::Item) => out.push_str("</li>\n"),
+            Event::TaskListMarker(checked) => {
+                if checked {
+                    out.push_str(
+                        "<input type=\"checkbox\" disabled=\"disabled\" checked=\"checked\" /> ",
+                    );
+                } else {
+                    out.push_str("<input type=\"checkbox\" disabled=\"disabled\" /> ");
+                }
+            }
 
-            Event::Start(Tag::Table(_)) => out.push_str("<table>\n"),
+            Event::Start(Tag::Table(aligns)) => {
+                let aligns_str = aligns
+                    .iter()
+                    .map(|a| match a {
+                        pulldown_cmark::Alignment::Left => "left",
+                        pulldown_cmark::Alignment::Center => "center",
+                        pulldown_cmark::Alignment::Right => "right",
+                        pulldown_cmark::Alignment::None => "none",
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",");
+                out.push_str(&format!("<table data-align=\"{}\">\n", aligns_str));
+            }
             Event::End(TagEnd::Table) => out.push_str("</table>\n"),
             Event::Start(Tag::TableHead) => out.push_str("  <thead>\n    <tr>\n"),
             Event::End(TagEnd::TableHead) => out.push_str("    </tr>\n  </thead>\n  <tbody>\n"),
@@ -169,6 +190,10 @@ pub fn convert(events: &[Event<'_>], config: &Config) -> Result<String> {
             Event::End(TagEnd::Strong) => out.push_str("</strong>"),
             Event::Start(Tag::Strikethrough) => out.push_str("<del>"),
             Event::End(TagEnd::Strikethrough) => out.push_str("</del>"),
+            Event::Start(Tag::Superscript) => out.push_str("<sup>"),
+            Event::End(TagEnd::Superscript) => out.push_str("</sup>"),
+            Event::Start(Tag::Subscript) => out.push_str("<sub>"),
+            Event::End(TagEnd::Subscript) => out.push_str("</sub>"),
 
             Event::Start(Tag::Link { dest_url, .. }) => out.push_str(&format!(
                 "<a href=\"{}\">",
@@ -199,6 +224,24 @@ pub fn convert(events: &[Event<'_>], config: &Config) -> Result<String> {
             }
 
             Event::Html(raw) | Event::InlineHtml(raw) => out.push_str(&raw),
+
+            Event::FootnoteReference(label) => {
+                out.push_str(&format!(
+                    "<sup class=\"footnote-ref\" data-label=\"{}\">[{}]</sup>",
+                    marksmen_xml::escape(label.as_ref()),
+                    marksmen_xml::escape(label.as_ref())
+                ));
+            }
+            Event::Start(Tag::FootnoteDefinition(label)) => {
+                out.push_str(&format!(
+                    "<div class=\"footnote-def\" data-label=\"{}\"><b>[{}]</b>: ",
+                    marksmen_xml::escape(label.as_ref()),
+                    marksmen_xml::escape(label.as_ref())
+                ));
+            }
+            Event::End(TagEnd::FootnoteDefinition) => {
+                out.push_str("</div>\n");
+            }
 
             // XHTML: `<br />` not `<br>`.
             Event::SoftBreak | Event::HardBreak => out.push_str("<br />\n"),

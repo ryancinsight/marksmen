@@ -106,7 +106,10 @@ fn split_into_chapters<'a>(events: &[Event<'a>]) -> Vec<(String, Vec<Event<'a>>)
 
     for event in events.iter().cloned() {
         match &event {
-            Event::Start(Tag::Heading { level: HeadingLevel::H1, .. }) => {
+            Event::Start(Tag::Heading {
+                level: HeadingLevel::H1,
+                ..
+            }) => {
                 // Flush the accumulated chapter before starting a new one.
                 if !current_events.is_empty() {
                     chapters.push((

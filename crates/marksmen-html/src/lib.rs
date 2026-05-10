@@ -115,7 +115,28 @@ pub fn convert(events: &[Event<'_>], config: &Config) -> Result<String> {
             }
             Event::Start(Tag::Item) => out.push_str("<li>"),
             Event::End(TagEnd::Item) => out.push_str("</li>\n"),
-            Event::Start(Tag::Table(_)) => out.push_str("<table>\n"),
+            Event::TaskListMarker(checked) => {
+                if checked {
+                    out.push_str(
+                        "<input type=\"checkbox\" disabled=\"disabled\" checked=\"checked\" /> ",
+                    );
+                } else {
+                    out.push_str("<input type=\"checkbox\" disabled=\"disabled\" /> ");
+                }
+            }
+            Event::Start(Tag::Table(aligns)) => {
+                let aligns_str = aligns
+                    .iter()
+                    .map(|a| match a {
+                        pulldown_cmark::Alignment::Left => "left",
+                        pulldown_cmark::Alignment::Center => "center",
+                        pulldown_cmark::Alignment::Right => "right",
+                        pulldown_cmark::Alignment::None => "none",
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",");
+                out.push_str(&format!("<table data-align=\"{}\">\n", aligns_str));
+            }
             Event::End(TagEnd::Table) => out.push_str("</table>\n"),
             Event::Start(Tag::TableHead) => out.push_str("  <thead>\n    <tr>\n"),
             Event::End(TagEnd::TableHead) => out.push_str("    </tr>\n  </thead>\n  <tbody>\n"),
@@ -129,6 +150,10 @@ pub fn convert(events: &[Event<'_>], config: &Config) -> Result<String> {
             Event::End(TagEnd::Strong) => out.push_str("</strong>"),
             Event::Start(Tag::Strikethrough) => out.push_str("<del>"),
             Event::End(TagEnd::Strikethrough) => out.push_str("</del>"),
+            Event::Start(Tag::Superscript) => out.push_str("<sup>"),
+            Event::End(TagEnd::Superscript) => out.push_str("</sup>"),
+            Event::Start(Tag::Subscript) => out.push_str("<sub>"),
+            Event::End(TagEnd::Subscript) => out.push_str("</sub>"),
             Event::Start(Tag::Link { dest_url, .. }) => {
                 out.push_str(&format!("<a href=\"{}\">", dest_url))
             }
@@ -274,28 +299,29 @@ fn render_graph_to_svg(graph: &marksmen_mermaid::layout::coordinate_assign::Spac
             svg.push('\n');
 
             if let Some(label) = &edge.label
-                && edge.path.len() >= 2 {
-                    let mid_segment = (edge.path.len() - 1) / 2;
-                    let start = edge.path[mid_segment];
-                    let end = edge.path[mid_segment + 1];
-                    let label_x = (start.0 + end.0) / 2.0;
-                    let label_y = (start.1 + end.1) / 2.0;
-                    let text_x = label_x + padding;
-                    let text_y = label_y + padding - 6.0;
-                    svg.push_str(&format!(
+                && edge.path.len() >= 2
+            {
+                let mid_segment = (edge.path.len() - 1) / 2;
+                let start = edge.path[mid_segment];
+                let end = edge.path[mid_segment + 1];
+                let label_x = (start.0 + end.0) / 2.0;
+                let label_y = (start.1 + end.1) / 2.0;
+                let text_x = label_x + padding;
+                let text_y = label_y + padding - 6.0;
+                svg.push_str(&format!(
                         r##"  <rect x="{}" y="{}" width="140" height="18" fill="white" opacity="0.9"/>"##,
                         text_x - 70.0,
                         text_y - 12.0
                     ));
-                    svg.push('\n');
-                    svg.push_str(&format!(
+                svg.push('\n');
+                svg.push_str(&format!(
                         r##"  <text x="{}" y="{}" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="#444">{}</text>"##,
                         text_x,
                         text_y,
                         label.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
                     ));
-                    svg.push('\n');
-                }
+                svg.push('\n');
+            }
         }
     }
 

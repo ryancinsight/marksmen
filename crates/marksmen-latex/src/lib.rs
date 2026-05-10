@@ -55,14 +55,12 @@ pub fn convert(events: &[Event<'_>], config: &Config) -> Result<String> {
 
     for event in events.iter().cloned() {
         match event {
-            Event::Start(Tag::Paragraph)
-                if !state.in_table => {
-                    out.push('\n');
-                }
-            Event::End(TagEnd::Paragraph)
-                if !state.in_table => {
-                    out.push_str("\n\n");
-                }
+            Event::Start(Tag::Paragraph) if !state.in_table => {
+                out.push('\n');
+            }
+            Event::End(TagEnd::Paragraph) if !state.in_table => {
+                out.push_str("\n\n");
+            }
             Event::Start(Tag::Heading { level, .. }) => {
                 let lev = match level {
                     pulldown_cmark::HeadingLevel::H1 => "\\section{",
@@ -108,6 +106,13 @@ pub fn convert(events: &[Event<'_>], config: &Config) -> Result<String> {
             }
             Event::Start(Tag::Item) => out.push_str("\\item "),
             Event::End(TagEnd::Item) => out.push('\n'),
+            Event::TaskListMarker(checked) => {
+                if checked {
+                    out.push_str("[x] ");
+                } else {
+                    out.push_str("[ ] ");
+                }
+            }
             Event::Start(Tag::Table(alignments)) => {
                 state.in_table = true;
                 let mut align_str = String::new();
@@ -149,6 +154,10 @@ pub fn convert(events: &[Event<'_>], config: &Config) -> Result<String> {
             Event::End(TagEnd::Strong) => out.push('}'),
             Event::Start(Tag::Strikethrough) => out.push_str(r"\sout{"), // requires \usepackage[normalem]{ulem} but we'll cheat or they can add it
             Event::End(TagEnd::Strikethrough) => out.push('}'),
+            Event::Start(Tag::Superscript) => out.push_str(r"\textsuperscript{"),
+            Event::End(TagEnd::Superscript) => out.push('}'),
+            Event::Start(Tag::Subscript) => out.push_str(r"\textsubscript{"),
+            Event::End(TagEnd::Subscript) => out.push('}'),
             Event::Start(Tag::Link { dest_url, .. }) => {
                 out.push_str(&format!("\\href{{{}}}{{", dest_url))
             }
@@ -187,6 +196,13 @@ pub fn convert(events: &[Event<'_>], config: &Config) -> Result<String> {
             Event::FootnoteReference(label) => {
                 out.push_str(&format!("\\footnotemark[{}]", escape_latex(label.as_ref())));
             }
+            Event::Start(Tag::FootnoteDefinition(label)) => {
+                out.push_str(&format!(
+                    "\\footnotetext[{}]{{",
+                    escape_latex(label.as_ref())
+                ));
+            }
+            Event::End(TagEnd::FootnoteDefinition) => out.push_str("}\n"),
             _ => {}
         }
     }
